@@ -8,6 +8,7 @@ import { BriefcaseIcon, DocumentTextIcon } from '@heroicons/react/24/solid';
 
 
 
+
 function ReconciliationUploadPage() {
   const [files, setFiles] = useState([]);
   const [files1, setFilesPBI] = useState([]);
@@ -32,6 +33,7 @@ function ReconciliationUploadPage() {
     const uploadEndpointOSDP = location.state?.uploadEndpointOSDP || '/upload_FCSHPC_OSDP';
     const uploadEndpointPBI = location.state?.uploadEndpointPBI || '/upload_FCSHPC_PBI';
     const nextPath = location.state?.nextPath || '/recons/hpc_fcs/summary';
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
   
 
@@ -119,7 +121,7 @@ function ReconciliationUploadPage() {
 
 
   const handleClear = async () => {
-    await axios.post("http://localhost:5000/clear");
+    await axios.post(`${BACKEND_URL}/clear`);
     setSortedData([]);
     setSummaryData([]);
     setFiles([]);
@@ -130,7 +132,7 @@ function ReconciliationUploadPage() {
   };
 
   const handleClearPBI = async () => {
-    await axios.post("http://localhost:5000/clear_pbi");
+    await axios.post(`${BACKEND_URL}/clear_pbi`);
     setSortedDataPBI([]);
     setSummaryDataPBI([]);
     setFilesPBI([]);
@@ -197,7 +199,7 @@ function ReconciliationUploadPage() {
     Array.from(files).forEach(file => formData.append('files', file));
     try {
       const endpoint = location.state?.uploadEndpointOSDP || '/upload_FCSHPC_OSDP';
-      const res = await axios.post(`http://localhost:5000${endpoint}`, formData);
+      const res = await axios.post(`${BACKEND_URL}${endpoint}`, formData);
       const { sorted_data, summary_data } = res.data || {};
       if (sorted_data && summary_data) {
         setSortedData(sorted_data);
