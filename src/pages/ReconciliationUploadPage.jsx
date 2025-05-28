@@ -226,7 +226,7 @@ function ReconciliationUploadPage() {
     Array.from(files1).forEach(file => formData.append('files1', file));
     try {
       const endpoint = location.state?.uploadEndpointPBI || '/upload_FCSHPC_PBI ';
-      const res = await axios.post(`http://localhost:5000${endpoint}`, formData);
+      const res = await axios.post(`${BACKEND_URL}${endpoint}`, formData);
       const { sorted_data_PBI, summary_data_PBI } = res.data || {};
       if (sorted_data_PBI && summary_data_PBI) {
         setSortedDataPBI(sorted_data_PBI);
