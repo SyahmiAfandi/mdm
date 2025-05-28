@@ -12,6 +12,7 @@ function ReconciliationSummary() {
   const location = useLocation();
   const fromButton = location.state?.fromButton || sessionStorage.getItem('fromButton') || 'N/A';
   const businessType = location.state?.businessType || sessionStorage.getItem('businessType') || 'N/A';
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -28,7 +29,7 @@ function ReconciliationSummary() {
     const osdp = JSON.parse(sessionStorage.getItem('sortedData')) || [];
     const pbi = JSON.parse(sessionStorage.getItem('sortedDataPBI')) || [];
 
-    fetch('http://localhost:5000/reconcile_all', {
+    fetch(`${BACKEND_URL}/reconcile_all`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ osdp_data: osdp, pbi_data: pbi })
