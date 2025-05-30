@@ -49,7 +49,19 @@ function ReconsHPCPage() {
 
   const bottomButtons = [
     { label: 'IQ Performance Outlet', path: '/in-progress' },
-    { label: 'IQ Performance Salesman', path: '/in-progress' },
+    { 
+      label: 'IQ Performance Salesman', 
+      path: '/recons/upload',
+      state: {
+        fromButton: 'IQ Performance Salesman',
+        businessType,
+        uploadEndpointOSDP: '/upload_HPCIQSALES_OSDP',
+        uploadEndpointPBI: '/upload_HPCIQSALES_PBI',
+        backPath: '/recons/hpc',
+        nextPath: '/recons/hpc_fcs/summary',
+      },
+    },
+    
   ];
 
   useEffect(() => {
