@@ -2,6 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import { motion, AnimatePresence } from 'framer-motion';
+import { saveAs } from 'file-saver';
+import { DownloadIcon } from 'lucide-react'; // or another icon of your choice
+import toast from 'react-hot-toast';
+import { Loader2 } from 'lucide-react'; // spinner icon
 
 function ReconciliationSummary() {
   const navigate = useNavigate();
@@ -13,6 +17,7 @@ function ReconciliationSummary() {
   const fromButton = location.state?.fromButton || sessionStorage.getItem('fromButton') || 'N/A';
   const businessType = location.state?.businessType || sessionStorage.getItem('businessType') || 'N/A';
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -51,43 +56,106 @@ function ReconciliationSummary() {
   const totalMismatch = displayedData.filter(row => row.Status === 'Mismatch').length;
   const noMismatchInBoth = osdpData.every(row => row.Status === 'Match') && pbiData.every(row => row.Status === 'Match');
 
+  const handleExportExcel = async () => {
+    setExporting(true);
+    const dataToExport = source === 'OSDP' ? osdpData : pbiData;
+
+    const toastId = toast.loading('Exporting report...');
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/export_summary_excel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          records: dataToExport,
+          report_type: source
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to export');
+
+      const blob = await response.blob();
+      saveAs(blob, `Reconciliation_Summary_${source}.xlsx`);
+
+      toast.success('Report exported successfully!', { id: toastId });
+    } catch (error) {
+      toast.error('Failed to export report.', { id: toastId });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+
+
   return (
     <DashboardLayout>
-      <div className="flex justify-between items-center mb-6">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setShowConfirmModal(true)}
-          className="px-4 py-2 bg-gray-700 text-white text-sm rounded hover:bg-gray-800 transition"
-        >
-          Back to Main
-        </motion.button>
+      <div className="grid grid-cols-3 items-center mb-6">
+        {/* Left buttons */}
+        <div className="flex gap-2 justify-start">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowConfirmModal(true)}
+            className="px-4 py-2 bg-gray-700 text-white text-sm rounded hover:bg-gray-800 transition"
+          >
+            Back to Main
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleExportExcel}
+            disabled={exporting}
+            className={`flex items-center gap-2 px-4 py-2 text-sm rounded transition ${
+              exporting ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'
+            }`}
+          >
+            {exporting ? (
+              <>
+                <Loader2 className="animate-spin" size={16} />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <DownloadIcon size={16} />
+                Export Excel
+              </>
+            )}
+          </motion.button>
+        </div>
 
-        <motion.div className="border border-gray-300 bg-gray-50 rounded-md px-4 py-2 flex gap-6 items-center text-sm mt-2">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-600">Business Type:</span>
-            <span className="inline-block px-2 py-0.5 text-xs rounded bg-green-100 text-green-700 font-semibold">
-              {businessType}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-600">Report Type:</span>
-            <span className="inline-block px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700 font-semibold">
-              {fromButton}
-            </span>
-          </div>
-        </motion.div>
+        {/* Centered box (naturally centered in column 2) */}
+        <div className="flex justify-center">
+          <motion.div className="border border-gray-300 bg-gray-50 rounded-md px-4 py-2 flex gap-6 items-center text-sm">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-gray-600">Business Type:</span>
+              <span className="inline-block px-2 py-0.5 text-xs rounded bg-green-100 text-green-700 font-semibold">
+                {businessType}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-gray-600">Report Type:</span>
+              <span className="inline-block px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700 font-semibold">
+                {fromButton}
+              </span>
+            </div>
+          </motion.div>
+        </div>
 
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => navigate('/recons/hpc_fcs/result')}
-          disabled={noMismatchInBoth}
-          className={`px-4 py-2 text-white text-sm rounded ${noMismatchInBoth ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
-        >
-          Go to Result
-        </motion.button>
+        {/* Right button pinned to end */}
+        <div className="flex justify-end">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => navigate('/recons/hpc_fcs/result')}
+            disabled={noMismatchInBoth}
+            className={`px-4 py-2 text-white text-sm rounded ${noMismatchInBoth ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
+          >
+            Go to Result
+          </motion.button>
+        </div>
       </div>
+
+
 
       <div className="max-w-7xl mx-auto p-6 relative">
         <h2 className="text-2xl font-bold text-center mb-6">Reconciliation Summary</h2>

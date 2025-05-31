@@ -32,6 +32,7 @@ function LoginPage() {
       if (result.success) {
         setRole(result.role);
         setUser({ name: result.name, email: result.email }); // ✅ SET USER DATA
+        localStorage.setItem('username', result.name); // ✅ SAVE FOR EXPORT USE
         setShowToast(true);
         setTimeout(() => {
             setFadeOut(true);

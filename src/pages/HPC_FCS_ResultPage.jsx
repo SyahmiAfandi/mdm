@@ -3,15 +3,21 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import DashboardLayout from '../components/DashboardLayout';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FileText, FileSpreadsheet, Download } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Loader2 } from 'lucide-react';
 
 function ReconciliationPage() {
   const [reconciliationResult, setReconciliationResult] = useState([]);
   const [activeTab, setActiveTab] = useState('Missing in OSDP');
   const [showExportModal, setShowExportModal] = useState(false);
-
+  const [exporting, setExporting] = useState({ excel: null, csv: null });
   const navigate = useNavigate();
   const location = useLocation();
+  const businessType = sessionStorage.getItem('businessType') || 'N/A';
+  const reportType = location.state?.fromButton || sessionStorage.getItem('fromButton') || 'N/A';
   const { distributor, distributorName, source } = location.state || {};
+  const creator = localStorage.getItem('username') || 'Auto Generated';
 
   useEffect(() => {
     const stored = JSON.parse(sessionStorage.getItem('reconcile_all_result')) || {};
@@ -33,16 +39,16 @@ function ReconciliationPage() {
         <thead className="bg-gray-100">
           <tr>
             <th className="border px-2 py-1 text-left">Field</th>
-            <th className="border px-2 py-1 text-center">OSDP</th>
-            <th className="border px-2 py-1 text-center">PBI</th>
+            <th className="border px-2 py-1 text-center" style={{ width: '100px' }}>OSDP</th>
+            <th className="border px-2 py-1 text-center" style={{ width: '100px' }}>PBI</th>
           </tr>
         </thead>
         <tbody>
           {Object.entries(differences).map(([field, value], idx) => (
-            <tr key={`${field}-${idx}`}>
-              <td className="border px-2 py-1 text-left">{field}</td>
-              <td className="border px-2 py-1 text-center">{value.OSDP?.toString() || ''}</td>
-              <td className="border px-2 py-1 text-center">{value.PBI?.toString() || ''}</td>
+            <tr key={`${field}-${idx}`} className="hover:bg-yellow-50">
+              <td className="border px-2 py-1 text-left text-sm break-words">{field}</td>
+              <td className="border px-2 py-1 text-center text-sm truncate">{value.OSDP?.toString() || ''}</td>
+              <td className="border px-2 py-1 text-center text-sm truncate">{value.PBI?.toString() || ''}</td>
             </tr>
           ))}
         </tbody>
@@ -51,50 +57,94 @@ function ReconciliationPage() {
   );
 
   const handleExportCSV = (mode) => {
-    let data = [];
-    if (mode === 'all') {
-      data = reconciliationResult;
-    } else {
-      data = filteredResults;
-    }
+    setExporting(prev => ({ ...prev, csv: mode }));
 
-    const flattened = [];
-    data.forEach(row => {
-      if (row['Mismatch Type'] === 'Value mismatch' && row.Differences) {
-        const diffs = row.Differences;
-        for (const [field, values] of Object.entries(diffs)) {
-          flattened.push({
-            Distributor: row.Distributor,
-            'Distributor Name': row['Distributor Name'],
-            'Sales Route': row['Sales Route'],
-            'Mismatch Type': row['Mismatch Type'],
-            Field: field,
-            OSDP: values.OSDP,
-            PBI: values.PBI
-          });
-        }
-      } else {
-        flattened.push({
-          Distributor: row.Distributor,
-          'Distributor Name': row['Distributor Name'],
-          'Sales Route': row['Sales Route'],
-          'Mismatch Type': row['Mismatch Type'],
-          Field: '',
-          OSDP: '',
-          PBI: row.Details || `Only in ${row['Mismatch Type'].includes('OSDP') ? 'PBI' : 'OSDP'}`
+    // Let the UI update and show spinner first
+    setTimeout(() => {
+      try {
+        const data = mode === 'all' ? reconciliationResult : filteredResults;
+        const flattened = [];
+
+        data.forEach(row => {
+          if (row['Mismatch Type'] === 'Value mismatch' && row.Differences) {
+            Object.entries(row.Differences).forEach(([field, values]) => {
+              flattened.push({
+                Distributor: row.Distributor,
+                'Distributor Name': row['Distributor Name'],
+                'Sales Route': row['Sales Route'],
+                'Mismatch Type': row['Mismatch Type'],
+                Field: field,
+                OSDP: values.OSDP,
+                PBI: values.PBI
+              });
+            });
+          } else {
+            flattened.push({
+              Distributor: row.Distributor,
+              'Distributor Name': row['Distributor Name'],
+              'Sales Route': row['Sales Route'],
+              'Mismatch Type': row['Mismatch Type'],
+              Field: '',
+              OSDP: '',
+              PBI: row.Details || `Only in ${row['Mismatch Type'].includes('OSDP') ? 'PBI' : 'OSDP'}`
+            });
+          }
         });
-      }
-    });
 
-    const ws = XLSX.utils.json_to_sheet(flattened);
-    const csv = XLSX.utils.sheet_to_csv(ws);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Reconciliation_${mode}.csv`;
-    link.click();
-    setShowExportModal(false);
+        const ws = XLSX.utils.json_to_sheet(flattened);
+        const csv = XLSX.utils.sheet_to_csv(ws);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Reconciliation_${mode}.csv`;
+        link.click();
+
+        toast.success('CSV export complete!');
+        setShowExportModal(false);
+      } catch (err) {
+        toast.error('Failed to export CSV.');
+      } finally {
+        setExporting(prev => ({ ...prev, csv: null }));
+      }
+    }, 800); // small delay to allow render
+  }
+
+
+  const handleExportExcel = async (mode) => {
+    const dataToExport = mode === 'all' ? reconciliationResult : filteredResults;
+    setExporting(prev => ({ ...prev, excel: mode }));
+    const toastId = toast.loading('Exporting Excel...');
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}/export_result_excel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          records: dataToExport,
+          mode,
+          businessType,
+          reportType, // <- corrected here
+          creator
+        })
+      });
+
+      if (!response.ok) throw new Error('Export failed');
+
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `Reconciliation_${mode}.xlsx`;
+      link.click();
+
+      toast.success('Exported successfully!', { id: toastId });
+      setShowExportModal(false);
+    } catch (err) {
+      toast.error('Failed to export Excel.', { id: toastId });
+    } finally {
+      setExporting(prev => ({ ...prev, excel: null }));
+    }
   };
+
 
   return (
     <DashboardLayout>
@@ -102,7 +152,13 @@ function ReconciliationPage() {
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Reconciliation Result</h2>
           <div className="flex gap-2">
-            <button onClick={() => setShowExportModal(true)} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Export Report</button>
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="w-40 h-10 bg-green-600 text-white text-sm font-semibold rounded hover:bg-green-700 transition"
+            >
+              Export Report
+            </button>
+
             <button
               onClick={() => navigate('/recons/hpc_fcs/summary', {
                 state: {
@@ -110,7 +166,7 @@ function ReconciliationPage() {
                   businessType: sessionStorage.getItem('businessType')
                 }
               })}
-              className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600"
+              className="w-40 h-10 bg-gray-700 text-white text-sm font-semibold rounded hover:bg-gray-600 transition"
             >
               ← Back to Summary
             </button>
@@ -186,27 +242,106 @@ function ReconciliationPage() {
         <AnimatePresence>
             {showExportModal && (
               <motion.div
-                className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"
+                className={`fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-70 ${
+                  exporting.csv || exporting.excel ? 'cursor-not-allowed' : 'cursor-pointer'
+                }`}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                onClick={() => setShowExportModal(false)}
+                onClick={() => {
+                  if (!exporting.csv && !exporting.excel) {
+                    setShowExportModal(false);
+                  }
+                }}
               >
                 <motion.div
-                  className="bg-white p-6 rounded-xl shadow-xl w-full max-w-md mx-4 text-center"
+                  className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-md mx-4 text-center"
                   initial={{ y: 30, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: 30, opacity: 0 }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <h3 className="text-xl font-semibold mb-4">Export Reports (CSV)</h3>
-                  <div className="flex justify-center gap-4">
-                    <button onClick={() => handleExportCSV('all')} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Export All</button>
-                    <button onClick={() => handleExportCSV('current')} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Export This Tab</button>
+                  <h3 className="text-2xl font-semibold text-gray-800 mb-6">Export Reports</h3>
+
+                  <div className="space-y-6">
+                    {/* CSV Section */}
+                    <div>
+                      <p className="text-sm font-semibold text-left mb-3 text-gray-700 flex items-center gap-2">
+                        <FileText size={18} /> Export in CSV:
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* CSV - Current Tab */}
+                        <button
+                          onClick={() => handleExportCSV('current')}
+                          disabled={exporting.csv !== null || exporting.excel !== null}
+                          className={`w-full px-4 py-2 rounded-md ${
+                            (exporting.csv !== null && exporting.csv !== 'current') || exporting.excel !== null
+                              ? 'bg-gray-400 cursor-not-allowed'
+                              : 'bg-green-600 hover:bg-green-700'
+                          } text-white transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium`}
+                        >
+                          {exporting.csv === 'current' ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+                          Current Tab
+                        </button>
+
+                        {/* CSV - All Tab */}
+                        <button
+                          onClick={() => handleExportCSV('all')}
+                          disabled={exporting.csv !== null || exporting.excel !== null}
+                          className={`w-full px-4 py-2 rounded-md ${
+                            (exporting.csv !== null && exporting.csv !== 'all') || exporting.excel !== null
+                              ? 'bg-gray-400 cursor-not-allowed'
+                              : 'bg-blue-600 hover:bg-blue-700'
+                          } text-white transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium`}
+                        >
+                          {exporting.csv === 'all' ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+                          All Tab
+                        </button>
+                      </div>
+                    </div>
+
+                    <hr className="border-gray-200" />
+
+                    {/* Excel Section */}
+                    <div>
+                      <p className="text-sm font-semibold text-left mb-3 text-gray-700 flex items-center gap-2">
+                        <FileSpreadsheet size={18} /> Export in Excel:
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Excel - Current Tab */}
+                        <button
+                          onClick={() => handleExportExcel('current')}
+                          disabled={exporting.excel !== null || exporting.csv !== null}
+                          className={`w-full px-4 py-2 rounded-md ${
+                            (exporting.excel !== null && exporting.excel !== 'current') || exporting.csv !== null
+                              ? 'bg-gray-400 cursor-not-allowed'
+                              : 'bg-green-600 hover:bg-green-700'
+                          } text-white transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium`}
+                        >
+                          {exporting.excel === 'current' ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+                          Current Tab
+                        </button>
+
+                        {/* Excel - All Tab */}
+                        <button
+                          onClick={() => handleExportExcel('all')}
+                          disabled={exporting.excel !== null || exporting.csv !== null}
+                          className={`w-full px-4 py-2 rounded-md ${
+                            (exporting.excel !== null && exporting.excel !== 'all') || exporting.csv !== null
+                              ? 'bg-gray-400 cursor-not-allowed'
+                              : 'bg-blue-600 hover:bg-blue-700'
+                          } text-white transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium`}
+                        >
+                          {exporting.excel === 'all' ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+                          All Tab
+                        </button>
+                      </div>
+                    </div>
+
+
                   </div>
                 </motion.div>
               </motion.div>
-
           )}
         </AnimatePresence>
       </div>
