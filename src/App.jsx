@@ -10,12 +10,14 @@ import {
 //import Navbar from './components/NavBar';
 import LoginPage from './pages/LoginPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import ToolsSelectionPage from './pages/ToolsSelectionPage';
 
 //-----------------------------------------------------------------------------------------//
 
 //Home Page
 const HomePage = lazy(() => import('./pages/HomePage'));
 
+const ToolSelection = lazy(() => import('./pages/ToolsSelectionPage'));
 //Tools -Reconciliation
 //Level 1
 const ReconsMainPage = lazy(() => import('./pages/ReconsMainPage'));// Level 1 - Main Page Recons
@@ -50,6 +52,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
+          <Route path="/tools" element={<ToolSelection />} />
           <Route path="/recons" element={<ProtectedRoute><ReconsMainPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute><AdminManageControl /></ProtectedRoute>} />

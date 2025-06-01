@@ -31,6 +31,19 @@ const Sidebar = ({ isOpen }) => {
         <SidebarLink to="/" label="Home" icon={<Home size={20} />} isOpen={isOpen} isActive={isActive} />
 
         {(role === 'admin' || role === 'user') && (
+        <>
+          <SidebarLink
+            to="/tools"
+            label="Tools"
+            icon={<Sliders size={20} />}
+            isOpen={isOpen}
+            isActive={(path) =>
+              location.pathname.startsWith('/tools') ||
+              location.pathname.startsWith('/recons') ||
+              location.pathname.startsWith('/promotion')
+            }
+          />
+          {/* 
           <SidebarGroup
             label="Tools"
             icon={<Sliders size={20} />}
@@ -45,7 +58,9 @@ const Sidebar = ({ isOpen }) => {
               <SidebarLink to="/promotion" label="Promotion Tools" isOpen={isOpen} isActive={isActive} />
             )}
           </SidebarGroup>
-        )}
+          */}
+        </>
+      )}
 
         <SidebarLink to="/utilities" label="Utilities" icon={<Layers size={20} />} isOpen={isOpen} isActive={isActive} />
         {role === 'admin' && (
