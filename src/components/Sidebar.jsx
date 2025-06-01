@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Sliders, FileText, Settings, Layers, LogOut, UserCircle } from 'lucide-react';
+import {
+  Home, Sliders, FileText, Settings, Layers,
+  BarChart2, LogOut, UserCircle
+} from 'lucide-react';
 import SidebarLink from './SidebarLink';
-import SidebarGroup from './SidebarGroup';
 import { useSidebar } from '../context/SidebarContext';
 import { useUser } from '../context/UserContext';
 
 const Sidebar = ({ isOpen }) => {
   const location = useLocation();
-  const [toolsOpen, setToolsOpen] = useState(true);
   const { isSidebarOpen } = useSidebar();
   const { role, setRole, user } = useUser();
   const navigate = useNavigate();
@@ -18,20 +19,24 @@ const Sidebar = ({ isOpen }) => {
     return location.pathname.startsWith(path);
   };
 
-  const isToolsActive =
-    !isSidebarOpen &&
-    (location.pathname.startsWith('/recons') || location.pathname.startsWith('/promotion'));
-
   return (
     <aside className={`bg-white shadow-md fixed h-full z-20 ${isOpen ? 'w-64' : 'w-16'} transition-all duration-300 p-4`}>
       <h2 className={`text-xl font-bold text-blue-600 mb-6 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>
         MDM Tools
       </h2>
-      <nav className="text-gray-700 font-medium space-y-2">
-        <SidebarLink to="/" label="Home" icon={<Home size={20} />} isOpen={isOpen} isActive={isActive} />
 
+      <nav className="text-gray-700 font-medium space-y-2">
+        {/* 🏠 Dashboard */}
+        <SidebarLink
+          to="/"
+          label="Dashboard"
+          icon={<Home size={20} />}
+          isOpen={isOpen}
+          isActive={isActive}
+        />
+
+        {/* 🧰 Tools */}
         {(role === 'admin' || role === 'user') && (
-        <>
           <SidebarLink
             to="/tools"
             label="Tools"
@@ -43,33 +48,48 @@ const Sidebar = ({ isOpen }) => {
               location.pathname.startsWith('/promotion')
             }
           />
-          {/* 
-          <SidebarGroup
-            label="Tools"
-            icon={<Sliders size={20} />}
-            isOpen={isOpen}
-            expanded={toolsOpen}
-            onToggle={() => setToolsOpen(!toolsOpen)}
-            childrenOpen={isOpen && toolsOpen}
-            isActive={isToolsActive}
-          >
-            <SidebarLink to="/recons" label="Reconciliation Tools" isOpen={isOpen} isActive={isActive} />
-            {role === 'admin' && (
-              <SidebarLink to="/promotion" label="Promotion Tools" isOpen={isOpen} isActive={isActive} />
-            )}
-          </SidebarGroup>
-          */}
-        </>
-      )}
-
-        <SidebarLink to="/utilities" label="Utilities" icon={<Layers size={20} />} isOpen={isOpen} isActive={isActive} />
-        {role === 'admin' && (
-          <SidebarLink to="/settings" label="Settings" icon={<Settings size={20} />} isOpen={isOpen} isActive={isActive} />
         )}
-        <SidebarLink to="/contact" label="About" icon={<FileText size={20} />} isOpen={isOpen} isActive={isActive} />
+
+        {/* ⚙️ Utilities */}
+        <SidebarLink
+          to="#"
+          label="Utilities"
+          icon={<Layers size={20} />}
+          isOpen={isOpen}
+          isActive={isActive}
+        />
+
+        {/* 📊 Reports */}
+        <SidebarLink
+          to="#"
+          label="Reports"
+          icon={<BarChart2 size={20} />}
+          isOpen={isOpen}
+          isActive={isActive}
+        />
+
+        {/* ⚙️ Settings */}
+        {role === 'admin' && (
+          <SidebarLink
+            to="/settings"
+            label="Settings"
+            icon={<Settings size={20} />}
+            isOpen={isOpen}
+            isActive={isActive}
+          />
+        )}
+
+        {/* 📘 Contact / Help */}
+        <SidebarLink
+          to="/contact"
+          label="Contact"
+          icon={<FileText size={20} />}
+          isOpen={isOpen}
+          isActive={isActive}
+        />
       </nav>
 
-      {/* User Info */}
+      {/* 👤 User Info */}
       <div className="absolute bottom-16 left-0 w-full px-4 text-gray-700">
         <div className={`flex items-center ${isOpen ? 'gap-3 px-3 py-2' : 'justify-center w-8 h-8'}`}>
           <UserCircle size={20} />
@@ -82,7 +102,7 @@ const Sidebar = ({ isOpen }) => {
         </div>
       </div>
 
-      {/* Logout Button */}
+      {/* 🔓 Logout Button */}
       <div className="absolute bottom-4 left-0 w-full px-4">
         <button
           onClick={() => {
