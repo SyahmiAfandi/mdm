@@ -52,7 +52,7 @@ const Sidebar = ({ isOpen }) => {
 
         {/* ⚙️ Utilities */}
         <SidebarLink
-          to="#"
+          to="/utilities"
           label="Utilities"
           icon={<Layers size={20} />}
           isOpen={isOpen}
@@ -61,7 +61,7 @@ const Sidebar = ({ isOpen }) => {
 
         {/* 📊 Reports */}
         <SidebarLink
-          to="#"
+          to="/reports"
           label="Reports"
           icon={<BarChart2 size={20} />}
           isOpen={isOpen}

@@ -18,6 +18,9 @@ import ToolsSelectionPage from './pages/ToolsSelectionPage';
 const HomePage = lazy(() => import('./pages/HomePage'));
 
 const ToolSelection = lazy(() => import('./pages/ToolsSelectionPage'));
+const UtilitiesSelection = lazy(() => import('./pages/UtilitiesPage'));
+const ReportSelection = lazy(() => import('./pages/ReportsPage'));
+const ReportSummary = lazy(() => import('./pages/ReportSummaryPage'));
 //Tools -Reconciliation
 //Level 1
 const ReconsMainPage = lazy(() => import('./pages/ReconsMainPage'));// Level 1 - Main Page Recons
@@ -53,6 +56,9 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
           <Route path="/tools" element={<ToolSelection />} />
+          <Route path="/utilities" element={<UtilitiesSelection />} />
+          <Route path="/reports" element={<ReportSelection />} />
+          <Route path="/reports/summary_recons" element={<ReportSummary />} />
           <Route path="/recons" element={<ProtectedRoute><ReconsMainPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute><AdminManageControl /></ProtectedRoute>} />
