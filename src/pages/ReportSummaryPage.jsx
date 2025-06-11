@@ -397,6 +397,29 @@ export default function ReportSummaryPage() {
 
   useEffect(() => { setCurrentPage(1); }, [searchTerm, filters, sortConfig]);
 
+  // Add this just above your component (or in your CSS)
+const tooltipStyle = `
+  .custom-tooltip {
+    position: absolute;
+    z-index: 40;
+    background: #1e293b;
+    color: white;
+    font-size: 0.75rem;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.16);
+    min-width: 180px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+    left: 50%; top: 100%; transform: translateX(-50%) translateY(10px);
+    white-space: pre-line;
+  }
+  .hover-tooltip:hover .custom-tooltip { opacity: 1; pointer-events: auto; }
+`;
+
+
+<style>{tooltipStyle}</style>
   return (
     <DashboardLayout>
       <motion.div
@@ -709,9 +732,9 @@ export default function ReportSummaryPage() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 50 }}
               transition={{ duration: 0.4 }}
-              className="overflow-x-auto"
+              className=""
             >
-              <table className="min-w-fit mt-1 border text-xs">
+              <table className="w-full mt-1 border text-xs">
                 <thead className="bg-gray-200 text-xs">
                   <tr>
                     {visibleCols.Year && <th className="px-3 py-2">Year</th>}
@@ -778,39 +801,78 @@ export default function ReportSummaryPage() {
                         <td className="px-2 py-1 text-left">{row.DistributorName || '—'}</td>
                       )}
                       {allReportTypes.map((report) => {
-                      if (!visibleCols[report]) return null;
-                      const status = row.reports[report];
-                      const hasType = report in row.reports;
+                        if (!visibleCols[report]) return null;
+                        const status = row.reports[report];
+                        const hasType = report in row.reports;
 
-                      let cellClass = "w-24 px-2 py-1 text-center font-medium ";
-                      let display = "";
+                        let cellClass = "w-24 px-2 py-1 text-center font-medium relative"; // note: relative for tooltip positioning
+                        let display = "";
 
-                      if (!hasType) {
-                        cellClass += "bg-gray-200 text-gray-400 italic";
-                        display = "Not Applicable";
-                      } else if (status === undefined || status === null || /^\s*$/.test(status)) {
-                        cellClass += "bg-yellow-100 text-yellow-700 italic";
-                        display = "No Data";
-                      } else if (status === "Match") {
-                        cellClass += "bg-green-100 text-green-700";
-                        display = "Match";
-                      } else if (status === "Mismatch") {
-                        cellClass += "bg-red-100 text-red-700";
-                        display = "Mismatch";
-                      } else {
-                        display = status;
-                      }
+                        // Tooltip content preparation
+                        let tooltip = null;
+                        if (hasType && (status === "Match" || status === "Mismatch")) {
+                          // Find the original row for more info
+                          const detailRow = filtered.find(
+                            d =>
+                              d.Year === row.Year &&
+                              d.Month === row.Month &&
+                              d['Business Type'] === row.BusinessType && // might need .toLowerCase() fix
+                              d['Distributor Code'] === row.Distributor &&
+                              d['Report Type'] === report
+                          );
+                          tooltip = (
+                            <div className="custom-tooltip absolute left-1/2 top-full mt-2 transform -translate-x-1/2 bg-slate-800 text-white text-xs rounded-lg shadow-lg p-3 z-50 whitespace-pre-line pointer-events-none opacity-0 group-hover:opacity-100 transition text-left"
+                              style={{ minWidth: 220, whiteSpace: "pre-line" }}
+                            >
+                              <div><b>Report Type:</b> {report}</div>
+                              <div>
+                                <b>Status:</b>{' '}
+                                <span className={status === "Match" ? "text-green-400 font-semibold" : status === "Mismatch" ? "text-red-400 font-semibold" : ""}>
+                                  {status}
+                                </span>
+                              </div>
+                              <div><b>User:</b> {detailRow?.PIC || '-'}</div>
+                              <div><b>Last Update:</b> {detailRow?.Timestamp || '-'}</div>
+                            </div>
+                          );
+                        }
 
-                      return (
-                        <td
-                          key={report}
-                          className={cellClass}
-                          style={{ minWidth: 90, maxWidth: 90 }}
-                        >
-                          {display}
-                        </td>
-                      );
-                    })}
+                        if (!hasType) {
+                          cellClass += " bg-gray-200 text-gray-400 italic";
+                          display = "Not Applicable";
+                        } else if (status === undefined || status === null || /^\s*$/.test(status)) {
+                          cellClass += " bg-yellow-100 text-yellow-700 italic";
+                          display = "No Data";
+                        } else if (status === "Match") {
+                          cellClass += " bg-green-100 text-green-700 group";
+                          display = (
+                            <div className="hover-tooltip relative group cursor-pointer">
+                              Match
+                              {tooltip}
+                            </div>
+                          );
+                        } else if (status === "Mismatch") {
+                          cellClass += " bg-red-100 text-red-700 group";
+                          display = (
+                            <div className="hover-tooltip relative group cursor-pointer">
+                              Mismatch
+                              {tooltip}
+                            </div>
+                          );
+                        } else {
+                          display = status;
+                        }
+
+                        return (
+                          <td
+                            key={report}
+                            className={cellClass}
+                            style={{ minWidth: 90, maxWidth: 90 }}
+                          >
+                            {display}
+                          </td>
+                        );
+                      })}
                     </motion.tr>
                   ))}
                 </tbody>
