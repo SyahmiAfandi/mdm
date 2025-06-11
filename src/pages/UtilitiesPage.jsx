@@ -1,6 +1,7 @@
 import React from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 const utilities = [
   {
@@ -21,7 +22,11 @@ const utilities = [
   },
 ];
 
+
 function UtilitiesPage() {
+
+  const navigate = useNavigate();
+
   return (
     <DashboardLayout>
       <motion.div
@@ -40,7 +45,15 @@ function UtilitiesPage() {
             >
               <h2 className="text-lg font-semibold">{tool.title}</h2>
               <p className="text-sm text-gray-600">{tool.description}</p>
-              <button className="mt-3 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+              <button
+                className="mt-3 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                onClick={() => {
+                  if (tool.title === 'Date Converter') navigate('/utilities/date-converter');
+                  else if (tool.title === 'Data Cleaner') navigate('/utilities/data-cleaner');
+                  else if (tool.title === 'Column Mapper') navigate('/utilities/column-mapper');
+                  else if (tool.title === 'Google Sheets Sync') navigate('/utilities/sheets-sync');
+                }}
+              >
                 Launch Tool
               </button>
             </motion.div>

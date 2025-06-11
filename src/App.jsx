@@ -16,6 +16,8 @@ import ToolsSelectionPage from './pages/ToolsSelectionPage';
 
 //Home Page
 const HomePage = lazy(() => import('./pages/HomePage'));
+const ChatPage = lazy(() => import('./pages/ChatPage'));
+const UtilitiesDate = lazy(() => import('./pages/DateConverterPage'));
 
 const ToolSelection = lazy(() => import('./pages/ToolsSelectionPage'));
 const UtilitiesSelection = lazy(() => import('./pages/UtilitiesPage'));
@@ -56,6 +58,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
           <Route path="/tools" element={<ToolSelection />} />
+          <Route path="/chat" element={<ChatPage />} />
           <Route path="/utilities" element={<UtilitiesSelection />} />
           <Route path="/reports" element={<ReportSelection />} />
           <Route path="/reports/summary_recons" element={<ReportSummary />} />
@@ -71,7 +74,7 @@ function App() {
           <Route path="/recons/ic" element={<ReconsICPage />} />
           <Route path="/detailed-view" element={<DetailedView />} />
           <Route path="/contact" element={<ContactPage />} />
-          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/utilities/date-converter" element={<UtilitiesDate />} />
         </Routes>
         </Suspense>
     </Router>

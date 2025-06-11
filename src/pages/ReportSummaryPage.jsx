@@ -10,8 +10,9 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { BarChart2, Table } from 'lucide-react';
+import { BarChart2, Table, Search, Eye, EyeOff } from 'lucide-react';
 import annotationPlugin from 'chartjs-plugin-annotation';
+import { motion, AnimatePresence } from 'framer-motion';
 
 ChartJS.register(
   CategoryScale,
@@ -23,6 +24,13 @@ ChartJS.register(
   annotationPlugin
 );
 
+// Helper: prettify “hpc-retail” → “Hpc Retail”
+function prettifyBusinessType(b) {
+  if (!b) return '';
+  return b.replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
+// Predefined background colors for business-type shading
 const businessTypeBgColors = [
   'rgba(253,230,138,0.5)',
   'rgba(59,130,246,0.12)',
@@ -31,8 +39,11 @@ const businessTypeBgColors = [
   'rgba(254,249,195,0.5)',
 ];
 
+
+// Horizontal padding reserved for the business-group “chips” on the right
 const CLASSIC_LABEL_WIDTH = 100;
 
+// Plugin to draw a rounded “chip” showing each BusinessType label
 const businessGroupLabelPlugin = {
   id: 'businessGroupLabelPlugin',
   afterDraw: (chart) => {
@@ -40,37 +51,51 @@ const businessGroupLabelPlugin = {
     if (!scales.y || !chartArea) return;
     const businessGroupMeta = config.options.plugins.businessGroupMeta || [];
     const chipWidth = CLASSIC_LABEL_WIDTH;
+
     businessGroupMeta.forEach((meta) => {
       const yScale = scales.y;
       const yStart = yScale.getPixelForValue(meta.start);
       const yEnd = yScale.getPixelForValue(meta.end);
       const yCenter = (yStart + yEnd) / 2;
       const text = meta.business;
+
       ctx.save();
       ctx.font = '11px "Inter", "Segoe UI", Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+
       const boxWidth = chipWidth;
       const boxHeight = 18;
       const x = chartArea.right + 10;
       const y = yCenter - boxHeight / 2;
+
+      // Draw rounded rectangle background
       ctx.fillStyle = '#fff';
       ctx.strokeStyle = '#60a5fa';
       ctx.lineWidth = 1.1;
       const r = 8;
+
       ctx.beginPath();
       ctx.moveTo(x + r, y);
       ctx.lineTo(x + boxWidth - r, y);
       ctx.quadraticCurveTo(x + boxWidth, y, x + boxWidth, y + r);
       ctx.lineTo(x + boxWidth, y + boxHeight - r);
-      ctx.quadraticCurveTo(x + boxWidth, y + boxHeight, x + boxWidth - r, y + boxHeight);
+      ctx.quadraticCurveTo(
+        x + boxWidth,
+        y + boxHeight,
+        x + boxWidth - r,
+        y + boxHeight
+      );
       ctx.lineTo(x + r, y + boxHeight);
       ctx.quadraticCurveTo(x, y + boxHeight, x, y + boxHeight - r);
       ctx.lineTo(x, y + r);
       ctx.quadraticCurveTo(x, y, x + r, y);
       ctx.closePath();
+
       ctx.fill();
       ctx.stroke();
+
+      // Draw the business text inside the chip
       ctx.fillStyle = '#2563eb';
       ctx.font = '11px "Inter", "Segoe UI", Arial, sans-serif';
       ctx.fillText(text, x + boxWidth / 2, yCenter + 1);
@@ -80,6 +105,7 @@ const businessGroupLabelPlugin = {
 };
 ChartJS.register(businessGroupLabelPlugin);
 
+// Plugin to draw numeric labels inside each stacked bar if there's enough space
 const barStackValueLabelPlugin = {
   id: 'barStackValueLabelPlugin',
   afterDatasetsDraw: (chart) => {
@@ -93,30 +119,30 @@ const barStackValueLabelPlugin = {
         if (!bar) return;
         const value = dataset.data[idx] || 0;
         if (!value) return;
+
         const { x, y, base } = bar;
         const width = Math.abs(x - base);
+
         ctx.font = '11px "Inter", "Segoe UI", Arial, sans-serif';
         ctx.textAlign = width > 14 ? 'center' : 'left';
         ctx.textBaseline = 'middle';
+
         const txt = value.toString();
         ctx.fillStyle = width > 14 ? '#fff' : '#1e293b';
-        let tx = width > 14 ? (base + x) / 2 : Math.max(x, base) + 6;
-        let ty = y;
+
+        const tx = width > 14 ? (base + x) / 2 : Math.max(x, base) + 6;
+        const ty = y;
         ctx.fillText(txt, tx, ty);
       });
     });
     ctx.restore();
-  }
+  },
 };
 ChartJS.register(barStackValueLabelPlugin);
 
-function prettifyBusinessType(b) {
-  if (!b) return '';
-  return b.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-}
 
-function ReportSummaryPage() {
-  // ---- Filter defaults to previous month of current year ----
+export default function ReportSummaryPage() {
+  // ---- Default filters to “previous month” of current year ----
   const currentDate = new Date();
   let defaultMonthIdx = currentDate.getMonth() - 1;
   let defaultYear = currentDate.getFullYear();
@@ -125,10 +151,11 @@ function ReportSummaryPage() {
     defaultYear = defaultYear - 1;
   }
   const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'January','February','March','April','May','June','July',
+    'August','September','October','November','December',
   ];
 
+  // ---- Main state hooks ----
   const [data, setData] = useState([]);
   const [filters, setFilters] = useState({
     month: monthNames[defaultMonthIdx],
@@ -137,18 +164,34 @@ function ReportSummaryPage() {
     type: '',
     business: '',
   });
-  const [viewMode, setViewMode] = useState(true);
+  const [viewMode, setViewMode] = useState(true); // true = Chart, false = Table
 
-  // -------- COLUMN VISIBILITY STATE ---------
+  // ---- Column visibility state ----
   const [visibleCols, setVisibleCols] = useState({
     Year: true,
     Month: true,
     BusinessType: true,
     Distributor: true,
     DistributorName: true,
-    // Report types will be added dynamically after data is loaded
+    // Report types will be added dynamically after data loads
   });
 
+  // ---- Show/Hide the “Show Columns” dropdown ----
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef();
+
+  // ---- Search + Sort state for table view ----
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+
+  // ---- Show/Hide search bar in Table View ----
+  const [showSearchBar, setShowSearchBar] = useState(true);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10; // You can make this configurable if you want
+
+  // ---------------- Fetch data ----------------
   useEffect(() => {
     fetch(
       'https://script.google.com/macros/s/AKfycbwDPtUd-pz85z8SJOPfHI0tJAr2LsJtFs_EH9w62-FJ6GZ_Fcxl31jle6eUWj8EQWxG/exec'
@@ -156,11 +199,11 @@ function ReportSummaryPage() {
       .then((res) => res.json())
       .then((rows) => {
         setData(rows);
-        // Setup report type columns as visible by default
-        const allReportTypes = Array.from(new Set(rows.map(row => row['Report Type'] || ''))).sort();
+        // Dynamically add each Report Type to visibleCols
+        const allReportTypes = Array.from(new Set(rows.map((row) => row['Report Type'] || ''))).sort();
         setVisibleCols((prev) => {
           const updated = { ...prev };
-          allReportTypes.forEach(r => {
+          allReportTypes.forEach((r) => {
             if (!(r in updated)) updated[r] = true;
           });
           return updated;
@@ -168,6 +211,19 @@ function ReportSummaryPage() {
       });
   }, []);
 
+  // ---------------- Close “Show Columns” dropdown on outside click ----------------
+  useEffect(() => {
+    if (!showDropdown) return;
+    function handleClickOutside(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDropdown]);
+
+  // ---------------- Apply filters ----------------
   const filtered = data.filter((row) => {
     return (
       (!filters.month || row.Month === filters.month) &&
@@ -178,6 +234,7 @@ function ReportSummaryPage() {
     );
   });
 
+  // ---------------- Build counts for chart ----------------
   const counts = {};
   filtered.forEach((d) => {
     const business = d['Business Type'] || 'Unknown';
@@ -193,10 +250,10 @@ function ReportSummaryPage() {
   });
 
   const businessLabels = Object.keys(counts).sort();
-
   const onlyReportTypeLabels = [];
   const actualPairs = [];
   const businessGroupMeta = [];
+
   businessLabels.forEach((b, idx) => {
     const reportsForThisBusiness = Object.keys(counts[b]).sort();
     const startIdx = onlyReportTypeLabels.length;
@@ -213,12 +270,8 @@ function ReportSummaryPage() {
     });
   });
 
-  const matchData = actualPairs.map(
-    ([b, r]) => counts[b][r]?.Match || 0
-  );
-  const mismatchData = actualPairs.map(
-    ([b, r]) => counts[b][r]?.Mismatch || 0
-  );
+  const matchData = actualPairs.map(([b, r]) => counts[b][r]?.Match || 0);
+  const mismatchData = actualPairs.map(([b, r]) => counts[b][r]?.Mismatch || 0);
 
   const chartData = {
     labels: onlyReportTypeLabels,
@@ -227,17 +280,18 @@ function ReportSummaryPage() {
         label: 'Match',
         data: matchData,
         backgroundColor: '#4ade80',
-        stack: 'stack1'
+        stack: 'stack1',
       },
       {
         label: 'Mismatch',
         data: mismatchData,
         backgroundColor: '#f87171',
-        stack: 'stack1'
+        stack: 'stack1',
       },
     ],
   };
 
+  // Build Chart.js annotations (colored backgrounds + dividing lines)
   const annotations = {};
   businessGroupMeta.forEach((meta, idx) => {
     annotations[`bg${idx}`] = {
@@ -248,7 +302,7 @@ function ReportSummaryPage() {
       xMax: 'max',
       backgroundColor: meta.bgColor,
       borderWidth: 0,
-      drawTime: 'beforeDatasetsDraw'
+      drawTime: 'beforeDatasetsDraw',
     };
     if (idx < businessGroupMeta.length - 1) {
       annotations[`divider${idx}`] = {
@@ -257,285 +311,440 @@ function ReportSummaryPage() {
         yMax: meta.end + 0.5,
         borderColor: '#a1a1aa',
         borderWidth: 1.2,
-        scaleID: 'y'
+        scaleID: 'y',
       };
     }
   });
 
-  // --------- TABLE VIEW LOGIC --------------
-  const allReportTypes = Array.from(new Set(filtered.map(row => row['Report Type'] || ''))).sort();
+  // ---------------- Prepare table rows (grouped) ----------------
+  const allReportTypes = Array.from(
+    new Set(filtered.map((row) => row['Report Type'] || ''))
+  ).sort();
 
-  function handleToggleCol(col) {
-    setVisibleCols(prev => ({ ...prev, [col]: !prev[col] }));
+  const grouped = {};
+  filtered.forEach((row) => {
+    const key = [row.Year, row.Month, row['Business Type'], row['Distributor Code']].join('||');
+    if (!grouped[key]) {
+      grouped[key] = {
+        Year: row.Year,
+        Month: row.Month,
+        BusinessType: prettifyBusinessType(row['Business Type']),
+        Distributor: row['Distributor Code'],
+        DistributorName: '',
+        reports: {},
+      };
+    }
+    const nameFromRow = row['Distributor Name'];
+    if (nameFromRow && nameFromRow.trim() !== '' && grouped[key].DistributorName.trim() === '') {
+      grouped[key].DistributorName = nameFromRow.trim();
+    }
+    // Store all report statuses as raw value (could be "", null, etc.)
+    grouped[key].reports[row['Report Type']] = row['Report Status'];
+  });
+  let tableRows = Object.values(grouped);
+
+  // --- Apply search filter (Distributor Code or Distributor Name) ---
+  if (searchTerm.trim() !== '') {
+    const lower = searchTerm.toLowerCase();
+    tableRows = tableRows.filter(
+      (r) =>
+        r.Distributor.toString().toLowerCase().includes(lower) ||
+        (r.DistributorName || '').toLowerCase().includes(lower)
+    );
   }
 
-  // ---- COLUMN CHECKBOXES DROPDOWN ----
-  const [showDropdown, setShowDropdown] = useState(false);
-  const dropdownRef = useRef();
+  // --- Apply sort if requested ---
+  if (sortConfig.key) {
+    tableRows.sort((a, b) => {
+      const aVal = (a[sortConfig.key] || '').toString().toLowerCase();
+      const bVal = (b[sortConfig.key] || '').toString().toLowerCase();
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
 
-  useEffect(() => {
-    if (!showDropdown) return;
-    function handleClick(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setShowDropdown(false);
-      }
+  // Sort handler
+  const requestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
     }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showDropdown]);
+    setSortConfig({ key, direction });
+  };
+
+  // Toggle column visibility
+  function handleToggleCol(col) {
+    setVisibleCols((prev) => ({ ...prev, [col]: !prev[col] }));
+  }
+    // Helper for rendering status cell
+  function getStatusCell(status, hasType) {
+    if (!hasType) return <span className="text-gray-400 italic">Not Applicable</span>;
+    if (status === undefined || status === null || /^\s*$/.test(status)) {
+      // If the report type exists for this distributor but status is blank/null/empty
+      return <span className="text-yellow-500 italic">No Data</span>;
+    }
+    return status;
+  }
+
+  const totalRows = tableRows.length;
+  const totalPages = Math.ceil(totalRows / pageSize);
+
+  const paginatedRows = tableRows.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, filters, sortConfig]);
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6">
+      <motion.div
+        className="p-6 space-y-6"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+      >
         <h1 className="text-2xl font-bold">Report Summary</h1>
-        {/* Filters + Toggle + Show Columns */}
-        <div className="flex flex-wrap justify-between items-center gap-4">
-          <div className="flex flex-wrap gap-2">
-            {/* Month Filter */}
+
+        {/* ========================================= */}
+        {/* 1) Filter “Card” Container (Selects Row)  */}
+        {/* ========================================= */}
+        <div className="bg-white p-4 rounded-lg shadow-md flex flex-wrap gap-4">
+          {/* Month Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Month
+            </label>
             <select
-              className="border px-3 py-1.5 rounded-md text-sm shadow-sm focus:ring-2 focus:ring-blue-400"
+              className="block w-36 bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-md focus:ring-indigo-500 focus:border-indigo-500 px-3 py-1.5"
               value={filters.month}
-              onChange={(e) =>
-                setFilters({ ...filters, month: e.target.value })
-              }
+              onChange={(e) => setFilters({ ...filters, month: e.target.value })}
             >
               <option value="">All Months</option>
               {monthNames.map((m) => (
-                <option key={m} value={m}>{m}</option>
+                <option key={m} value={m}>
+                  {m}
+                </option>
               ))}
             </select>
-            {/* Year Filter */}
+          </div>
+
+          {/* Year Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Year</label>
             <select
-              className="border px-3 py-1.5 rounded-md text-sm shadow-sm focus:ring-2 focus:ring-blue-400"
+              className="block w-24 bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-md focus:ring-indigo-500 focus:border-indigo-500 px-3 py-1.5"
               value={filters.year}
-              onChange={(e) =>
-                setFilters({ ...filters, year: e.target.value })
-              }
+              onChange={(e) => setFilters({ ...filters, year: e.target.value })}
             >
               <option value="">All Years</option>
               {[2023, 2024, 2025].map((y) => (
-                <option key={y} value={y}>{y}</option>
+                <option key={y} value={y}>
+                  {y}
+                </option>
               ))}
             </select>
-            {/* Status Filter */}
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Status</label>
             <select
-              className="border px-3 py-1.5 rounded-md text-sm shadow-sm focus:ring-2 focus:ring-blue-400"
+              className="block w-28 bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-md focus:ring-indigo-500 focus:border-indigo-500 px-3 py-1.5"
               value={filters.status}
-              onChange={(e) =>
-                setFilters({ ...filters, status: e.target.value })
-              }
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
             >
               <option value="">All Status</option>
               <option value="Match">Match</option>
               <option value="Mismatch">Mismatch</option>
             </select>
-            {/* Report Type Filter */}
+          </div>
+
+          {/* Report Type Filter */}
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Report Type
+            </label>
             <select
-              className="border px-3 py-1.5 rounded-md text-sm shadow-sm focus:ring-2 focus:ring-blue-400"
+              className="block w-full bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-md focus:ring-indigo-500 focus:border-indigo-500 px-3 py-1.5"
               value={filters.type}
-              onChange={(e) =>
-                setFilters({ ...filters, type: e.target.value })
-              }
+              onChange={(e) => setFilters({ ...filters, type: e.target.value })}
             >
               <option value="">All Types</option>
-              {[...new Set(data.map((d) => d['Report Type']))].map(
-                (type) => (
-                  <option key={type} value={type}>{type}</option>
-                )
-              )}
-            </select>
-            {/* Business Type Filter */}
-            <select
-              className="border px-3 py-1.5 rounded-md text-sm shadow-sm focus:ring-2 focus:ring-blue-400"
-              value={filters.business}
-              onChange={(e) =>
-                setFilters({ ...filters, business: e.target.value })
-              }
-            >
-              <option value="">All Business Types</option>
-              {[...new Set(data.map((d) => d['Business Type']))].map(
-                (b) => (
-                  <option key={b} value={b}>{prettifyBusinessType(b)}</option>
-                )
-              )}
+              {[...new Set(data.map((d) => d['Report Type']))].map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
             </select>
           </div>
-          {/* Show Columns & Toggle between Chart / Table View */}
-          <div className="flex items-center gap-3">
-            {!viewMode && ( // <-- Show only when in Table view
-            <div className="relative">
+
+          {/* Business Type Filter */}
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Business Type
+            </label>
+            <select
+              className="block w-full bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-md focus:ring-indigo-500 focus:border-indigo-500 px-3 py-1.5"
+              value={filters.business}
+              onChange={(e) => setFilters({ ...filters, business: e.target.value })}
+            >
+              <option value="">All Business Types</option>
+              {[...new Set(data.map((d) => d['Business Type']))].map((b) => (
+                <option key={b} value={b}>
+                  {prettifyBusinessType(b)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* =============================================================== */}
+        {/* 2) Combined: Hide/Show Search, Search Input, + Chart/Table Toggle */}
+        {/* =============================================================== */}
+        <div className="flex items-center justify-between">
+        {/* LEFT: Hide/Show Search & Search Bar (Table view only) */}
+        <div className="flex items-center gap-4">
+          {!viewMode && (
+            <>
               <button
                 type="button"
-                onClick={() => setShowDropdown((v) => !v)}
-                className="px-3 py-1.5 bg-gray-100 rounded border text-sm font-medium shadow-sm hover:bg-gray-200"
+                onClick={() => setShowSearchBar((v) => !v)}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-1.5 rounded-md shadow-sm transition-colors duration-150"
               >
+                {showSearchBar ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showSearchBar ? 'Hide Search' : 'Show Search'}
+              </button>
+              <AnimatePresence initial={false}>
+                {showSearchBar && (
+                  <motion.div
+                    key="search"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    className="relative"
+                  >
+                    <Search
+                      size={18}
+                      className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Search Distributor code or name…"
+                      className="pl-10 pr-2 py-1.5 w-64 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-colors duration-150"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </>
+          )}
+        </div>
+
+        {/* RIGHT: Show Columns + Toggle */}
+        <div className="flex items-center gap-3">
+          {/* Show Columns: only in Table View */}
+          {!viewMode && (
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowDropdown((v) => !v)}
+                className="flex items-center gap-1 bg-white border border-gray-300 rounded-md px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 shadow transition"
+              >
+                <Eye className="w-4 h-4 mr-1" />
                 Show Columns
               </button>
               {showDropdown && (
-                <div
-                  ref={dropdownRef}
-                  className="absolute z-30 bg-white border rounded shadow-lg p-3 mt-2 left-0 min-w-[200px]"
-                  style={{ maxHeight: 270, overflowY: 'auto' }}
-                >
-                  <div className="font-semibold text-xs text-gray-500 mb-1">Toggle columns</div>
-                  {['Year','Month','BusinessType','Distributor','DistributorName',...allReportTypes].map(col => (
-                    <label key={col} className="flex items-center gap-1 text-xs py-0.5 cursor-pointer">
+                <div className="absolute left-0 z-50 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg p-2 space-y-1">
+                  {Object.entries(visibleCols).map(([col, val]) => (
+                    <label key={col} className="flex items-center gap-2 cursor-pointer px-2 py-1 rounded hover:bg-gray-100">
                       <input
                         type="checkbox"
-                        checked={visibleCols[col] !== false}
+                        checked={val}
                         onChange={() => handleToggleCol(col)}
+                        className="form-checkbox"
                       />
-                      {col === 'BusinessType'
-                        ? 'Business Type'
-                        : col}
+                      <span className="text-xs">
+                        {col === 'BusinessType' ? 'Business Type'
+                          : col === 'Distributor' ? 'Distributor Code'
+                          : col === 'DistributorName' ? 'Distributor Name'
+                          : col}
+                      </span>
                     </label>
                   ))}
                 </div>
               )}
             </div>
-            )}
-            {/* Toggle Button */}
-            <label
-              htmlFor="viewToggle"
-              className="relative inline-block w-10 h-6 cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                id="viewToggle"
-                className="sr-only"
-                checked={viewMode}
-                onChange={() => setViewMode(!viewMode)}
-              />
-              <div className="absolute inset-0 bg-blue-500 rounded-full transition duration-300 w-10 h-6"></div>
-              <div
-                className={`dot absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white flex items-center justify-center transition-transform duration-300 ease-in-out ${
-                  viewMode ? 'translate-x-0' : 'translate-x-4'
-                }`}
-              >
-                {viewMode ? (
-                  <BarChart2 size={16} className="text-blue-500" />
-                ) : (
-                  <Table size={16} className="text-blue-500" />
-                )}
-              </div>
-            </label>
-            <span className="text-sm text-gray-700 font-medium">
-              {viewMode ? 'Chart View' : 'Table View'}
-            </span>
-          </div>
-        </div>
-        {/* Chart or Table */}
-        {viewMode ? (
-          <div
-            className="overflow-x-auto"
-            style={{
-              minHeight: 310,
-              position: 'relative',
-              width: '100%',
-              minWidth: 0,
-            }}
+          )}
+
+          {/* Chart/Table Toggle: always visible, always at the end/right */}
+          <button
+            type="button"
+            onClick={() => setViewMode((v) => !v)}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-1.5 rounded-md shadow-sm transition-colors duration-150"
           >
-            <Bar
-              data={chartData}
-              options={{
-                indexAxis: 'y',
-                responsive: true,
-                layout: {
-                  padding: { right: CLASSIC_LABEL_WIDTH + 30 },
-                },
-                barThickness: 13,
-                plugins: {
-                  annotation: { annotations },
-                  businessGroupMeta,
-                  legend: {
-                    position: 'top',
-                    labels: {
-                      font: { size: 11, family: '"Inter","Segoe UI",Arial,sans-serif', weight: 'normal' }
-                    }
+            {viewMode ? (
+              <>
+                <Table size={18} className="inline-block mr-1" />
+                Table View
+              </>
+            ) : (
+              <>
+                <BarChart2 size={18} className="inline-block mr-1" />
+                Chart View
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+
+
+        {/* ================================================= */}
+        {/* 3) Chart or Table Rendering */}
+        {/* ================================================= */}
+        <AnimatePresence mode="wait">
+          {viewMode ? (
+            <motion.div
+              key="chart"
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              transition={{ duration: 0.4 }}
+              className="overflow-x-auto"
+              style={{
+                minHeight: 310,
+                position: 'relative',
+                width: '100%',
+                minWidth: 0,
+              }}
+            >
+              <Bar
+                data={chartData}
+                options={{
+                  indexAxis: 'y',
+                  responsive: true,
+                  layout: {
+                    padding: { right: CLASSIC_LABEL_WIDTH + 30 },
                   },
-                  title: {
-                    display: true,
-                    text: 'Status by Report Type (Grouped by Business)',
-                    font: { size: 12, family: '"Inter","Segoe UI",Arial,sans-serif', weight: 'normal' }
-                  },
-                },
-                scales: {
-                  x: {
-                    title: { display: true, text: 'Count', font: { size: 11, family: '"Inter","Segoe UI",Arial,sans-serif', weight: 'normal' } },
-                    beginAtZero: true,
-                    stacked: true,
-                    ticks: { font: { size: 11, family: '"Inter","Segoe UI",Arial,sans-serif', weight: 'normal' } }
-                  },
-                  y: {
-                    title: { display: true, text: 'Report Type', font: { size: 11, family: '"Inter","Segoe UI",Arial,sans-serif', weight: 'normal' } },
-                    stacked: true,
-                    ticks: {
-                      callback: function (val, idx) {
-                        return this.getLabelForValue(val);
+                  barThickness: 13,
+                  plugins: {
+                    annotation: { annotations },
+                    businessGroupMeta,
+                    legend: {
+                      position: 'top',
+                      labels: {
+                        font: {
+                          size: 11,
+                          family: '"Inter","Segoe UI",Arial,sans-serif',
+                          weight: 'normal',
+                        },
                       },
-                      font: { size: 11, family: '"Inter","Segoe UI",Arial,sans-serif', weight: 'normal' }
+                    },
+                    title: {
+                      display: true,
+                      text: 'Status by Report Type (Grouped by Business)',
+                      font: {
+                        size: 12,
+                        family: '"Inter","Segoe UI",Arial,sans-serif',
+                        weight: 'normal',
+                      },
                     },
                   },
-                },
-                maintainAspectRatio: false,
-              }}
-              plugins={[barStackValueLabelPlugin, businessGroupLabelPlugin]}
-            />
-          </div>
-        ) : (
-          // ---------- TABLE VIEW START ----------
-          <div className="overflow-x-auto">
-            {/* ---- COLUMN CHECKBOXES ---- */}
-            {/* Already included in top bar */}
-            {/* ---- TABLE ---- */}
-            {(() => {
-              // Group rows by unique (Year, Month, Business Type, Distributor)
-              const grouped = {};
-              filtered.forEach(row => {
-                const key = [
-                  row.Year,
-                  row.Month,
-                  row['Business Type'],
-                  row['Distributor Code']
-                ].join('||');
-
-                // Initialize group if not exists
-                if (!grouped[key]) {
-                  grouped[key] = {
-                    Year: row.Year,
-                    Month: row.Month,
-                    BusinessType: prettifyBusinessType(row['Business Type']),
-                    Distributor: row['Distributor Code'],
-                    DistributorName: '', // start empty
-                    reports: {},
-                  };
-                }
-
-                // ✅ Always prefer non-empty name values
-                const nameFromRow = row['Distributor Name'];
-                if (nameFromRow && nameFromRow.trim() !== '' && grouped[key].DistributorName.trim() === '') {
-                  grouped[key].DistributorName = nameFromRow.trim();
-                }
-
-                // Always record the report-status into that bucket’s reports object:
-                grouped[key].reports[row['Report Type']] = row['Report Status'];
-              });
-
-              console.log('Grouped result:', grouped);
-              
-              const tableRows = Object.values(grouped);
-
-              return (
-                <table className="min-w-fit mt-4 border text-xs">
-                  <thead className="bg-gray-200 text-xs">
-                    <tr>
-                      {visibleCols.Year && <th className="px-3 py-2">Year</th>}
-                      {visibleCols.Month && <th className="px-3 py-2">Month</th>}
-                      {visibleCols.BusinessType && <th className="px-3 py-2">Business Type</th>}
-                      {visibleCols.Distributor && <th className="px-3 py-2">Distributor</th>}
-                      {visibleCols.DistributorName && <th className="px-3 py-2">Distributor Name</th>}
-                      {allReportTypes.map(report => (
-                        visibleCols[report] &&
+                  scales: {
+                    x: {
+                      title: {
+                        display: true,
+                        text: 'Count',
+                        font: {
+                          size: 11,
+                          family: '"Inter","Segoe UI",Arial,sans-serif',
+                          weight: 'normal',
+                        },
+                      },
+                      beginAtZero: true,
+                      stacked: true,
+                      ticks: {
+                        font: {
+                          size: 11,
+                          family: '"Inter","Segoe UI",Arial,sans-serif',
+                          weight: 'normal',
+                        },
+                      },
+                    },
+                    y: {
+                      title: {
+                        display: true,
+                        text: 'Report Type',
+                        font: {
+                          size: 11,
+                          family: '"Inter","Segoe UI",Arial,sans-serif',
+                          weight: 'normal',
+                        },
+                      },
+                      stacked: true,
+                      ticks: {
+                        callback: function (val) {
+                          return this.getLabelForValue(val);
+                        },
+                        font: {
+                          size: 11,
+                          family: '"Inter","Segoe UI",Arial,sans-serif',
+                          weight: 'normal',
+                        },
+                      },
+                    },
+                  },
+                  maintainAspectRatio: false,
+                }}
+                plugins={[barStackValueLabelPlugin, businessGroupLabelPlugin]}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="table"
+              initial={{ opacity: 0, x: -50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 50 }}
+              transition={{ duration: 0.4 }}
+              className="overflow-x-auto"
+            >
+              <table className="min-w-fit mt-1 border text-xs">
+                <thead className="bg-gray-200 text-xs">
+                  <tr>
+                    {visibleCols.Year && <th className="px-3 py-2">Year</th>}
+                    {visibleCols.Month && <th className="px-3 py-2">Month</th>}
+                    {visibleCols.BusinessType && <th className="px-3 py-2">Business Type</th>}
+                    {visibleCols.Distributor && (
+                      <th
+                        className="px-3 py-2 cursor-pointer select-none"
+                        onClick={() => requestSort('Distributor')}
+                      >
+                        Distributor Code
+                        {sortConfig.key === 'Distributor' && (
+                          <span className="ml-1">
+                            {sortConfig.direction === 'asc' ? '▲' : '▼'}
+                          </span>
+                        )}
+                      </th>
+                    )}
+                    {visibleCols.DistributorName && (
+                      <th
+                        className="px-3 py-2 cursor-pointer select-none"
+                        onClick={() => requestSort('DistributorName')}
+                      >
+                        Distributor Name
+                        {sortConfig.key === 'DistributorName' && (
+                          <span className="ml-1">
+                            {sortConfig.direction === 'asc' ? '▲' : '▼'}
+                          </span>
+                        )}
+                      </th>
+                    )}
+                    {allReportTypes.map((report) =>
+                      visibleCols[report] ? (
                         <th
                           key={report}
                           className="px-2 py-2 w-24"
@@ -543,53 +752,109 @@ function ReportSummaryPage() {
                         >
                           {report}
                         </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tableRows.map((row, i) => (
-                      <tr key={i} className="border-t">
-                        {visibleCols.Year && <td className="px-2 py-1 text-center">{row.Year}</td>}
-                        {visibleCols.Month && <td className="px-2 py-1 text-center">{row.Month}</td>}
-                        {visibleCols.BusinessType && <td className="px-2 py-1 text-center">{row.BusinessType}</td>}
-                        {visibleCols.Distributor && <td className="px-2 py-1 text-center">{row.Distributor}</td>}
-                        {visibleCols.DistributorName && (
-                          <td className="px-2 py-1 text-left">
-                            {row.DistributorName || '—'}            {/* show a dash or “N/A” if still blank */}
-                          </td>
-                        )}
-                        {allReportTypes.map(report => {
-                          if (!visibleCols[report]) return null;
-                          const status = row.reports[report];
-                          return (
-                            <td
-                              key={report}
-                              className={
-                                "w-24 px-2 py-1 text-center font-medium " +
-                                (status === 'Match'
-                                  ? 'bg-green-100 text-green-700'
-                                  : status === 'Mismatch'
-                                  ? 'bg-red-100 text-red-700'
-                                  : '')
-                              }
-                              style={{ minWidth: 90, maxWidth: 90 }}
-                            >
-                              {status || ''}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              );
-            })()}
-          </div>
-          // ---------- TABLE VIEW END ----------
-        )}
-      </div>
+                      ) : null
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedRows.map((row, i) => (
+                    <motion.tr
+                      key={i}
+                      className="border-t"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.01, duration: 0.3 }}
+                      whileHover={{ scale: 1.000, backgroundColor: '#f1f5f9' }}
+                    >
+                      {visibleCols.Year && <td className="px-2 py-1 text-center">{row.Year}</td>}
+                      {visibleCols.Month && <td className="px-2 py-1 text-center">{row.Month}</td>}
+                      {visibleCols.BusinessType && (
+                        <td className="px-2 py-1 text-center">{row.BusinessType}</td>
+                      )}
+                      {visibleCols.Distributor && (
+                        <td className="px-2 py-1 text-center">{row.Distributor}</td>
+                      )}
+                      {visibleCols.DistributorName && (
+                        <td className="px-2 py-1 text-left">{row.DistributorName || '—'}</td>
+                      )}
+                      {allReportTypes.map((report) => {
+                      if (!visibleCols[report]) return null;
+                      const status = row.reports[report];
+                      const hasType = report in row.reports;
+
+                      let cellClass = "w-24 px-2 py-1 text-center font-medium ";
+                      let display = "";
+
+                      if (!hasType) {
+                        cellClass += "bg-gray-200 text-gray-400 italic";
+                        display = "Not Applicable";
+                      } else if (status === undefined || status === null || /^\s*$/.test(status)) {
+                        cellClass += "bg-yellow-100 text-yellow-700 italic";
+                        display = "No Data";
+                      } else if (status === "Match") {
+                        cellClass += "bg-green-100 text-green-700";
+                        display = "Match";
+                      } else if (status === "Mismatch") {
+                        cellClass += "bg-red-100 text-red-700";
+                        display = "Mismatch";
+                      } else {
+                        display = status;
+                      }
+
+                      return (
+                        <td
+                          key={report}
+                          className={cellClass}
+                          style={{ minWidth: 90, maxWidth: 90 }}
+                        >
+                          {display}
+                        </td>
+                      );
+                    })}
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+              {/* Pagination Controls */}
+              <div className="flex justify-between items-center mt-4">
+                <span className="text-xs text-gray-600">
+                  Showing {Math.min((currentPage - 1) * pageSize + 1, totalRows)}-
+                  {Math.min(currentPage * pageSize, totalRows)} of {totalRows} results
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-2 py-1 text-xs rounded border bg-white hover:bg-gray-100 disabled:opacity-60"
+                  >
+                    Prev
+                  </button>
+                  {[...Array(totalPages)].map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentPage(idx + 1)}
+                      className={`px-2 py-1 text-xs rounded border ${
+                        currentPage === idx + 1
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white hover:bg-gray-100'
+                      }`}
+                    >
+                      {idx + 1}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-2 py-1 text-xs rounded border bg-white hover:bg-gray-100 disabled:opacity-60"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
     </DashboardLayout>
   );
 }
-
-export default ReportSummaryPage;

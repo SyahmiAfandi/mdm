@@ -20,6 +20,7 @@
     "react": "^19.1.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.1.0",
+    "react-dropzone": "^14.3.8",
     "react-hot-toast": "^2.5.2",
     "react-responsive": "^10.0.1",
     "react-router-dom": "^7.6.0",

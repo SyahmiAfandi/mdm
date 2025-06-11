@@ -6,6 +6,7 @@ import { saveAs } from 'file-saver';
 import { DownloadIcon } from 'lucide-react'; // or another icon of your choice
 import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react'; // spinner icon
+import { ChevronDownIcon } from 'lucide-react';
 
 function ReconciliationSummary() {
   const navigate = useNavigate();
@@ -18,6 +19,11 @@ function ReconciliationSummary() {
   const businessType = location.state?.businessType || sessionStorage.getItem('businessType') || 'N/A';
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
   const [exporting, setExporting] = useState(false);
+  const [showExportOptions, setShowExportOptions] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportYear, setExportYear] = useState('2025');
+  const [exportMonth, setExportMonth] = useState('January');
+  const creator = localStorage.getItem('username') || 'Auto Generated';
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -85,13 +91,41 @@ function ReconciliationSummary() {
     }
   };
 
+  const handleExportToDatabase = async () => {
+    const dataToExport = source === 'OSDP' ? osdpData : pbiData;
+    const toastId = toast.loading('Exporting to database...');
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/export_to_sheets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          year: exportYear,
+          month: exportMonth,
+          businessType,
+          reportType: fromButton,
+          records: dataToExport,
+          source,
+          pic: creator,
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to export to Google Sheets');
+
+      toast.success('Successfully exported to Report Database!', { id: toastId });
+    } catch (err) {
+      toast.error('Failed to export to Report Database.', { id: toastId });
+    } finally {
+      setShowExportModal(false);
+    }
+  };
 
 
   return (
     <DashboardLayout>
       <div className="grid grid-cols-3 items-center mb-6">
         {/* Left buttons */}
-        <div className="flex gap-2 justify-start">
+        <div className="flex gap-2 justify-start relative">
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -100,28 +134,103 @@ function ReconciliationSummary() {
           >
             Back to Main
           </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleExportExcel}
-            disabled={exporting}
-            className={`flex items-center gap-2 px-4 py-2 text-sm rounded transition ${
-              exporting ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 text-white'
-            }`}
+        <motion.div
+          className="relative"
+          onMouseLeave={() => setShowExportOptions(false)} // 👈 keeps dropdown open while inside
+        >
+          <button
+            onClick={() => setShowExportOptions((prev) => !prev)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition"
           >
-            {exporting ? (
-              <>
-                <Loader2 className="animate-spin" size={16} />
-                Exporting...
-              </>
-            ) : (
-              <>
-                <DownloadIcon size={16} />
-                Export Excel
-              </>
-            )}
-          </motion.button>
-        </div>
+            <DownloadIcon size={16} /> Export <ChevronDownIcon size={14} />
+          </button>
+
+          {showExportOptions && (
+            <div className="absolute z-20 mt-1 w-48 bg-white rounded shadow border">
+              <button
+                onClick={() => {
+                  setShowExportOptions(false);
+                  handleExportExcel();
+                }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+              >
+                To Excel File
+              </button>
+              <button
+                onClick={() => {
+                  setShowExportOptions(false);
+                  setShowExportModal(true);
+                }}
+                className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+              >
+                To Report Database
+              </button>
+            </div>
+          )}
+        </motion.div>
+
+      </div>
+
+      {/* Export Modal */}
+      <AnimatePresence>
+        {showExportModal && (
+          <motion.div
+            className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowExportModal(false)}
+          >
+            <motion.div
+              className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md mx-4"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-bold mb-4">Export to Report Database</h3>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                <select
+                  value={exportYear}
+                  onChange={(e) => setExportYear(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                >
+                  {['2024', '2025', '2026'].map((yr) => (
+                    <option key={yr}>{yr}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
+                <select
+                  value={exportMonth}
+                  onChange={(e) => setExportMonth(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                >
+                  {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m) => (
+                    <option key={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400 text-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleExportToDatabase}
+                  className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 text-white"
+                >
+                  Export
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
         {/* Centered box (naturally centered in column 2) */}
         <div className="flex justify-center">
