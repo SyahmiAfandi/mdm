@@ -771,7 +771,7 @@ const tooltipStyle = `
                         <th
                           key={report}
                           className="px-2 py-2 w-24"
-                          style={{ minWidth: 90, maxWidth: 90 }}
+                          //style={{ minWidth: 90, maxWidth: 90 }}
                         >
                           {report}
                         </th>
@@ -800,7 +800,7 @@ const tooltipStyle = `
                       {visibleCols.DistributorName && (
                         <td className="px-2 py-1 text-left">{row.DistributorName || '—'}</td>
                       )}
-                      {allReportTypes.map((report) => {
+                      {allReportTypes.map((report, colIdx) => {
                         if (!visibleCols[report]) return null;
                         const status = row.reports[report];
                         const hasType = report in row.reports;
@@ -821,7 +821,13 @@ const tooltipStyle = `
                               d['Report Type'] === report
                           );
                           tooltip = (
-                            <div className="custom-tooltip absolute left-1/2 top-full mt-2 transform -translate-x-1/2 bg-slate-800 text-white text-xs rounded-lg shadow-lg p-3 z-50 whitespace-pre-line pointer-events-none opacity-0 group-hover:opacity-100 transition text-left"
+                            <div
+                              className={
+                                "custom-tooltip absolute top-full mt-2 bg-slate-800 text-white text-xs rounded-lg shadow-lg p-3 z-50 whitespace-pre-line pointer-events-none opacity-0 group-hover:opacity-100 transition text-left " +
+                                (colIdx >= allReportTypes.length - 2
+                                  ? "right-0 left-auto translate-x-0"
+                                  : "left-1/2 -translate-x-1/2")
+                              }
                               style={{ minWidth: 220, whiteSpace: "pre-line" }}
                             >
                               <div><b>Report Type:</b> {report}</div>
@@ -867,7 +873,7 @@ const tooltipStyle = `
                           <td
                             key={report}
                             className={cellClass}
-                            style={{ minWidth: 90, maxWidth: 90 }}
+                            //style={{ minWidth: 90, maxWidth: 90 }}
                           >
                             {display}
                           </td>
