@@ -13,6 +13,7 @@ import {
 import { BarChart2, Table, Search, Eye, EyeOff } from 'lucide-react';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { APP_FULL_NAME } from '../config';
 
 ChartJS.register(
   CategoryScale,
@@ -189,13 +190,11 @@ export default function ReportSummaryPage() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10; // You can make this configurable if you want
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // ---------------- Fetch data ----------------
   useEffect(() => {
-    fetch(
-      'https://script.google.com/macros/s/AKfycbwDPtUd-pz85z8SJOPfHI0tJAr2LsJtFs_EH9w62-FJ6GZ_Fcxl31jle6eUWj8EQWxG/exec'
-    )
+    fetch(import.meta.env.VITE_GAS_REPORT_SUMMARY_URL)
       .then((res) => res.json())
       .then((rows) => {
         setData(rows);
@@ -388,13 +387,12 @@ export default function ReportSummaryPage() {
   }
 
   const totalRows = tableRows.length;
-  const totalPages = Math.ceil(totalRows / pageSize);
+  const totalPages = Math.ceil(totalRows / rowsPerPage);
 
   const paginatedRows = tableRows.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
+    (currentPage - 1) * rowsPerPage,
+    currentPage * rowsPerPage
   );
-
   useEffect(() => { setCurrentPage(1); }, [searchTerm, filters, sortConfig]);
 
   // Add this just above your component (or in your CSS)
@@ -421,14 +419,14 @@ const tooltipStyle = `
 
 <style>{tooltipStyle}</style>
   return (
-    <DashboardLayout>
+    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Reports","Reconciliation Summary Report"]}>
       <motion.div
         className="p-6 space-y-6"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
       >
-        <h1 className="text-2xl font-bold">Report Summary</h1>
+        <h1 className="text-2xl font-bold">Reconciliation Summary Report</h1>
 
         {/* ========================================= */}
         {/* 1) Filter “Card” Container (Selects Row)  */}
@@ -884,41 +882,64 @@ const tooltipStyle = `
                 </tbody>
               </table>
               {/* Pagination Controls */}
-              <div className="flex justify-between items-center mt-4">
-                <span className="text-xs text-gray-600">
-                  Showing {Math.min((currentPage - 1) * pageSize + 1, totalRows)}-
-                  {Math.min(currentPage * pageSize, totalRows)} of {totalRows} results
-                </span>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="px-2 py-1 text-xs rounded border bg-white hover:bg-gray-100 disabled:opacity-60"
-                  >
-                    Prev
-                  </button>
-                  {[...Array(totalPages)].map((_, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setCurrentPage(idx + 1)}
-                      className={`px-2 py-1 text-xs rounded border ${
-                        currentPage === idx + 1
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'bg-white hover:bg-gray-100'
-                      }`}
+              <div className="flex justify-between items-center mt-4 flex-wrap gap-2">
+                <div className="text-xs text-gray-600">
+                  Showing {Math.min((currentPage - 1) * rowsPerPage + 1, totalRows)}-
+                  {Math.min(currentPage * rowsPerPage, totalRows)} of {totalRows} results
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {/* Rows per page dropdown */}
+                  <div className="flex items-center gap-1 text-xs text-gray-600">
+                    <label htmlFor="rowsPerPage">Rows per page:</label>
+                    <select
+                      id="rowsPerPage"
+                      value={rowsPerPage}
+                      onChange={(e) => {
+                        setRowsPerPage(Number(e.target.value));
+                        setCurrentPage(1); // Reset to page 1
+                      }}
+                      className="border text-xs px-1 py-0.5 rounded bg-white"
                     >
-                      {idx + 1}
+                      {[10, 20, 50].map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Pagination buttons */}
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="px-2 py-1 text-xs rounded border bg-white hover:bg-gray-100 disabled:opacity-60"
+                    >
+                      Prev
                     </button>
-                  ))}
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="px-2 py-1 text-xs rounded border bg-white hover:bg-gray-100 disabled:opacity-60"
-                  >
-                    Next
-                  </button>
+                    {[...Array(totalPages)].map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setCurrentPage(idx + 1)}
+                        className={`px-2 py-1 text-xs rounded border ${
+                          currentPage === idx + 1
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'bg-white hover:bg-gray-100'
+                        }`}
+                      >
+                        {idx + 1}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-2 py-1 text-xs rounded border bg-white hover:bg-gray-100 disabled:opacity-60"
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
               </div>
+
             </motion.div>
           )}
         </AnimatePresence>

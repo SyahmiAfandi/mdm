@@ -5,6 +5,7 @@ import { useUser } from '../context/UserContext';
 import { Sun, Shield } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { motion } from 'framer-motion';
+import { APP_FULL_NAME } from '../config';
 
 function SettingsPage() {
   const { user, role } = useUser();
@@ -29,7 +30,7 @@ function SettingsPage() {
   };
 
   return (
-    <DashboardLayout>
+    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Settings"]}>
       <Toaster position="top-right" />
       <div className="max-w-4xl mx-auto p-6 space-y-10">
         {[...Array(5)].map((_, i) => (
@@ -116,7 +117,7 @@ function SettingsPage() {
                   variants={buttonVariants}
                   whileHover="hover"
                   whileTap="tap"
-                  onClick={() => navigate('/admin/users')}
+                  onClick={() => navigate('/settings/admin/users')}
                   className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-4 py-2 rounded text-gray-800 dark:text-white"
                 >
                   Manage Users
@@ -125,7 +126,7 @@ function SettingsPage() {
                   variants={buttonVariants}
                   whileHover="hover"
                   whileTap="tap"
-                  onClick={() => navigate('/admin/roles')}
+                  onClick={() => navigate('/settings/admin/permission')}
                   className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-4 py-2 rounded text-gray-800 dark:text-white"
                 >
                   Configure Roles & Permissions
@@ -134,7 +135,7 @@ function SettingsPage() {
                   variants={buttonVariants}
                   whileHover="hover"
                   whileTap="tap"
-                  onClick={() => navigate('/admin/licenses')}
+                  onClick={() => navigate('/settings/admin/licenses')}
                   className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-4 py-2 rounded text-gray-800 dark:text-white"
                 >
                   Check License Expiry

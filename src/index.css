@@ -1,3 +1,52 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* =========================
+   Sticky columns & header
+   ========================= */
+.sticky-col  { position: sticky; left: 0;  background:#fff; z-index:40; box-shadow: 1px 0 0 rgba(0,0,0,.05); }
+.sticky-col-2{ position: sticky;          background:#fff; z-index:39; box-shadow: 1px 0 0 rgba(0,0,0,.05); }
+thead th     { background:#f3f4f6; z-index:45; }
+
+
+thead th.sticky-col,
+thead th.sticky-col-2 {
+  background: #f3f4f6;
+}
+
+/* =========================
+   Table scroller (table-only scroll)
+   ========================= */
+.table-scroll {
+  height: 70vh;            /* adjust to taste */
+  width: 100%;
+  max-width: 100%;
+  overflow: auto;          /* both x/y scroll inside this box */
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+  min-width: 0;            /* critical in flex layouts */
+}
+
+/* Keep the table width INSIDE the scroller; never widen the page */
+.table-scroll > table {
+  display: inline-block;   /* shrink-to-content */
+  table-layout: fixed;     /* we set column widths from JS */
+  vertical-align: top;
+}
+
+/* =========================
+   Layout safety
+   ========================= */
+/* If your DashboardLayout uses a flex container with a content area, ensure it can shrink: */
+.layout .content,
+.page-wrap {               /* .page-wrap is used by the report page wrapper */
+  min-width: 0;
+  overflow-x: hidden;      /* hard stop for page widening */
+}
+
+/* =========================
+   Scrollbar stability (avoid layout jump)
+   ========================= */
+html { scrollbar-gutter: stable; }
+body { overflow-y: scroll; }

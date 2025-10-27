@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '../context/UserContext';
 import { CheckCircle } from 'lucide-react';
+import { useUser } from '../context/UserContext';
+
+// ⬇️ from your firebaseClient (as provided earlier)
+import {
+  loginWithUsername,
+  logout,
+  buildPermissionSnapshot,
+  persistPermissionSnapshot,
+} from '../firebaseClient';
+
+const PERM_STORAGE_KEY = 'ff.permissions';
+const ROLE_STORAGE_KEY = 'ff.role';
 
 function LoginPage() {
   const [username, setUserName] = useState('');
@@ -12,41 +23,75 @@ function LoginPage() {
   const [fadeOut, setFadeOut] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [expiredToast, setExpiredToast] = useState('');
+
   const navigate = useNavigate();
   const { setRole, setUser } = useUser();
 
+  const clearLocalPerms = () => {
+    try {
+      localStorage.removeItem(PERM_STORAGE_KEY);
+      localStorage.removeItem(ROLE_STORAGE_KEY);
+    } catch {}
+  };
+
   const handleLogin = async () => {
     setLoading(true);
-    try {
-      const response = await fetch(
-        'https://script.google.com/macros/s/AKfycbx_pPfpu51AK6u_eOZo998IR8WE_A7MZiDD0BBINijtASqeAGfgoyQrvmJFAUbhMEZBUw/exec',
-        {
-          method: 'POST',
-          body: JSON.stringify({ username, password }),
-        }
-      );
-      const result = await response.json();
-      console.log('Login result:', result);
-      setLoading(false);
+    setError('');
+    setExpiredToast('');
 
-      if (result.success) {
-        setRole(result.role);
-        setUser({ name: result.name, email: result.email }); // ✅ SET USER DATA
-        localStorage.setItem('username', result.name); // ✅ SAVE FOR EXPORT USE
-        setShowToast(true);
-        setTimeout(() => {
-            setFadeOut(true);
-            setTimeout(() => navigate('/'), 800);
-        }, 2000);
-        } else if (result.error === 'expired') {
-        setExpiredToast(`Your account has expired on ${result.expiredDate}!`);
-        setTimeout(() => setExpiredToast(''), 3000);
-        } else {
-        setError('Invalid credentials');
-        }
-    } catch (err) {
+    try {
+      const result = await loginWithUsername(username, password);
+      const { role, profile, license, licenseValid, permissions } = result;
+      const resolvedRole = role || 'viewer';
+
+      // License check (and show the expiry date if available)
+      if (!licenseValid) {
+        await logout();
+        setLoading(false);
+
+        let expText = 'N/A';
+        try {
+          const d =
+            (license && license.validUntil && license.validUntil.toDate && license.validUntil.toDate()) ||
+            null;
+          if (d) expText = d.toISOString().slice(0, 10);
+        } catch {}
+
+        setExpiredToast(`Your account has expired on ${expText}!`);
+        setTimeout(() => setExpiredToast(''), 1500);
+        clearLocalPerms();
+        return;
+      }
+
+      // Save user context
+      setRole(resolvedRole);
+      setUser({
+        name: profile?.name || profile?.username || username,
+        email: profile?.email || '',
+      });
+
+      // Persist username (optional)
+      localStorage.setItem('username', profile?.name || profile?.username || username);
+      localStorage.setItem(ROLE_STORAGE_KEY, resolvedRole);
+
+      // 🔐 Build + store permission snapshot (from Firestore rolePermissions or fallback)
+      const permSnapshot = buildPermissionSnapshot(resolvedRole, permissions);
+      // write to localStorage so Sidebar can read instantly (no flicker)
+      persistPermissionSnapshot(resolvedRole, permSnapshot);
+
       setLoading(false);
-      setError('Login failed');
+      setSuccess(true);
+      setShowToast(true);
+
+      // Navigate after a short success animation
+      setTimeout(() => {
+        setFadeOut(true);
+        setTimeout(() => navigate('/'), 400);
+      }, 1200);
+    } catch (e) {
+      setLoading(false);
+      setError(e?.message || 'Invalid credentials');
+      clearLocalPerms();
     }
   };
 
@@ -75,17 +120,26 @@ function LoginPage() {
           .animate-fade-in-fast { animation: fade-in-fast 0.3s ease-in-out forwards; }
         `}</style>
 
-        <div className={`bg-white shadow-2xl rounded-xl p-6 sm:p-8 w-full max-w-md transform transition duration-500 hover:scale-[1.02] mt-[-40px] sm:mt-0 ${fadeOut ? 'animate-fade-out' : 'animate-fade-in'}`}>
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-blue-700 mb-4 sm:mb-6 animate-slide-down">Welcome Back</h2>
-          <p className="text-center text-sm text-gray-500 mb-4 sm:mb-6 animate-slide-up">Please sign in to access the dashboard</p>
+        <div
+          className={`bg-white shadow-2xl rounded-xl p-6 sm:p-8 w-full max-w-md transform transition duration-500 hover:scale-[1.02] mt-[-40px] sm:mt-0 ${
+            fadeOut ? 'animate-fade-out' : 'animate-fade-in'
+          }`}
+        >
+          <h2 className="text-2xl sm:text-3xl font-bold text-center text-blue-700 mb-4 sm:mb-6 animate-slide-down">
+            Welcome Back
+          </h2>
+          <p className="text-center text-sm text-gray-500 mb-4 sm:mb-6 animate-slide-up">
+            Please sign in to access the dashboard
+          </p>
 
           <input
-            type="username"
+            type="text"
             placeholder="User Name"
             className="w-full p-3 border border-gray-300 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
             value={username}
             onChange={(e) => setUserName(e.target.value)}
             disabled={loading || success}
+            autoComplete="username"
           />
           <input
             type="password"
@@ -94,6 +148,7 @@ function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             disabled={loading || success}
+            autoComplete="current-password"
           />
 
           <button
@@ -110,7 +165,11 @@ function LoginPage() {
             )}
           </button>
 
-          {error && <p className="text-red-600 mt-4 text-center animate-pulse text-sm">{error}</p>}
+          {error && (
+            <p className="text-red-600 mt-4 text-center animate-pulse text-sm">
+              {error}
+            </p>
+          )}
         </div>
 
         {showToast && (

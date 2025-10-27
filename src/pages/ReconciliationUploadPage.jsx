@@ -5,9 +5,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { BriefcaseIcon, DocumentTextIcon } from '@heroicons/react/24/solid';
-
-
-
+import { APP_FULL_NAME } from '../config';
 
 function ReconciliationUploadPage() {
   const [files, setFiles] = useState([]);
@@ -30,17 +28,14 @@ function ReconciliationUploadPage() {
   const location = useLocation();
   const fromButton = location.state?.fromButton || '';
   const businessType = location.state?.businessType || sessionStorage.getItem('businessType') || 'N/A';
-    const uploadEndpointOSDP = location.state?.uploadEndpointOSDP || '/upload_FCSHPC_OSDP';
-    const uploadEndpointPBI = location.state?.uploadEndpointPBI || '/upload_FCSHPC_PBI';
-    const nextPath = location.state?.nextPath || '/recons/hpc_fcs/summary';
+  const uploadEndpointOSDP = location.state?.uploadEndpointOSDP || '/upload_HPCRAWDATA_OSDP';
+  const uploadEndpointPBI = location.state?.uploadEndpointPBI || '/upload_FCSHPC_PBI';
+  const nextPath = location.state?.nextPath || '/recons/summary';
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
-
-  
+  const [loadingNext, setLoadingNext] = useState(false);
 
   const osdpInputRef = useRef();
   const pbiInputRef = useRef();
-
-  const summaryColumns = ['Distributor', 'Distributor Name', 'Total Data'];
 
   const mergeUniqueFiles = (existing, incoming) => {
     const existingNames = new Set(existing.map(file => file.name));
@@ -74,7 +69,6 @@ function ReconciliationUploadPage() {
     setDroppedFilesOSDP(updated.length);
   };
 
-
   const handleFileChangePBI = (e) => {
     const filesArray = Array.from(e.target.files);
     const invalid = filesArray.filter(file => !isExcelFile(file));
@@ -86,8 +80,6 @@ function ReconciliationUploadPage() {
     setFilesPBI(updated);
     setDroppedFilesPBI(updated.length);
   };
-
-
 
   const handleDropOSDP = (e) => {
     e.preventDefault();
@@ -103,7 +95,6 @@ function ReconciliationUploadPage() {
     setDroppedFilesOSDP(updated.length);
   };
 
-
   const handleDropPBI = (e) => {
     e.preventDefault();
     setDragActivePBI(false);
@@ -117,8 +108,6 @@ function ReconciliationUploadPage() {
     setFilesPBI(updated);
     setDroppedFilesPBI(updated.length);
   };
-
-
 
   const handleClear = async () => {
     await axios.post(`${BACKEND_URL}/clear`);
@@ -190,33 +179,44 @@ function ReconciliationUploadPage() {
     );
   };
 
+  // THE MAIN FIX: dynamic rendering and safe toast logic
+const handleUploadOSDP = async () => {
+  if (!files.length) return alert("Please choose at least one file.");
+  setLoadingOSDP(true);
+  setError(null);
 
-  const handleUploadOSDP = async () => {
-    if (!files.length) return alert("Please choose at least one file.");
-    setLoadingOSDP(true);
-    setError(null);
-    const formData = new FormData();
-    Array.from(files).forEach(file => formData.append('files', file));
-    try {
-      const endpoint = location.state?.uploadEndpointOSDP || '/upload_FCSHPC_OSDP';
-      const res = await axios.post(`${BACKEND_URL}${endpoint}`, formData);
-      const { sorted_data, summary_data } = res.data || {};
-      if (sorted_data && summary_data) {
-        setSortedData(sorted_data);
-        setSummaryData(summary_data);
-        sessionStorage.setItem('sortedData', JSON.stringify(sorted_data));
-        sessionStorage.setItem('summaryData', JSON.stringify(summary_data));
-      } else {
-        throw new Error("Invalid data format");
-      }
-    } catch (err) {
-      setError("Upload failed.");
-      setSortedData([]);
-      setSummaryData([]);
-    } finally {
-      setLoadingOSDP(false);
+  const formData = new FormData();
+  Array.from(files).forEach(file => formData.append('files', file));
+
+  try {
+    const endpoint = location.state?.uploadEndpointOSDP || '/upload_HPCRAWDATA_OSDP';
+    const res = await axios.post(`${BACKEND_URL}${endpoint}`, formData);
+    // Use these directly from response
+    const sorted_data = Array.isArray(res.data?.sorted_data) ? res.data.sorted_data : [];
+    const summary_data = Array.isArray(res.data?.summary_data) ? res.data.summary_data : [];
+
+    // Set React state (table will re-render)
+    setSortedData(sorted_data);
+    setSummaryData(summary_data);
+
+    // Use server response to decide toast, not state
+    if (summary_data && summary_data.length > 0) {
+      toast.success('OSDP upload successful!');
+    } else if (sorted_data && sorted_data.length > 0) {
+      toast.success('OSDP upload successful! (Details)');
+    } else {
+      toast.error("Upload finished, but no records found.");
     }
-  };
+  } catch (err) {
+    setError("Upload failed: " + (err?.response?.data?.error || err.message));
+    toast.error("Upload failed: " + (err?.response?.data?.error || err.message));
+    setSortedData([]);
+    setSummaryData([]);
+  } finally {
+    setLoadingOSDP(false);
+  }
+};
+
 
   const handleUploadPBI = async () => {
     if (!files1.length) return alert("Please choose at least one file.");
@@ -225,14 +225,19 @@ function ReconciliationUploadPage() {
     const formData = new FormData();
     Array.from(files1).forEach(file => formData.append('files1', file));
     try {
-      const endpoint = location.state?.uploadEndpointPBI || '/upload_FCSHPC_PBI ';
+      const endpoint = location.state?.uploadEndpointPBI || '/upload_FCSHPC_PBI';
       const res = await axios.post(`${BACKEND_URL}${endpoint}`, formData);
+
       const { sorted_data_PBI, summary_data_PBI } = res.data || {};
-      if (sorted_data_PBI && summary_data_PBI) {
+      if (Array.isArray(sorted_data_PBI) && Array.isArray(summary_data_PBI)) {
         setSortedDataPBI(sorted_data_PBI);
         setSummaryDataPBI(summary_data_PBI);
-        sessionStorage.setItem('sortedDataPBI', JSON.stringify(sorted_data_PBI));
-        sessionStorage.setItem('summaryDataPBI', JSON.stringify(summary_data_PBI));
+        try {
+          sessionStorage.setItem('summaryDataPBI', JSON.stringify(summary_data_PBI));
+        } catch (e) {
+          console.warn("Could not store summaryDataPBI in sessionStorage", e);
+        }
+        toast.success('Power BI upload successful!');
       } else {
         throw new Error("Invalid data format");
       }
@@ -240,12 +245,14 @@ function ReconciliationUploadPage() {
       setErrorPBI("Upload failed.");
       setSortedDataPBI([]);
       setSummaryDataPBI([]);
+      console.error("Upload failed:", err, err.response?.data);
+      toast.error('Power BI upload failed.');
     } finally {
       setLoadingPBI(false);
     }
   };
 
-const DropOverlay = ({ active }) => (
+  const DropOverlay = ({ active }) => (
     <AnimatePresence>
       {active && (
         <motion.div
@@ -261,7 +268,7 @@ const DropOverlay = ({ active }) => (
   );
 
   const isExcelFile = (file) =>
-  file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
 
   useEffect(() => {
     if (fromButton) {
@@ -269,65 +276,79 @@ const DropOverlay = ({ active }) => (
     }
   }, [fromButton]);
 
+
   return (
-    <DashboardLayout>
+    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Tools", "Reconciliation Tools", businessType, fromButton, "Upload Files"]}>
       {/* Navigation Buttons */}
-        <div className=" flex justify-between items-center mb-6">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => navigate('/recons/hpc')}
-            className="px-4 py-2 bg-gray-700 text-white text-sm rounded hover:bg-gray-800 transition"
-          >
-            ← Back
-          </motion.button>
+      <div className=" flex justify-between items-center mb-6">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => navigate(-1)}
+          className="px-4 py-2 bg-gray-700 text-white text-sm rounded hover:bg-gray-800 transition"
+        >
+          ← Back
+        </motion.button>
 
-          {/* Text at center */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, type: 'spring', stiffness: 300, damping: 20 }}
-            className="border border-gray-300 bg-gray-50 rounded-md px-4 py-2 flex gap-6 items-center text-sm"
-          >
-            <div className="flex items-center gap-2">
-              <BriefcaseIcon className="w-3.5 h-3.5 text-green-700" />
-              <span className="font-medium text-gray-600">Business Type:</span>
-              <span className="inline-block px-2 py-0.5 text-xs rounded bg-green-100 text-green-700 font-semibold">
-                {businessType}
-              </span>
-            </div>
+        {/* Text at center */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, type: 'spring', stiffness: 300, damping: 20 }}
+          className="border border-gray-300 bg-gray-50 rounded-md px-4 py-2 flex gap-6 items-center text-sm"
+        >
+          <div className="flex items-center gap-2">
+            <BriefcaseIcon className="w-3.5 h-3.5 text-green-700" />
+            <span className="font-medium text-gray-600">Business Type:</span>
+            <span className="inline-block px-2 py-0.5 text-xs rounded bg-green-100 text-green-700 font-semibold">
+              {businessType}
+            </span>
+          </div>
 
-            <div className="flex items-center gap-2">
-              <DocumentTextIcon className="w-3.5 h-3.5 text-blue-700" />
-              <span className="font-medium text-gray-600">Report Type:</span>
-              <span className="inline-block px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700 font-semibold">
-                {fromButton}
-              </span>
-            </div>
-          </motion.div>
+          <div className="flex items-center gap-2">
+            <DocumentTextIcon className="w-3.5 h-3.5 text-blue-700" />
+            <span className="font-medium text-gray-600">Report Type:</span>
+            <span className="inline-block px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700 font-semibold">
+              {fromButton}
+            </span>
+          </div>
+        </motion.div>
 
-
-
-
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() =>
-              navigate('/recons/hpc_fcs/summary', {
-                state: {
-                  sortedData,
-                  sortedDataPBI,
-                  fromButton,
-                  businessType
-                }
-              })
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={async () => {
+            setLoadingNext(true);
+            try {
+              const res = await fetch(`${BACKEND_URL}/reconcile_all`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  osdp_data: sortedData,
+                  pbi_data: sortedDataPBI,
+                  businessType,
+                  reportType: fromButton
+                })
+              });
+              const { result_id, key_columns } = await res.json();
+              sessionStorage.setItem('reconcileResultId', result_id);
+              sessionStorage.setItem('keyColumns', JSON.stringify(key_columns));
+              navigate('/recons/summary', {
+                state: { result_id, key_columns, fromButton, businessType }
+              });
+            } catch (e) {
+              toast.error('Failed to process reconciliation. Please try again.');
+            } finally {
+              setLoadingNext(false);
             }
-            className={`px-4 py-2 text-white text-sm rounded ${summaryData.length === 0 || summaryDataPBI.length === 0 ? 'bg-gray-500 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-600'}`}
-            disabled={summaryData.length === 0 || summaryDataPBI.length === 0}
-          >
-            Next →
-          </motion.button>
-        </div>
+          }}
+          className={`px-4 py-2 text-white text-sm rounded ${summaryData.length === 0 || summaryDataPBI.length === 0 ? 'bg-gray-500 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-600'}`}
+          disabled={summaryData.length === 0 || summaryDataPBI.length === 0}
+        >
+          Next →
+        </motion.button>
+      </div>
+
       <div className="p-8 relative min-h-[calc(100vh-88px)] pb-24">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* OSDP Upload Section */}
@@ -391,20 +412,29 @@ const DropOverlay = ({ active }) => (
 
             {loadingOSDP && <Spinner />}
             {error && <p className="text-red-600 mt-2">{error}</p>}
-            {summaryData.length > 0 && (
+            {/* DYNAMIC SUMMARY TABLE */}
+            {Array.isArray(summaryData) && summaryData.length > 0 && (
               <div>
                 <h3 className="font-bold mt-6 mb-2">Summary Data</h3>
+                {/*<pre className="text-xs bg-gray-100 p-2 border mb-2">{JSON.stringify(summaryData, null, 2)}</pre>*/}
                 <table className="w-full table-auto border mt-5 text-sm">
                   <thead>
-                    <tr>{summaryColumns.map((key, i) => <th key={i} className="border px-2 py-1">{key}</th>)}</tr>
+                    <tr>
+                      {Object.keys(summaryData[0]).map((key, i) => (
+                        <th key={i} className="border px-2 py-1">{key}</th>
+                      ))}
+                    </tr>
                   </thead>
                   <tbody>
                     {summaryData.map((row, i) => (
-                      <tr key={i}>{summaryColumns.map((key, j) => <td key={j} className="border px-2 py-1">{row[key]}</td>)}</tr>
+                      <tr key={i}>
+                        {Object.keys(row).map((key, j) => (
+                          <td key={j} className="border px-2 py-1">{row[key]}</td>
+                        ))}
+                      </tr>
                     ))}
                   </tbody>
                 </table>
-                {/*<button onClick={() => navigate('/detailed-view', { state: { sortedData } })} className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-500">View Detailed Data</button>*/}
               </div>
             )}
           </motion.div>
@@ -428,17 +458,17 @@ const DropOverlay = ({ active }) => (
               <p className="text-sm text-gray-500 mb-2">Or drop files here</p>
             )}
             <AnimatePresence>
-            {files1.length > 0 && (
-              <motion.div
-                key="pbi-filelist"
-                initial={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
-              >
-                {renderFileList(files1, true)}
-              </motion.div>
-            )}
-          </AnimatePresence>
+              {files1.length > 0 && (
+                <motion.div
+                  key="pbi-filelist"
+                  initial={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {renderFileList(files1, true)}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <AnimatePresence>
               {(files1.length > 0 || droppedFilesPBI > 0) && (
@@ -470,16 +500,24 @@ const DropOverlay = ({ active }) => (
 
             {loadingPBI && <Spinner />}
             {errorPBI && <p className="text-red-600 mt-2">{errorPBI}</p>}
-            {summaryDataPBI.length > 0 && (
+            {Array.isArray(summaryDataPBI) && summaryDataPBI.length > 0 && (
               <div>
                 <h3 className="font-bold mt-6 mb-2">Summary Data</h3>
                 <table className="w-full table-auto border mt-5 text-sm">
                   <thead>
-                    <tr>{summaryColumns.map((key, i) => <th key={i} className="border px-2 py-1">{key}</th>)}</tr>
+                    <tr>
+                      {Object.keys(summaryDataPBI[0]).map((key, i) => (
+                        <th key={i} className="border px-2 py-1">{key}</th>
+                      ))}
+                    </tr>
                   </thead>
                   <tbody>
                     {summaryDataPBI.map((row, i) => (
-                      <tr key={i}>{summaryColumns.map((key, j) => <td key={j} className="border px-2 py-1">{row[key]}</td>)}</tr>
+                      <tr key={i}>
+                        {Object.keys(row).map((key, j) => (
+                          <td key={j} className="border px-2 py-1">{row[key]}</td>
+                        ))}
+                      </tr>
                     ))}
                   </tbody>
                 </table>
@@ -487,8 +525,18 @@ const DropOverlay = ({ active }) => (
             )}
           </motion.div>
         </div>
-        
       </div>
+      {loadingNext && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-xl p-8 shadow flex flex-col items-center">
+            <svg className="animate-spin h-10 w-10 text-blue-600 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <span className="text-lg font-medium text-blue-800">Processing reconciliation, please wait...</span>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

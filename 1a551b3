@@ -1,0 +1,14 @@
+[33mgit rev-parse --show-toplevel[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Big update v3.0
+[33m1a551b3[m Fix tooltip logic and minor bug
+[33mde603e8[m add tooltip to table data in recons reports
+[33maffb2f8[m Add reconciliation logic and report logic
+[33me95aa8a[m add vercel.json to fix refresh issue on vercel
+[33m9550c1a[m fix: group by Distributor Code only and populate Distributor Name correctly
+[33mcb9a3ba[m Enhance sidebar with structured sections: dashboard, tools, reports, settings, and contact
+[33mabb80fe[m Add animated Tools Selection page and remove submenu from sidebar
+[33mc47a223[m Update: reconciliation export formatting and cell style fixes
+[33m8d1a677[m Update: Added IQ Salesman logic into recons and add endpoint
+[33m83f8cee[m Fix API endpoint on FCS_HPC_SummaryPage
+[33m5422507[m Fix API endpoint on FCSHPC part
+[33m5ec580f[m Update API endpoints to Render backend
+[33mb704b40[m First commit: Initial React app

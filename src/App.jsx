@@ -23,23 +23,24 @@ const ToolSelection = lazy(() => import('./pages/ToolsSelectionPage'));
 const UtilitiesSelection = lazy(() => import('./pages/UtilitiesPage'));
 const ReportSelection = lazy(() => import('./pages/ReportsPage'));
 const ReportSummary = lazy(() => import('./pages/ReportSummaryPage'));
+const MismatchTrackerReport = lazy(() => import('./pages/MismatchTrackerReport'));
+const MatrixReconsReport = lazy(() => import('./pages/ReconciliationMatrix'));
+const DSSreport = lazy(() => import('./pages/DailySalesSummary'));
+
 //Tools -Reconciliation
-//Level 1
 const ReconsMainPage = lazy(() => import('./pages/ReconsMainPage'));// Level 1 - Main Page Recons
-//Level 2
 const ReconsHPCPage = lazy(() => import('./pages/ReconsHPCPage'));// Level 2 - HPC Page Recons
 const ReconsICPage = lazy(() => import('./pages/ReconsICPage'));//Level 2 - IC Page Recons
-//Level 3
 const DetailedView = lazy(() => import('./pages/DetailedView'));
 const ReconciliationUploadPage = lazy(() => import('./pages/ReconciliationUploadPage'));//test combine upload page
-//Level 4
-const HPC_FCS_ResultPage = lazy(() => import('./pages/HPC_FCS_ResultPage.jsx'));
-const HPC_FCS_SummaryPage = lazy(() => import('./pages/HPC_FCS_SummaryPage.jsx'));
-
+const Recons_ResultPage = lazy(() => import('./pages/Recons_ResultPage.jsx'));
+const Recons_SummaryPage = lazy(() => import('./pages/Recons_SummaryPage.jsx'));
+const ReconsCustom = lazy(() => import('./pages/ReconsCustom.jsx'));
 //Settings
 const Settings = lazy(() => import('./pages/Settings'));
 const AdminManageControl = lazy(() => import('./pages/AdminUsersPage.jsx'));
 const AdminLicenses = lazy(() => import('./pages/LicenseExpiryPage.jsx'));
+const RolePermission = lazy(() => import('./pages/RolesPermissionsPage.jsx'));
 
 //About
 const ContactPage = lazy(() => import('./pages/ContactPage'));
@@ -62,19 +63,24 @@ function App() {
           <Route path="/utilities" element={<UtilitiesSelection />} />
           <Route path="/reports" element={<ReportSelection />} />
           <Route path="/reports/summary_recons" element={<ReportSummary />} />
+          <Route path="/reports/mismatch-tracker" element={<MismatchTrackerReport />} />
+          <Route path="/reports/matrix_recons" element={<MatrixReconsReport />} />
+          <Route path="/reports/DSS" element={<DSSreport />} />
           <Route path="/recons" element={<ProtectedRoute><ReconsMainPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-          <Route path="/admin/users" element={<ProtectedRoute><AdminManageControl /></ProtectedRoute>} />
-          <Route path="/admin/licenses" element={<ProtectedRoute><AdminLicenses /></ProtectedRoute>} />
+          <Route path="/settings/admin/users" element={<ProtectedRoute><AdminManageControl /></ProtectedRoute>} />
+          <Route path="/settings/admin/licenses" element={<ProtectedRoute><AdminLicenses /></ProtectedRoute>} />
           <Route path="/recons/hpc" element={<ProtectedRoute><ReconsHPCPage /></ProtectedRoute>} />
-          <Route path="/recons/hpc_fcs/summary" element={<ProtectedRoute><HPC_FCS_SummaryPage /></ProtectedRoute>} />
-          <Route path="/recons/hpc_fcs/result" element={<ProtectedRoute><HPC_FCS_ResultPage /></ProtectedRoute>} />
+          <Route path="/recons/summary" element={<ProtectedRoute><Recons_SummaryPage /></ProtectedRoute>} />
+          <Route path="/recons/result" element={<ProtectedRoute><Recons_ResultPage /></ProtectedRoute>} />
           <Route path="/in-progress" element={<ProtectedRoute><InProgressPage  /></ProtectedRoute>} />
           <Route path="/recons/upload" element={<ProtectedRoute><ReconciliationUploadPage  /></ProtectedRoute>} />
           <Route path="/recons/ic" element={<ReconsICPage />} />
+          <Route path="/recons/custom" element={<ReconsCustom />} />
           <Route path="/detailed-view" element={<DetailedView />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/utilities/date-converter" element={<UtilitiesDate />} />
+          <Route path="/settings/admin/permission" element={<RolePermission />} />
         </Routes>
         </Suspense>
     </Router>

@@ -2,6 +2,7 @@ import React from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { APP_FULL_NAME } from '../config';
 
 const utilities = [
   {
@@ -28,7 +29,7 @@ function UtilitiesPage() {
   const navigate = useNavigate();
 
   return (
-    <DashboardLayout>
+    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Utilities"]}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

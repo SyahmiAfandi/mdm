@@ -2,10 +2,11 @@ import React from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import { motion } from 'framer-motion';
 import { Mail, Headset } from 'lucide-react';
+import { APP_FULL_NAME } from '../config';
 
 function ContactPage() {
   return (
-    <DashboardLayout>
+    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Contact"]}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

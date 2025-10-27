@@ -15,11 +15,27 @@ function ReconsHPCPage() {
   const topButtons = [
     {
       label: 'Daily Sales Summary',
-      path: '/in-progress',
+      path: '/recons/upload',
+      state: {
+        fromButton: 'Daily Sales Summary',
+        businessType,
+        uploadEndpointOSDP: '/upload_HPCDSS_OSDP',
+        uploadEndpointPBI: '/upload_HPCDSS_PBI',
+        backPath: '/recons/hpc',
+        nextPath: '/recons/summary',
+      },
     },
     {
       label: 'EFOS Outlet',
-      path: '/in-progress',
+      path: '/recons/upload',
+      state: {
+        fromButton: 'EFOS Outlet',
+        businessType,
+        uploadEndpointOSDP: '/upload_HPCEFOSOUTLET_OSDP',
+        uploadEndpointPBI: '/upload_HPCEFOSOUTLET_PBI',
+        backPath: '/recons/hpc',
+        nextPath: '/recons/summary',
+      },
     },
     {
       label: 'EFOS Salesman',
@@ -30,7 +46,7 @@ function ReconsHPCPage() {
         uploadEndpointOSDP: '/upload_HPCEFOSSALES_OSDP',
         uploadEndpointPBI: '/upload_HPCEFOSSALES_PBI',
         backPath: '/recons/hpc',
-        nextPath: '/recons/hpc_fcs/summary',
+        nextPath: '/recons/summary',
       },
     },
     {
@@ -42,13 +58,23 @@ function ReconsHPCPage() {
         uploadEndpointOSDP: '/upload_FCSHPC_OSDP',
         uploadEndpointPBI: '/upload_FCSHPC_PBI',
         backPath: '/recons/hpc',
-        nextPath: '/recons/hpc_fcs/summary',
+        nextPath: '/recons/summary',
       },
     },
   ];
 
   const bottomButtons = [
-    { label: 'IQ Performance Outlet', path: '/in-progress' },
+    { label: 'IQ Performance Outlet',
+      path: '/recons/upload',
+      state: {
+        fromButton: 'IQ Performance Outlet',
+        businessType,
+        uploadEndpointOSDP: '/upload_HPCIQOUTLET_OSDP',
+        uploadEndpointPBI: '/upload_HPCIQOUTLET_PBI',
+        backPath: '/recons/hpc',
+        nextPath: '/recons/summary',
+      }, 
+    },
     { 
       label: 'IQ Performance Salesman', 
       path: '/recons/upload',
@@ -58,7 +84,19 @@ function ReconsHPCPage() {
         uploadEndpointOSDP: '/upload_HPCIQSALES_OSDP',
         uploadEndpointPBI: '/upload_HPCIQSALES_PBI',
         backPath: '/recons/hpc',
-        nextPath: '/recons/hpc_fcs/summary',
+        nextPath: '/recons/summary',
+      },
+    },
+    { 
+      label: 'Raw Data Invoice Level', 
+      path: '/recons/upload',
+      state: {
+        fromButton: 'Raw Data Invoice Level',
+        businessType,
+        uploadEndpointOSDP: '/upload_HPCRAWDATA_OSDP',
+        uploadEndpointPBI: '/upload_HPCRAWDATA_PBI',
+        backPath: '/recons/hpc',
+        nextPath: '/recons/summary',
       },
     },
     
@@ -185,7 +223,7 @@ function ReconsHPCPage() {
   };
 
   return (
-    <DashboardLayout>
+    <DashboardLayout pageTitle="MDM Tools Version 3.0" breadcrumbs={["Tools","Reconciliation Tools","HPC"]}>
       <div className="p-5 min-h-[calc(100vh-96px)] overflow-hidden flex flex-col items-center justify-start relative">
         <div className="absolute top-0 left-0 z-10">
           <button
