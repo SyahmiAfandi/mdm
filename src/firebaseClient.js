@@ -12,10 +12,10 @@ import { getFirestore, doc, getDoc, Timestamp } from "firebase/firestore";
 
 // --- Your Firebase config ---
 const firebaseConfig = {
-  apiKey: "AIzaSyDpiE1uB9QUNZp7lgBPS9mEA0zx-W83F1U",
-  authDomain: "mdm-tools-project.firebaseapp.com",
-  projectId: "mdm-tools-project",
-  appId: "1:859478727317:web:7bb227ce347340a97ad99c",
+  apiKey:        import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:     import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  appId:         import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);
