@@ -72,7 +72,7 @@ function ReconsMainPage() {
                 onClick={() => handleNavigate(btn.path, btn.label)}
                 whileHover={{ scale: 1.06 }}
                 whileTap={{ scale: 0.97 }}
-                className="relative w-[260px] h-[130px] text-lg font-bold rounded-xl shadow-md flex items-center justify-center transition-all duration-300 overflow-hidden bg-cover bg-center grayscale hover:grayscale-0 hover:shadow-xl"
+                className="relative w-[260px] h-[130px] text-lg font-bold rounded-xl shadow-md flex items-center justify-center transition-all duration-150 overflow-hidden bg-cover bg-center grayscale hover:grayscale-0 hover:shadow-xl"
                 style={{ backgroundImage: `url('${btn.img}')` }}
                 onMouseEnter={(e) => e.currentTarget.style.backgroundImage = `url('${btn.hoverImg}')`}
                 onMouseLeave={(e) => e.currentTarget.style.backgroundImage = `url('${btn.img}')`}

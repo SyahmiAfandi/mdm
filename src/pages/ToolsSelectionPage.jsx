@@ -54,7 +54,7 @@ const ToolsSelectionPage = () => {
       title: 'Promotion Tools',
       description: 'Manage promotion datasets and campaign matching.',
       icon: <Gift size={36} />,
-      onClick: () => navigate('#'),
+      onClick: () => navigate('/promotions'),
     },
     {
       title: 'Add New Tool',

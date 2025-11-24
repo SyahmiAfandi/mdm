@@ -27,6 +27,9 @@ const MismatchTrackerReport = lazy(() => import('./pages/MismatchTrackerReport')
 const MatrixReconsReport = lazy(() => import('./pages/ReconciliationMatrix'));
 const DSSreport = lazy(() => import('./pages/DailySalesSummary'));
 
+//Tools - Promotions
+const PromoSelection = lazy(() => import('./pages/promoselect'));
+const PromoAutoIC = lazy(() => import('./pages/promo_auto_IC'));
 //Tools -Reconciliation
 const ReconsMainPage = lazy(() => import('./pages/ReconsMainPage'));// Level 1 - Main Page Recons
 const ReconsHPCPage = lazy(() => import('./pages/ReconsHPCPage'));// Level 2 - HPC Page Recons
@@ -59,6 +62,8 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
           <Route path="/tools" element={<ToolSelection />} />
+          <Route path="/promotions" element={<ProtectedRoute><PromoSelection /></ProtectedRoute>} />
+          <Route path="/promoautoIC" element={<ProtectedRoute><PromoAutoIC /></ProtectedRoute>} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/utilities" element={<UtilitiesSelection />} />
           <Route path="/reports" element={<ReportSelection />} />

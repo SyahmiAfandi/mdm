@@ -142,6 +142,39 @@ function ReconciliationSummary() {
     }
   };
 
+  // NEW: CSV DSS (calls /export_combined_csv and downloads the CSV)
+  const handleExportCsvDss = async () => {
+    setExporting(true);
+    const toastId = toast.loading('Generating CSV DSS...');
+    try {
+      const url = `${BACKEND_URL}/export_combined_csv`;
+      const fd = new FormData();
+      // Provide result_id so backend can rebuild the CSV for this reconciliation
+      fd.append('result_id', resultId);
+
+      const resp = await fetch(url, {
+        method: 'POST',
+        body: fd,
+      });
+
+      if (!resp.ok) {
+        const msg = `Failed to generate CSV (HTTP ${resp.status})`;
+        throw new Error(msg);
+      }
+
+      const blob = await resp.blob();
+      const fname = `combined_export_${businessType}_${fromButton}.csv`.replace(/\s+/g, '_');
+      saveAs(blob, fname);
+
+      toast.success('CSV DSS generated!', { id: toastId });
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to generate CSV DSS.', { id: toastId });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // --- Early return after all hooks, for safety ---
   if (!resultId) {
     return (
@@ -188,7 +221,7 @@ function ReconciliationSummary() {
             <button
               onClick={() => {
                 setShowExportOptions((prev) => !prev);
-                setIsHovering(true); // <-- ensures menu doesn't close too soon
+                setIsHovering(true); // keep open briefly
               }}
               onMouseEnter={() => setIsHovering(true)}
               onMouseLeave={() => setIsHovering(false)}
@@ -198,7 +231,7 @@ function ReconciliationSummary() {
             </button>
             {showExportOptions && (
               <div
-                className="absolute z-20 mt-1 w-48 bg-white rounded shadow border"
+                className="absolute z-20 mt-1 w-56 bg-white rounded shadow border"
                 onMouseEnter={() => setIsHovering(true)}
                 onMouseLeave={() => setIsHovering(false)}
               >
@@ -208,6 +241,7 @@ function ReconciliationSummary() {
                     handleExportExcel();
                   }}
                   className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                  disabled={exporting}
                 >
                   To Excel File
                 </button>
@@ -217,8 +251,20 @@ function ReconciliationSummary() {
                     setShowExportModal(true);
                   }}
                   className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                  disabled={exporting}
                 >
                   To Report Database
+                </button>
+                {/* NEW: CSV DSS */}
+                <button
+                  onClick={() => {
+                    setShowExportOptions(false);
+                    handleExportCsvDss();
+                  }}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 text-sm"
+                  disabled={exporting}
+                >
+                  CSV DSS
                 </button>
               </div>
             )}
@@ -359,6 +405,7 @@ function ReconciliationSummary() {
           </motion.div>
         )}
       </AnimatePresence>
+
       <AnimatePresence>
         {showExportModal && (
           <motion.div
