@@ -7,6 +7,7 @@ import { FileText, FileSpreadsheet, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 import { APP_FULL_NAME } from '../config';
+import { getBackendUrl } from "../config/backend";
 
 function ReconciliationPage() {
   const [activeTab, setActiveTab] = useState('Missing in OSDP');
@@ -26,6 +27,16 @@ function ReconciliationPage() {
   const creator = localStorage.getItem('username') || 'Auto Generated';
   const { distributor, distributorName, source } = location.state || {};
 
+  const requireBackend = () => {
+  const url = getBackendUrl();
+    if (!url) {
+      toast.error("Backend URL not set. Please set Tunnel URL in Header.");
+      throw new Error("Backend URL not set");
+    }
+    return url;
+  };
+
+
   // Fetch ALL rows at once, only once (no pagination)
   useEffect(() => {
     if (!resultId) {
@@ -33,15 +44,21 @@ function ReconciliationPage() {
       return;
     }
     setLoading(true);
-    fetch(`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}/get_reconcile_page?result_id=${resultId}&page=1&size=1000000`)
-      .then(res => res.json())
-      .then(data => {
-        setAllRows(data.rows || []);
-        setPage(1);
-      })
-      .catch(() => toast.error('Failed to fetch reconciliation results.'))
-      .finally(() => setLoading(false));
+
+    try {
+      fetch(`${requireBackend()}/get_reconcile_page?result_id=${resultId}&page=1&size=1000000`)
+        .then(res => res.json())
+        .then(data => {
+          setAllRows(data.rows || []);
+          setPage(1);
+        })
+        .catch(() => toast.error('Failed to fetch reconciliation results.'))
+        .finally(() => setLoading(false));
+    } catch (e) {
+      setLoading(false);
+    }
   }, [resultId]);
+
 
   // Filter ALL data before paginating!
   const filteredRows = React.useMemo(() => {
@@ -145,7 +162,7 @@ function ReconciliationPage() {
     const toastId = toast.loading('Exporting Excel...');
     try {
       const dataToExport = mode === 'all' ? allRows : filteredRows;
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}/export_result_excel`, {
+      const response = await fetch(`${requireBackend()}/export_result_excel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

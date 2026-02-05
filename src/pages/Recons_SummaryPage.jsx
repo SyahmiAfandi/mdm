@@ -88,7 +88,7 @@ function ReconciliationSummary() {
         toast.error('Failed to load reconciliation summary.');
       })
       .finally(() => setLoading(false));
-  }, [resultId, BACKEND_URL]);
+  }, [resultId]);
 
   // --- Hover logic for dropdown ---
   useEffect(() => {
