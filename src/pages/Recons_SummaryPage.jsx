@@ -6,6 +6,7 @@ import { saveAs } from 'file-saver';
 import { DownloadIcon, Loader2, ChevronDownIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { APP_FULL_NAME } from '../config';
+import { getBackendUrl } from "../config/backend";
 
 const monthNames = [
   'January','February','March','April','May','June',
@@ -44,7 +45,6 @@ function ReconciliationSummary() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const fromButton = location.state?.fromButton || sessionStorage.getItem('fromButton') || 'N/A';
   const businessType = location.state?.businessType || sessionStorage.getItem('businessType') || 'N/A';
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
   const [exporting, setExporting] = useState(false);
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -54,6 +54,14 @@ function ReconciliationSummary() {
   const creator = localStorage.getItem('username') || 'Auto Generated';
   const [loading, setLoading] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
+  const backendUrl = getBackendUrl();
+  const requireBackend = () => {
+    if (!backendUrl) {
+      toast.error("Backend URL not set. Please set Tunnel URL in Header.");
+      throw new Error("Backend URL not set");
+    }
+    return backendUrl;
+  };
 
   // --- Early navigation effect, NO return! ---
   useEffect(() => {
@@ -67,7 +75,7 @@ function ReconciliationSummary() {
   useEffect(() => {
     if (!resultId) return; // Only fetch if resultId exists
     setLoading(true);
-    fetch(`${BACKEND_URL}/get_reconcile_summary?result_id=${resultId}`)
+    fetch(`${requireBackend()}/get_reconcile_summary?result_id=${resultId}`)
       .then(res => res.json())
       .then(data => {
         setOsdpData(data.summary_osdp || []);
@@ -97,7 +105,7 @@ function ReconciliationSummary() {
     const dataToExport = source === 'OSDP' ? osdpData : pbiData;
     const toastId = toast.loading('Exporting report...');
     try {
-      const response = await fetch(`${BACKEND_URL}/export_summary_excel`, {
+      const response = await fetch(`${requireBackend()}/export_summary_excel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -120,7 +128,7 @@ function ReconciliationSummary() {
     const dataToExport = source === 'OSDP' ? osdpData : pbiData;
     const toastId = toast.loading('Exporting to database...');
     try {
-      const response = await fetch(`${BACKEND_URL}/export_to_sheets`, {
+      const response = await fetch(`${requireBackend()}/export_to_sheets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -147,7 +155,7 @@ function ReconciliationSummary() {
     setExporting(true);
     const toastId = toast.loading('Generating CSV DSS...');
     try {
-      const url = `${BACKEND_URL}/export_combined_csv`;
+      const url = `${requireBackend()}/export_combined_csv`;
       const fd = new FormData();
       // Provide result_id so backend can rebuild the CSV for this reconciliation
       fd.append('result_id', resultId);
