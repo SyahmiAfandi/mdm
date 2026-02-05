@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { BriefcaseIcon, DocumentTextIcon } from '@heroicons/react/24/solid';
 import { APP_FULL_NAME } from '../config';
+import { getBackendUrl } from "../config/backend";
 
 function ReconciliationUploadPage() {
   const [files, setFiles] = useState([]);
@@ -31,11 +32,19 @@ function ReconciliationUploadPage() {
   const uploadEndpointOSDP = location.state?.uploadEndpointOSDP || '/upload_HPCRAWDATA_OSDP';
   const uploadEndpointPBI = location.state?.uploadEndpointPBI || '/upload_FCSHPC_PBI';
   const nextPath = location.state?.nextPath || '/recons/summary';
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
   const [loadingNext, setLoadingNext] = useState(false);
 
   const osdpInputRef = useRef();
   const pbiInputRef = useRef();
+
+  const backendUrl = getBackendUrl();
+  const requireBackend = () => {
+    if (!backendUrl) {
+      toast.error("Backend URL not set. Please set Tunnel URL in Header.");
+      throw new Error("Backend URL not set");
+    }
+    return backendUrl;
+  };
 
   const mergeUniqueFiles = (existing, incoming) => {
     const existingNames = new Set(existing.map(file => file.name));
@@ -110,7 +119,7 @@ function ReconciliationUploadPage() {
   };
 
   const handleClear = async () => {
-    await axios.post(`${BACKEND_URL}/clear`);
+    await axios.post(`${requireBackend()}/clear`);
     setSortedData([]);
     setSummaryData([]);
     setFiles([]);
@@ -121,7 +130,7 @@ function ReconciliationUploadPage() {
   };
 
   const handleClearPBI = async () => {
-    await axios.post(`${BACKEND_URL}/clear_pbi`);
+    await axios.post(`${requireBackend()}/clear_pbi`);
     setSortedDataPBI([]);
     setSummaryDataPBI([]);
     setFilesPBI([]);
@@ -190,7 +199,7 @@ const handleUploadOSDP = async () => {
 
   try {
     const endpoint = location.state?.uploadEndpointOSDP || '/upload_HPCRAWDATA_OSDP';
-    const res = await axios.post(`${BACKEND_URL}${endpoint}`, formData);
+    const res = await axios.post(`${requireBackend()}${endpoint}`, formData);
     // Use these directly from response
     const sorted_data = Array.isArray(res.data?.sorted_data) ? res.data.sorted_data : [];
     const summary_data = Array.isArray(res.data?.summary_data) ? res.data.summary_data : [];
@@ -226,7 +235,7 @@ const handleUploadOSDP = async () => {
     Array.from(files1).forEach(file => formData.append('files1', file));
     try {
       const endpoint = location.state?.uploadEndpointPBI || '/upload_FCSHPC_PBI';
-      const res = await axios.post(`${BACKEND_URL}${endpoint}`, formData);
+      const res = await axios.post(`${requireBackend()}${endpoint}`, formData);
 
       const { sorted_data_PBI, summary_data_PBI } = res.data || {};
       if (Array.isArray(sorted_data_PBI) && Array.isArray(summary_data_PBI)) {
@@ -320,7 +329,7 @@ const handleUploadOSDP = async () => {
           onClick={async () => {
             setLoadingNext(true);
             try {
-              const res = await fetch(`${BACKEND_URL}/reconcile_all`, {
+              const res = await fetch(`${requireBackend()}/reconcile_all`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

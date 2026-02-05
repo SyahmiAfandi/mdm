@@ -426,7 +426,7 @@ function ReconciliationSummary() {
                 <div>
                   <label className="block text-sm mb-1">Year:</label>
                   <select value={exportYear} onChange={e => setExportYear(e.target.value)} className="border rounded px-2 py-1 w-full">
-                    {['2025', '2024', '2023'].map(y => <option key={y} value={y}>{y}</option>)}
+                    {['2026','2025', '2024', '2023'].map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
                 <div>
