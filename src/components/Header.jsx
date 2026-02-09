@@ -28,6 +28,8 @@ import {
   saveBackendUrlLocal,
   clearBackendUrlLocal,
   isLocalhostUrl,
+  isProdSiteHost,
+  isVercelProdDomain,
 } from "../config/backend";
 
 // Theme toggle logic
@@ -44,7 +46,7 @@ function useTheme() {
   return [theme, toggleTheme];
 }
 
-// ✅ Role-based access for backend config (adjust as you like)
+// Role-based access
 const CAN_CONFIG_BACKEND = (role) => {
   const r = String(role || "").toLowerCase();
   return ["admin", "superadmin", "developer"].includes(r);
@@ -56,10 +58,14 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
   const { showTooltip, setShowTooltip } = useTooltip();
   const [theme, toggleTheme] = useTheme();
 
-  // ===== Backend URL + Status =====
   const HEALTH_PATH = "/test";
 
-  // Mode: "local" | "tunnel"
+  // ✅ detect prod site / your vercel domain
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  const isProdSite = isProdSiteHost(host);
+  const isMyProdDomain = isVercelProdDomain(host);
+
+  // Mode
   const [backendMode, setBackendMode] = useState(() => getBackendMode());
 
   // Stored URLs (dependencies)
@@ -72,31 +78,21 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
     () => getBackendUrlLocal() || "http://127.0.0.1:5000"
   );
 
-  // Lock tunnel after Save, unlock after Clear
+  // Lock tunnel after save
   const [lockedTunnel, setLockedTunnel] = useState(() => !!getBackendUrlTunnel());
 
-  // Canonical backend URL used for checks
+  // Canonical backend URL
   const [backendUrl, setBackendUrl] = useState(() => getBackendUrl());
 
-  // status: "missing" | "checking" | "up" | "down"
+  // status
   const [backendStatus, setBackendStatus] = useState(backendUrl ? "checking" : "missing");
   const [backendMsg, setBackendMsg] = useState(backendUrl ? "Checking..." : "No URL set");
 
-  // Backend config popover
   const [showBackendPopover, setShowBackendPopover] = useState(false);
   const backendPopoverRef = useRef(null);
-
-  // Account dropdown ref
   const dropdownRef = useRef(null);
 
   const isAbsoluteHttpUrl = (url) => /^https?:\/\/.+/i.test(url);
-
-  // ====== DEV/PROD badge near server icon ======
-  const envLabel = backendMode === "local" || isLocalhostUrl(backendUrl) ? "DEV" : "PROD";
-  const envBadgeClass =
-    envLabel === "DEV"
-      ? "bg-emerald-500/90 text-white border-emerald-200"
-      : "bg-indigo-600/90 text-white border-indigo-200";
 
   const testBackend = async (url) => {
     const base = normalizeUrl(url);
@@ -125,14 +121,62 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
       setBackendStatus("down");
       setBackendMsg(`Offline (HTTP ${res.status})`);
       return false;
-    } catch (e) {
+    } catch {
       setBackendStatus("down");
       setBackendMsg("Offline (network/CORS)");
       return false;
     }
   };
 
-  // Status icon colors
+  // ✅ IMPORTANT FIX:
+  // On PROD domain (mdm-pi.vercel.app), force tunnel mode so it will never stay DEV.
+  useEffect(() => {
+    if (!isMyProdDomain) return;
+
+    // Force tunnel on your Vercel prod domain
+    saveBackendMode("tunnel");
+    setBackendMode("tunnel");
+
+    const t = getBackendUrlTunnel();
+    setBackendUrl(t);
+
+    // Optional: unlock tunnel in prod so you can edit it
+    setLockedTunnel(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMyProdDomain]);
+
+  // ✅ Recompute canonical backendUrl when mode/url changes, then test
+  useEffect(() => {
+    // If in prod domain, always tunnel
+    const effectiveMode = isMyProdDomain ? "tunnel" : backendMode;
+
+    const canonical =
+      effectiveMode === "local" ? getBackendUrlLocal() : getBackendUrlTunnel();
+
+    setBackendUrl(canonical);
+
+    if (canonical) testBackend(canonical);
+    else {
+      setBackendStatus("missing");
+      setBackendMsg("No URL set");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backendMode, tunnelUrl, localUrl, isMyProdDomain]);
+
+  // ===== DEV/PROD badge logic (FIXED) =====
+  // On mdm-pi.vercel.app => always show PROD
+  const envLabel = isMyProdDomain
+    ? "PROD"
+    : backendMode === "local" || isLocalhostUrl(backendUrl)
+    ? "DEV"
+    : "PROD";
+
+  const envBadgeClass =
+    envLabel === "DEV"
+      ? "bg-emerald-500/90 text-white border-emerald-200"
+      : "bg-indigo-600/90 text-white border-indigo-200";
+
+  // Icon colors
   const backendIconClass =
     backendStatus === "up"
       ? "text-green-600 dark:text-green-300"
@@ -151,44 +195,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
       ? "Backend: Checking..."
       : "Backend: Missing URL";
 
-  // ✅ Auto-switch to LOCAL when URL is localhost
-  //    - If either the current canonical URL OR saved localUrl is localhost, prefer LOCAL
-  useEffect(() => {
-    const currentCanonical = getBackendUrl();
-    const savedLocal = getBackendUrlLocal();
-
-    // If canonical is localhost but mode isn't local, switch to local
-    if (isLocalhostUrl(currentCanonical) && backendMode !== "local") {
-      saveBackendMode("local");
-      setBackendMode("local");
-      setBackendUrl(savedLocal);
-      return;
-    }
-
-    // If tunnel mode but tunnel URL empty and local is localhost, auto-switch to local
-    if (backendMode === "tunnel" && !getBackendUrlTunnel() && isLocalhostUrl(savedLocal)) {
-      saveBackendMode("local");
-      setBackendMode("local");
-      setBackendUrl(savedLocal);
-      return;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once on mount
-
-  // ✅ Recompute canonical backendUrl when mode/url changes, then test
-  useEffect(() => {
-    const canonical = backendMode === "local" ? getBackendUrlLocal() : getBackendUrlTunnel();
-    setBackendUrl(canonical);
-
-    if (canonical) testBackend(canonical);
-    else {
-      setBackendStatus("missing");
-      setBackendMsg("No URL set");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backendMode, tunnelUrl, localUrl]);
-
-  // Close account dropdown when clicking outside
+  // Close menus on outside click
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -199,7 +206,6 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showUserMenu]);
 
-  // Close backend popover when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (backendPopoverRef.current && !backendPopoverRef.current.contains(event.target)) {
@@ -210,11 +216,8 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showBackendPopover]);
 
-  const handleLogout = () => {
-    alert("Logout action here!");
-  };
+  const handleLogout = () => alert("Logout action here!");
 
-  // Same height/center alignment for all top-right icons
   const iconBtnBase =
     "h-9 w-9 inline-flex items-center justify-center rounded-lg " +
     "transition hover:bg-blue-50 dark:hover:bg-gray-800 " +
@@ -267,7 +270,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
           <HelpCircle size={18} />
         </button>
 
-        {/* ✅ Backend icon + popover */}
+        {/* Backend icon + popover */}
         <div className="relative">
           <button
             type="button"
@@ -277,7 +280,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
           >
             <Server size={18} />
 
-            {/* ✅ DEV/PROD badge (tiny) */}
+            {/* DEV/PROD badge */}
             <span
               className={[
                 "absolute -bottom-1 left-1/2 -translate-x-1/2",
@@ -302,7 +305,6 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                 .join(" ")}
             />
 
-            {/* Pulse while checking */}
             {backendStatus === "checking" && (
               <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-yellow-400 opacity-70 animate-ping" />
             )}
@@ -334,184 +336,142 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                 </button>
               </div>
 
-              {/* Config */}
               {canConfigBackend ? (
                 <div className="mt-3">
-                  {/* ✅ Polished Toggle (small) */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="text-[11px] text-gray-500 dark:text-gray-300">
-                      Backend Mode
-                    </div>
-
-                    <div className="relative w-[120px] h-[28px] select-none">
-                      <div className="absolute inset-0 rounded-full bg-gray-200 dark:bg-gray-800" />
-                      <div
-                        className={[
-                          "absolute top-[2px] left-[2px] h-[24px] w-[56px] rounded-full",
-                          "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-md",
-                          "transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
-                          backendMode === "local" ? "translate-x-[60px]" : "translate-x-0",
-                        ].join(" ")}
-                      />
-                      <div className="relative z-10 flex h-full text-[9px] font-bold tracking-wide">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const next = "tunnel";
-                            saveBackendMode(next);
-                            setBackendMode(next);
-                            setBackendUrl(getBackendUrlTunnel());
-                          }}
-                          className={[
-                            "flex-1 flex items-center justify-center rounded-full",
-                            "transition-colors duration-200",
-                            backendMode === "tunnel"
-                              ? "text-white"
-                              : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white",
-                          ].join(" ")}
-                        >
-                          TUNNEL
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const next = "local";
-                            saveBackendMode(next);
-                            setBackendMode(next);
-                            setBackendUrl(getBackendUrlLocal());
-                          }}
-                          className={[
-                            "flex-1 flex items-center justify-center rounded-full",
-                            "transition-colors duration-200",
-                            backendMode === "local"
-                              ? "text-white"
-                              : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white",
-                          ].join(" ")}
-                        >
-                          LOCAL
-                        </button>
+                  {/* ✅ In PROD domain, disable LOCAL toggle completely */}
+                  {!isMyProdDomain && (
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-[11px] text-gray-500 dark:text-gray-300">
+                        Backend Mode
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Active input */}
-                  {backendMode === "tunnel" ? (
-                    <>
-                      <label className="block text-[11px] text-gray-500 dark:text-gray-300">
-                        Tunnel URL
-                      </label>
-
-                      <input
-                        value={tunnelUrlInput}
-                        disabled={lockedTunnel}
-                        onChange={(e) => {
-                          if (lockedTunnel) return;
-                          const v = e.target.value;
-                          setTunnelUrlInput(v);
-                          setBackendStatus(v ? "checking" : "missing");
-                          setBackendMsg(v ? "Not tested (click Test/Save)" : "No URL set");
-                        }}
-                        placeholder="https://xxxx.trycloudflare.com"
-                        className={[
-                          "w-full mt-1 px-2 py-1 text-xs rounded-lg border",
-                          "border-gray-200 dark:border-gray-600",
-                          "bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100",
-                          "focus:outline-none focus:ring-2 focus:ring-blue-300",
-                          lockedTunnel && "bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                      />
-
-                      <div className="flex gap-2 w-full mt-3">
-                        <button
-                          className="flex-1 text-xs px-2 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={lockedTunnel}
-                          onClick={async () => {
-                            const normalized = normalizeUrl(tunnelUrlInput);
-
-                            saveBackendUrlTunnel(normalized);
-                            setTunnelUrl(normalized);
-                            setTunnelUrlInput(normalized);
-
-                            setLockedTunnel(true);
-
-                            // If user accidentally saved localhost as tunnel, auto-switch to local
-                            if (isLocalhostUrl(normalized)) {
+                      {/* Polished small toggle */}
+                      <div className="relative w-[120px] h-[28px] select-none">
+                        <div className="absolute inset-0 rounded-full bg-gray-200 dark:bg-gray-800" />
+                        <div
+                          className={[
+                            "absolute top-[2px] left-[2px] h-[24px] w-[56px] rounded-full",
+                            "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-md",
+                            "transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+                            backendMode === "local" ? "translate-x-[60px]" : "translate-x-0",
+                          ].join(" ")}
+                        />
+                        <div className="relative z-10 flex h-full text-[9px] font-bold tracking-wide">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              saveBackendMode("tunnel");
+                              setBackendMode("tunnel");
+                              setBackendUrl(getBackendUrlTunnel());
+                            }}
+                            className={[
+                              "flex-1 flex items-center justify-center rounded-full",
+                              backendMode === "tunnel"
+                                ? "text-white"
+                                : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white",
+                            ].join(" ")}
+                          >
+                            TUNNEL
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
                               saveBackendMode("local");
                               setBackendMode("local");
                               setBackendUrl(getBackendUrlLocal());
-                              return;
-                            }
-
-                            setBackendUrl(normalized);
-                            const ok = await testBackend(normalized);
-                            if (ok) setShowBackendPopover(false);
-                          }}
-                        >
-                          Save
-                        </button>
-
-                        <button
-                          className="flex-1 text-xs px-2 py-1 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300
-                                     dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 transition"
-                          onClick={() => testBackend(tunnelUrlInput)}
-                        >
-                          Test
-                        </button>
-
-                        <button
-                          className="text-xs px-2 py-1 rounded-lg text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 transition"
-                          onClick={() => {
-                            clearBackendUrlTunnel();
-                            setTunnelUrl("");
-                            setTunnelUrlInput("");
-                            setLockedTunnel(false);
-
-                            if (backendMode === "tunnel") {
-                              setBackendUrl("");
-                              setBackendStatus("missing");
-                              setBackendMsg("No URL set");
-                            }
-                          }}
-                          title="Clear Tunnel URL"
-                        >
-                          Clear
-                        </button>
-                      </div>
-
-                      <div className="mt-2 text-[10px] text-gray-400">
-                        Status becomes <b>Online</b> only if{" "}
-                        <span className="select-text">{HEALTH_PATH}</span> returns HTTP 200/2xx.
-                      </div>
-
-                      {lockedTunnel && (
-                        <div className="mt-2 text-[10px] text-gray-500 dark:text-gray-300">
-                          Tunnel URL is locked. Click <b>Clear</b> to edit again.
+                            }}
+                            className={[
+                              "flex-1 flex items-center justify-center rounded-full",
+                              backendMode === "local"
+                                ? "text-white"
+                                : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white",
+                            ].join(" ")}
+                          >
+                            LOCAL
+                          </button>
                         </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tunnel input always available */}
+                  <label className="block text-[11px] text-gray-500 dark:text-gray-300">
+                    {isMyProdDomain ? "Production Backend URL" : "Tunnel URL"}
+                  </label>
+
+                  <input
+                    value={tunnelUrlInput}
+                    disabled={false} // allow edit in prod if you want
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setTunnelUrlInput(v);
+                      setBackendStatus(v ? "checking" : "missing");
+                      setBackendMsg(v ? "Not tested (click Test/Save)" : "No URL set");
+                    }}
+                    placeholder="https://your-backend-domain.com"
+                    className={[
+                      "w-full mt-1 px-2 py-1 text-xs rounded-lg border",
+                      "border-gray-200 dark:border-gray-600",
+                      "bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100",
+                      "focus:outline-none focus:ring-2 focus:ring-blue-300",
+                    ].join(" ")}
+                  />
+
+                  <div className="flex gap-2 w-full mt-3">
+                    <button
+                      className="flex-1 text-xs px-2 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
+                      onClick={async () => {
+                        const normalized = normalizeUrl(tunnelUrlInput);
+
+                        saveBackendUrlTunnel(normalized);
+                        setTunnelUrl(normalized);
+                        setTunnelUrlInput(normalized);
+
+                        // In prod domain always tunnel
+                        saveBackendMode("tunnel");
+                        setBackendMode("tunnel");
+                        setBackendUrl(normalized);
+
+                        const ok = await testBackend(normalized);
+                        if (ok) setShowBackendPopover(false);
+                      }}
+                    >
+                      Save
+                    </button>
+
+                    <button
+                      className="flex-1 text-xs px-2 py-1 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300
+                                 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 transition"
+                      onClick={() => testBackend(tunnelUrlInput)}
+                    >
+                      Test
+                    </button>
+
+                    <button
+                      className="text-xs px-2 py-1 rounded-lg text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 transition"
+                      onClick={() => {
+                        clearBackendUrlTunnel();
+                        setTunnelUrl("");
+                        setTunnelUrlInput("");
+                        setBackendUrl("");
+                        setBackendStatus("missing");
+                        setBackendMsg("No URL set");
+                      }}
+                      title="Clear URL"
+                    >
+                      Clear
+                    </button>
+                  </div>
+
+                  {/* Local input only in non-prod domain */}
+                  {!isMyProdDomain && backendMode === "local" && (
+                    <div className="mt-3">
                       <label className="block text-[11px] text-gray-500 dark:text-gray-300">
                         Local URL
                       </label>
-
                       <input
                         value={localUrlInput}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setLocalUrlInput(v);
-
-                          // ✅ If user types localhost, ensure mode stays local
-                          if (isLocalhostUrl(v) && backendMode !== "local") {
-                            saveBackendMode("local");
-                            setBackendMode("local");
-                          }
-
-                          setBackendStatus(v ? "checking" : "missing");
-                          setBackendMsg(v ? "Not tested (click Save/Test)" : "No URL set");
-                        }}
+                        onChange={(e) => setLocalUrlInput(e.target.value)}
                         placeholder="http://127.0.0.1:5000"
                         className={[
                           "w-full mt-1 px-2 py-1 text-xs rounded-lg border",
@@ -520,70 +480,40 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                           "focus:outline-none focus:ring-2 focus:ring-blue-300",
                         ].join(" ")}
                       />
-
                       <div className="flex gap-2 w-full mt-3">
                         <button
                           className="flex-1 text-xs px-2 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
                           onClick={async () => {
                             const normalized = normalizeUrl(localUrlInput);
-
                             saveBackendUrlLocal(normalized);
                             setLocalUrl(normalized);
                             setLocalUrlInput(normalized);
 
-                            // ✅ Auto-switch to LOCAL if localhost
-                            if (isLocalhostUrl(normalized) && backendMode !== "local") {
-                              saveBackendMode("local");
-                              setBackendMode("local");
-                            }
-
+                            saveBackendMode("local");
+                            setBackendMode("local");
                             setBackendUrl(normalized);
+
                             const ok = await testBackend(normalized);
                             if (ok) setShowBackendPopover(false);
                           }}
                         >
-                          Save
+                          Save Local
                         </button>
-
                         <button
                           className="flex-1 text-xs px-2 py-1 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300
                                      dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 transition"
                           onClick={() => testBackend(localUrlInput)}
                         >
-                          Test
-                        </button>
-
-                        <button
-                          className="text-xs px-2 py-1 rounded-lg text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 transition"
-                          onClick={() => {
-                            clearBackendUrlLocal();
-                            const fallback = "http://127.0.0.1:5000";
-                            setLocalUrl(fallback);
-                            setLocalUrlInput(fallback);
-
-                            saveBackendMode("local");
-                            setBackendMode("local");
-
-                            setBackendUrl(fallback);
-                            testBackend(fallback);
-                          }}
-                          title="Reset Local URL"
-                        >
-                          Reset
+                          Test Local
                         </button>
                       </div>
-
-                      <div className="mt-2 text-[10px] text-gray-400">
-                        Tip: Use <b>http://127.0.0.1:5000</b> or your LAN IP (e.g.{" "}
-                        <b>http://192.168.x.x:5000</b>).
-                      </div>
-
-                      <div className="mt-2 text-[10px] text-gray-400">
-                        Status becomes <b>Online</b> only if{" "}
-                        <span className="select-text">{HEALTH_PATH}</span> returns HTTP 200/2xx.
-                      </div>
-                    </>
+                    </div>
                   )}
+
+                  <div className="mt-2 text-[10px] text-gray-400">
+                    Status becomes <b>Online</b> only if{" "}
+                    <span className="select-text">{HEALTH_PATH}</span> returns HTTP 200/2xx.
+                  </div>
                 </div>
               ) : (
                 <div className="mt-3 text-xs text-gray-500 dark:text-gray-300">
@@ -668,7 +598,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                 </button>
               </div>
 
-              {/* Theme Switcher */}
+              {/* Theme */}
               <div className="flex items-center justify-between w-full px-0 mt-1 mb-2">
                 <label className="text-xs text-gray-700 dark:text-gray-200 cursor-pointer select-none">
                   Dark Mode (BETA)
@@ -684,31 +614,8 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                 </button>
               </div>
 
-              {/* Quick Links */}
-              <div className="w-full flex flex-col gap-1 mt-2">
-                <a
-                  href="#"
-                  className="flex items-center gap-2 text-xs text-blue-600 hover:underline hover:text-blue-800 dark:text-blue-200"
-                >
-                  <UserCircle size={15} /> My Profile
-                </a>
-                <a
-                  href="#"
-                  className="flex items-center gap-2 text-xs text-gray-500 hover:underline hover:text-blue-600 dark:text-gray-200"
-                >
-                  <HelpCircle size={15} /> Help Center
-                </a>
-                <a
-                  href="#"
-                  className="flex items-center gap-2 text-xs text-gray-400 hover:underline hover:text-blue-600 dark:text-gray-300"
-                >
-                  <span className="font-bold">?</span> What's New
-                </a>
-              </div>
-
               <div className="w-full border-b my-2 dark:border-gray-600" />
 
-              {/* Version & Logout */}
               <div className="w-full flex justify-between items-center mt-1">
                 <span className="text-[10px] text-gray-400 dark:text-gray-400">
                   {APP_FULL_NAME}
