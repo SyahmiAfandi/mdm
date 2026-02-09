@@ -14,6 +14,8 @@ import {
   Sun,
   LogOut,
   User,
+  Server,
+  X,
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
 import { useTooltip } from "../context/TooltipContext";
@@ -33,27 +35,58 @@ function useTheme() {
   return [theme, toggleTheme];
 }
 
+// ✅ Role-based access for backend config (adjust as you like)
+const CAN_CONFIG_BACKEND = (role) => {
+  const r = String(role || "").toLowerCase();
+  return ["admin", "superadmin", "developer"].includes(r);
+};
+
 const Header = ({ title = "", breadcrumbs = [] }) => {
   const { user, role } = useUser();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { showTooltip, setShowTooltip } = useTooltip();
   const [theme, toggleTheme] = useTheme();
-  const dropdownRef = useRef(null);
-  const [showBackendConfig, setShowBackendConfig] = useState(false);
 
-  // ===== Backend URL + Status (Tunnel URL) =====
+  // ===== Backend URL + Status =====
   const HEALTH_PATH = "/test";
+
+  // ✅ Canonical/saved backend URL (used for actual requests)
   const [backendUrl, setBackendUrl] = useState(() => getBackendUrl());
+
+  // ✅ Input value shown in popover (raw)
+  const [backendUrlInput, setBackendUrlInput] = useState(() => getBackendUrl() || "");
+
+  // ✅ NEW: lock input after Save, unlock after Clear
+  const [lockedBackend, setLockedBackend] = useState(() => {
+    const u = getBackendUrl();
+    return !!u; // locked if there is a saved URL
+  });
 
   // status: "missing" | "checking" | "up" | "down"
   const [backendStatus, setBackendStatus] = useState(backendUrl ? "checking" : "missing");
   const [backendMsg, setBackendMsg] = useState(backendUrl ? "Checking..." : "No URL set");
 
+  // Backend config popover (UNDER backend icon)
+  const [showBackendPopover, setShowBackendPopover] = useState(false);
+  const backendPopoverRef = useRef(null);
+
+  // Account dropdown ref
+  const dropdownRef = useRef(null);
+
+  const isAbsoluteHttpUrl = (url) => /^https?:\/\/.+/i.test(url);
+
   const testBackend = async (url) => {
     const base = normalizeUrl(url);
+
+    // Prevent relative fetch (would hit frontend origin)
     if (!base) {
       setBackendStatus("missing");
       setBackendMsg("No URL set");
+      return false;
+    }
+    if (!isAbsoluteHttpUrl(base)) {
+      setBackendStatus("down");
+      setBackendMsg("Invalid URL (must start with http:// or https://)");
       return false;
     }
 
@@ -61,23 +94,57 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
     setBackendMsg("Checking...");
 
     try {
-      const res = await fetch(`${base}${HEALTH_PATH}`, { method: "GET" });
+      const res = await fetch(`${base}${HEALTH_PATH}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
       if (res.ok) {
         setBackendStatus("up");
         setBackendMsg("Online");
         return true;
       }
+
       setBackendStatus("down");
-      setBackendMsg(`Down (HTTP ${res.status})`);
+      setBackendMsg(`Offline (HTTP ${res.status})`);
       return false;
     } catch (e) {
       setBackendStatus("down");
-      setBackendMsg("Down (network/CORS)");
+      setBackendMsg("Offline (network/CORS)");
       return false;
     }
   };
 
-  // Close dropdown when clicking outside
+  // Top-right indicator color + tooltip
+  const backendIconClass =
+    backendStatus === "up"
+      ? "text-green-600 dark:text-green-300"
+      : backendStatus === "down"
+      ? "text-red-600 dark:text-red-300"
+      : backendStatus === "checking"
+      ? "text-yellow-600 dark:text-yellow-300"
+      : "text-gray-400 dark:text-gray-500";
+
+  const backendIconTitle =
+    backendStatus === "up"
+      ? "Backend: Online"
+      : backendStatus === "down"
+      ? "Backend: Offline"
+      : backendStatus === "checking"
+      ? "Backend: Checking..."
+      : "Backend: Missing URL";
+
+  // ✅ Auto test ONLY when canonical backendUrl changes
+  useEffect(() => {
+    if (backendUrl) testBackend(backendUrl);
+    else {
+      setBackendStatus("missing");
+      setBackendMsg("No URL set");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backendUrl]);
+
+  // Close account dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -88,15 +155,29 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showUserMenu]);
 
-  // Auto test backend when menu opens
+  // Close backend popover when clicking outside
   useEffect(() => {
-    if (showUserMenu) testBackend(backendUrl);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showUserMenu]);
+    function handleClickOutside(event) {
+      if (backendPopoverRef.current && !backendPopoverRef.current.contains(event.target)) {
+        setShowBackendPopover(false);
+      }
+    }
+    if (showBackendPopover) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showBackendPopover]);
 
   const handleLogout = () => {
     alert("Logout action here!");
   };
+
+  // ✅ Same height/center alignment for all top-right icons
+  const iconBtnBase =
+    "h-9 w-9 inline-flex items-center justify-center rounded-lg " +
+    "transition hover:bg-blue-50 dark:hover:bg-gray-800 " +
+    "focus:outline-none focus:ring-2 focus:ring-blue-300";
+
+  // ✅ Role-based visibility
+  const canConfigBackend = CAN_CONFIG_BACKEND(role);
 
   return (
     <div className="sticky top-0 z-20 flex justify-between items-center px-6 py-2 bg-gradient-to-r from-blue-50 via-white to-blue-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 shadow-sm border-b border-blue-100 dark:border-gray-800">
@@ -121,7 +202,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
       </div>
 
       {/* Right */}
-      <div className="flex items-center gap-5 relative">
+      <div className="flex items-center gap-3 relative">
         <span className="flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-300 tracking-wide">
           <CalendarDays size={14} className="text-blue-400 dark:text-blue-300" />
           {new Date().toLocaleDateString("en-GB")}
@@ -129,26 +210,188 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
 
         <button
           title="Notifications"
-          className="relative text-blue-700 hover:text-blue-900 dark:text-blue-200"
+          className={`${iconBtnBase} text-blue-700 hover:text-blue-900 dark:text-blue-200`}
+          type="button"
         >
           <Bell size={18} />
         </button>
 
         <button
           title="Help"
-          className="text-blue-700 hover:text-blue-900 dark:text-blue-200"
+          className={`${iconBtnBase} text-blue-700 hover:text-blue-900 dark:text-blue-200`}
+          type="button"
         >
           <HelpCircle size={18} />
         </button>
+
+        {/* ✅ Backend icon + popover */}
+        <div className="relative">
+          <button
+            type="button"
+            title={backendIconTitle}
+            onClick={() => setShowBackendPopover((v) => !v)}
+            className={`${iconBtnBase} ${backendIconClass}`}
+          >
+            <Server size={18} />
+
+            {/* Status dot */}
+            <span
+              className={[
+                "absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full border border-white dark:border-gray-900",
+                backendStatus === "up" && "bg-green-500",
+                backendStatus === "down" && "bg-red-500",
+                backendStatus === "checking" && "bg-yellow-500",
+                backendStatus === "missing" && "bg-gray-400",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            />
+
+            {/* ✅ Animated pulse while checking */}
+            {backendStatus === "checking" && (
+              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-yellow-400 opacity-70 animate-ping" />
+            )}
+          </button>
+
+          {showBackendPopover && (
+            <div
+              ref={backendPopoverRef}
+              className="absolute right-0 mt-2 w-80 bg-white border shadow-2xl rounded-2xl z-50 p-4 dark:bg-gray-800 dark:border-gray-700"
+            >
+              <div className="w-full flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <Server size={18} className={backendIconClass} />
+                  <div>
+                    <div className="text-sm font-semibold text-gray-800 dark:text-white">
+                      Backend
+                    </div>
+                    <div className="text-[10px] text-gray-400">{backendMsg}</div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowBackendPopover(false)}
+                  className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                  title="Close"
+                >
+                  <X size={16} className="text-gray-500 dark:text-gray-300" />
+                </button>
+              </div>
+
+              {/* ✅ Show config ONLY for allowed roles */}
+              {canConfigBackend ? (
+                <div className="mt-3">
+                  <label className="block text-[11px] text-gray-500 dark:text-gray-300">
+                    Tunnel URL
+                  </label>
+
+                  <input
+                    value={backendUrlInput}
+                    disabled={lockedBackend} // ✅ lock after save
+                    onChange={(e) => {
+                      if (lockedBackend) return;
+                      const v = e.target.value;
+                      setBackendUrlInput(v);
+                      setBackendStatus(v ? "checking" : "missing");
+                      setBackendMsg(v ? "Not tested (click Test/Save)" : "No URL set");
+                    }}
+                    placeholder="https://xxxx.trycloudflare.com"
+                    className={[
+                      "w-full mt-1 px-2 py-1 text-xs rounded-lg border",
+                      "border-gray-200 dark:border-gray-600",
+                      "bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100",
+                      "focus:outline-none focus:ring-2 focus:ring-blue-300",
+                      lockedBackend && "bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  />
+
+                  <div className="flex gap-2 w-full mt-3">
+                    <button
+                      className="flex-1 text-xs px-2 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={lockedBackend} // ✅ cannot save if locked
+                      onClick={async () => {
+                        const normalized = normalizeUrl(backendUrlInput);
+
+                        saveBackendUrl(normalized);
+                        setBackendUrl(normalized);
+                        setBackendUrlInput(normalized);
+
+                        // ✅ lock after save
+                        setLockedBackend(true);
+
+                        const ok = await testBackend(normalized);
+                        if (ok) setShowBackendPopover(false);
+                      }}
+                    >
+                      Save
+                    </button>
+
+                    <button
+                      className="flex-1 text-xs px-2 py-1 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300
+                                 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 transition"
+                      onClick={() => testBackend(backendUrlInput)}
+                    >
+                      Test
+                    </button>
+
+                    <button
+                      className="text-xs px-2 py-1 rounded-lg text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 transition"
+                      onClick={() => {
+                        clearBackendUrl();
+                        setBackendUrl("");
+                        setBackendUrlInput("");
+                        setBackendStatus("missing");
+                        setBackendMsg("No URL set");
+                        setLockedBackend(false); // ✅ unlock after clear
+                      }}
+                      title="Clear URL"
+                    >
+                      Clear
+                    </button>
+                  </div>
+
+                  <div className="mt-2 text-[10px] text-gray-400">
+                    Status becomes <b>Online</b> only if{" "}
+                    <span className="select-text">{HEALTH_PATH}</span> returns HTTP 200/2xx.
+                  </div>
+
+                  {lockedBackend && (
+                    <div className="mt-2 text-[10px] text-gray-500 dark:text-gray-300">
+                      Tunnel URL is locked. Click <b>Clear</b> to edit again.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-3 text-xs text-gray-500 dark:text-gray-300">
+                  You don’t have permission to edit the backend URL.
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      className="text-xs px-3 py-1 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300
+                                 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 transition"
+                      onClick={() => testBackend(backendUrl)}
+                    >
+                      Refresh Status
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Avatar */}
         <div className="relative">
           <button
             title="Account"
-            className="ml-1 flex items-center gap-1 focus:outline-none"
+            className={`${iconBtnBase} text-blue-700 hover:text-blue-900 dark:text-blue-200`}
             onClick={() => setShowUserMenu((prev) => !prev)}
+            type="button"
           >
-            <UserCircle size={28} className="text-blue-600 dark:text-blue-200" />
+            <UserCircle size={22} className="text-blue-600 dark:text-blue-200" />
           </button>
 
           {showUserMenu && (
@@ -176,117 +419,6 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
               </div>
 
               <div className="text-[10px] text-green-500 mb-1">Active now</div>
-
-              {/* Backend Status (Collapsible) */}
-              <div className="w-full mt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowBackendConfig((v) => !v)}
-                  className="w-full flex items-center justify-between rounded-lg px-2 py-2
-                            hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-700 dark:text-gray-200 font-medium">
-                      Backend Status
-                    </span>
-                    <span
-                      className={[
-                        "text-[10px] px-2 py-0.5 rounded-full font-semibold",
-                        backendStatus === "up" &&
-                          "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200",
-                        backendStatus === "checking" &&
-                          "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200",
-                        backendStatus === "down" &&
-                          "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200",
-                        backendStatus === "missing" &&
-                          "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-200",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    >
-                      {backendStatus === "up"
-                        ? "Added"
-                        : backendStatus === "missing"
-                        ? "Missing"
-                        : backendStatus === "checking"
-                        ? "Checking"
-                        : "Down"}
-                    </span>
-                  </div>
-
-                  <span className="text-xs text-gray-400 dark:text-gray-300">
-                    {showBackendConfig ? "▾" : "▸"}
-                  </span>
-                </button>
-
-                <div className="text-[10px] text-gray-400 mt-1 px-2">{backendMsg}</div>
-
-                {/* Collapsible content */}
-                {showBackendConfig && (
-                  <div className="w-full mt-2 px-2 pb-2">
-                    <label className="block text-[11px] text-gray-500 dark:text-gray-300">
-                      Tunnel URL
-                    </label>
-
-                    <input
-                      value={backendUrl}
-                      onChange={(e) => setBackendUrl(normalizeUrl(e.target.value))}
-                      placeholder="https://xxxx.trycloudflare.com"
-                      className="w-full mt-1 px-2 py-1 text-xs rounded-lg border border-gray-200 dark:border-gray-600
-                                bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100
-                                focus:outline-none focus:ring-2 focus:ring-blue-300"
-                    />
-
-                    <div className="flex gap-2 w-full mt-2">
-                      <button
-                        className="flex-1 text-xs px-2 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
-                        onClick={async () => {
-                          const v = normalizeUrl(backendUrl);
-                          saveBackendUrl(v);
-                          setBackendUrl(v);
-
-                          const ok = await testBackend(v);
-
-                          if (ok) {
-                            setShowBackendConfig(false); // 👈 collapse when online
-                          }
-                        }}
-                      >
-                        Save
-                      </button>
-
-                      <button
-                        className="flex-1 text-xs px-2 py-1 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300
-                                  dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 transition"
-                        onClick={async () => {
-                          await testBackend(backendUrl);
-                        }}
-                      >
-                        Test
-                      </button>
-
-                      <button
-                        className="text-xs px-2 py-1 rounded-lg text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 transition"
-                        onClick={() => {
-                          clearBackendUrl();
-                          setBackendUrl("");
-                          setBackendStatus("missing");
-                          setBackendMsg("No URL set");
-                          setShowBackendConfig(true); // open it again so user can paste
-                        }}
-                        title="Clear URL"
-                      >
-                        Clear
-                      </button>
-                    </div>
-
-                    <div className="mt-2 text-[10px] text-gray-400">
-                      Example: <span className="select-text">https://xxxx.trycloudflare.com</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
 
               <div className="w-full border-b my-2 dark:border-gray-600" />
 
@@ -324,9 +456,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                 <button
                   onClick={toggleTheme}
                   className={`ml-2 flex items-center px-2 py-1 rounded-lg ${
-                    theme === "dark"
-                      ? "bg-blue-700 text-white"
-                      : "bg-gray-200 text-gray-700"
+                    theme === "dark" ? "bg-blue-700 text-white" : "bg-gray-200 text-gray-700"
                   } transition`}
                 >
                   {theme === "dark" ? <Moon size={16} /> : <Sun size={16} />}
