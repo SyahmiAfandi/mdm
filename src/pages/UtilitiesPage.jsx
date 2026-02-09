@@ -6,6 +6,10 @@ import { APP_FULL_NAME } from '../config';
 
 const utilities = [
   {
+    title: 'MDM Email Tracker',
+    description: 'Track email for MDM task',
+  },
+  {
     title: 'Date Converter',
     description: 'Convert date format (e.g. MM/DD/YYYY → DD/MM/YYYY)',
   },
@@ -50,6 +54,7 @@ function UtilitiesPage() {
                 className="mt-3 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                 onClick={() => {
                   if (tool.title === 'Date Converter') navigate('/utilities/date-converter');
+                  else if (tool.title === 'MDM Email Tracker') navigate('/utilities/emailtracker');
                   else if (tool.title === 'Data Cleaner') navigate('/utilities/data-cleaner');
                   else if (tool.title === 'Column Mapper') navigate('/utilities/column-mapper');
                   else if (tool.title === 'Google Sheets Sync') navigate('/utilities/sheets-sync');

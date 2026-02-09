@@ -44,6 +44,8 @@ const Settings = lazy(() => import('./pages/Settings'));
 const AdminManageControl = lazy(() => import('./pages/AdminUsersPage.jsx'));
 const AdminLicenses = lazy(() => import('./pages/LicenseExpiryPage.jsx'));
 const RolePermission = lazy(() => import('./pages/RolesPermissionsPage.jsx'));
+//Utilities
+const EmailTracker = lazy(() => import('./pages/Utilities-EmailTracker.jsx'));
 
 //About
 const ContactPage = lazy(() => import('./pages/ContactPage'));
@@ -66,6 +68,7 @@ function App() {
           <Route path="/promoautoIC" element={<ProtectedRoute><PromoAutoIC /></ProtectedRoute>} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/utilities" element={<UtilitiesSelection />} />
+          <Route path="/utilities/emailtracker" element={<EmailTracker />} />
           <Route path="/reports" element={<ReportSelection />} />
           <Route path="/reports/summary_recons" element={<ReportSummary />} />
           <Route path="/reports/mismatch-tracker" element={<MismatchTrackerReport />} />
