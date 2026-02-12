@@ -1,11 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import DashboardLayout from '../components/DashboardLayout';
 import { useUser } from '../context/UserContext';
 import { Sun, Shield } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { motion } from 'framer-motion';
-import { APP_FULL_NAME } from '../config';
 
 function SettingsPage() {
   const { user, role } = useUser();
@@ -30,7 +28,7 @@ function SettingsPage() {
   };
 
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Settings"]}>
+    <>
       <Toaster position="top-right" />
       <div className="max-w-4xl mx-auto p-6 space-y-10">
         {[...Array(5)].map((_, i) => (
@@ -153,7 +151,7 @@ function SettingsPage() {
           </motion.section>
         ))}
       </div>
-    </DashboardLayout>
+    </>
   );
 }
 

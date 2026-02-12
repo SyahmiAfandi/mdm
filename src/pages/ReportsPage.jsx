@@ -1,8 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import DashboardLayout from '../components/DashboardLayout';
 import { motion, MotionConfig, useReducedMotion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { APP_FULL_NAME } from '../config';
 import { usePermissions } from "../hooks/usePermissions";
 import {
   FileBarChart2,
@@ -214,7 +212,6 @@ export default function ReportsPage() {
   const KEEP_SPACER = false;
 
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Reports"]}>
       <MotionConfig reducedMotion={reduceMotion ? "user" : "never"}>
         <div className="p-6">
           {/* Header */}
@@ -325,6 +322,5 @@ export default function ReportsPage() {
           </section>
         </div>
       </MotionConfig>
-    </DashboardLayout>
   );
 }

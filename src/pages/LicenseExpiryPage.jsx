@@ -1,7 +1,6 @@
 // LicenseExpiryPage.jsx (Firebase version)
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import DashboardLayout from "../components/DashboardLayout";
 import { APP_FULL_NAME } from "../config";
 import { auth, db } from "../firebaseClient";
 import {
@@ -146,7 +145,7 @@ export default function LicenseExpiryPage() {
   // Non-owner view
   if (!loading && me && me.uid !== OWNER_UID) {
     return (
-      <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Settings","Admin","License Expiry"]}>
+      <>
         <div className="max-w-3xl mx-auto p-6">
           <h2 className="text-xl font-semibold">License Expiry</h2>
           <p className="mt-2 text-sm text-gray-600">
@@ -154,12 +153,12 @@ export default function LicenseExpiryPage() {
           </p>
           <button onClick={() => navigate(-1)} className="mt-4 text-sm px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Back</button>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Settings","Admin","License Expiry"]}>
+    <>
       <div className="max-w-6xl mx-auto p-6 space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-800 mb-4">License Expiry Overview</h1>
@@ -265,6 +264,6 @@ export default function LicenseExpiryPage() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   );
 }

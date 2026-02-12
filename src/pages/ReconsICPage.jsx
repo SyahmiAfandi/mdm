@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import DashboardLayout from '../components/DashboardLayout';
 import { motion } from 'framer-motion';
 import { useMediaQuery } from 'react-responsive';
-import { APP_FULL_NAME } from '../config';
+
 
 // Soft pastel color gradients for each button
 const BUTTON_COLORS = [
@@ -184,7 +183,6 @@ function ReconsICPage() {
   );
 
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Tools","Reconciliation Tools","IC"]}>
       <div className="p-5 min-h-[calc(100vh-96px)] overflow-hidden flex flex-col items-center justify-start relative">
         {/* Back Button */}
         <div className="absolute top-0 left-0 z-10">
@@ -207,7 +205,6 @@ function ReconsICPage() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
   );
 }
 

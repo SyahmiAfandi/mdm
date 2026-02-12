@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
 import classNames from "classnames";
-import DashboardLayout from "../components/DashboardLayout";
 import { APP_FULL_NAME } from "../config";
 
 const apiUrl = import.meta.env.VITE_GAS_MATRIX_URL;
@@ -182,7 +181,6 @@ export default function ReconciliationMatrix() {
   };
 
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Reports", "Reconciliation Status Report"]}>
       <div className="px-4 py-0 font-sans text-[9px]">
         <div className="flex items-center mb-2">
           <h1 className="text-lg font-bold tracking-tight text-gray-800">
@@ -389,7 +387,6 @@ export default function ReconciliationMatrix() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
   );
 }
 

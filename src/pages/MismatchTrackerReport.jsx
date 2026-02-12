@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from "react";
-import DashboardLayout from "../components/DashboardLayout";
 import { APP_FULL_NAME } from '../config';
 import {
   Loader2,
@@ -160,7 +159,7 @@ function MismatchTrackerReport() {
   };
 
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Reports", "Mismatch Tracker"]}>
+    <>
       <Toaster position="top-right" />
       <div className="p-6 relative">
         {/* Header & Toggle always visible */}
@@ -385,7 +384,7 @@ function MismatchTrackerReport() {
           </>
         )}
       </div>
-    </DashboardLayout>
+    </>
   );
 }
 

@@ -1,5 +1,8 @@
 // src/components/Header.jsx
 import React, { useState, useRef, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { db } from "../firebaseClient";
+import { doc, getDoc } from "firebase/firestore";
 import {
   CalendarDays,
   Bell,
@@ -12,6 +15,7 @@ import {
   Server,
   X,
 } from "lucide-react";
+
 import { useUser } from "../context/UserContext";
 import { useTooltip } from "../context/TooltipContext";
 import { APP_FULL_NAME, ORG_COMP } from "../config";
@@ -28,11 +32,14 @@ import {
   saveBackendUrlLocal,
   clearBackendUrlLocal,
   isLocalhostUrl,
-  isProdSiteHost,
   isVercelProdDomain,
 } from "../config/backend";
 
-// Theme toggle logic
+/** storage keys */
+const ROLE_STORAGE_KEY = "ff.role";
+const PERM_STORAGE_KEY = "ff.perms";
+
+/** Theme toggle logic */
 function useTheme() {
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
 
@@ -46,51 +53,44 @@ function useTheme() {
   return [theme, toggleTheme];
 }
 
-// Role-based access
-const CAN_CONFIG_BACKEND = (role) => {
-  const r = String(role || "").toLowerCase();
-  return ["admin", "superadmin", "developer"].includes(r);
-};
-
 const Header = ({ title = "", breadcrumbs = [] }) => {
-  const { user, role } = useUser();
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const navigate = useNavigate();
+  const { user, role, setRole } = useUser();
   const { showTooltip, setShowTooltip } = useTooltip();
   const [theme, toggleTheme] = useTheme();
 
-  const HEALTH_PATH = "/test";
+  // --- Permissions (from Firestore rolePermissions/{role}) ---
+  const [permLoading, setPermLoading] = useState(true);
+  const [permMap, setPermMap] = useState({}); // { "settings.backend.view": true, ... }
+  const can = (key) => !!permMap?.[key];
 
-  // ✅ detect prod site / your vercel domain
-  const host = typeof window !== "undefined" ? window.location.hostname : "";
-  const isProdSite = isProdSiteHost(host);
-  const isMyProdDomain = isVercelProdDomain(host);
+  const canViewBackend = can("settings.backend.view");
+  const canEditBackend = can("settings.backend.edit");
 
-  // Mode
-  const [backendMode, setBackendMode] = useState(() => getBackendMode());
-
-  // Stored URLs (dependencies)
-  const [tunnelUrl, setTunnelUrl] = useState(() => getBackendUrlTunnel());
-  const [localUrl, setLocalUrl] = useState(() => getBackendUrlLocal());
-
-  // Inputs shown in popover
-  const [tunnelUrlInput, setTunnelUrlInput] = useState(() => getBackendUrlTunnel() || "");
-  const [localUrlInput, setLocalUrlInput] = useState(
-    () => getBackendUrlLocal() || "http://127.0.0.1:5000"
-  );
-
-  // Lock tunnel after save
-  const [lockedTunnel, setLockedTunnel] = useState(() => !!getBackendUrlTunnel());
-
-  // Canonical backend URL
-  const [backendUrl, setBackendUrl] = useState(() => getBackendUrl());
-
-  // status
-  const [backendStatus, setBackendStatus] = useState(backendUrl ? "checking" : "missing");
-  const [backendMsg, setBackendMsg] = useState(backendUrl ? "Checking..." : "No URL set");
+  // --- UI menus ---
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const dropdownRef = useRef(null);
 
   const [showBackendPopover, setShowBackendPopover] = useState(false);
   const backendPopoverRef = useRef(null);
-  const dropdownRef = useRef(null);
+
+  // --- Backend status ---
+  const HEALTH_PATH = "/test";
+
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  const isMyProdDomain = isVercelProdDomain(host);
+
+  const [backendMode, setBackendMode] = useState(() => getBackendMode());
+  const [tunnelUrl, setTunnelUrl] = useState(() => getBackendUrlTunnel());
+  const [localUrl, setLocalUrl] = useState(() => getBackendUrlLocal());
+
+  const [tunnelUrlInput, setTunnelUrlInput] = useState(() => getBackendUrlTunnel() || "");
+  const [localUrlInput, setLocalUrlInput] = useState(() => getBackendUrlLocal() || "http://127.0.0.1:5000");
+
+  const [backendUrl, setBackendUrl] = useState(() => getBackendUrl());
+
+  const [backendStatus, setBackendStatus] = useState(backendUrl ? "checking" : "missing");
+  const [backendMsg, setBackendMsg] = useState(backendUrl ? "Checking..." : "No URL set");
 
   const isAbsoluteHttpUrl = (url) => /^https?:\/\/.+/i.test(url);
 
@@ -128,30 +128,46 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
     }
   };
 
-  // ✅ IMPORTANT FIX:
-  // On PROD domain (mdm-pi.vercel.app), force tunnel mode so it will never stay DEV.
+  // Load permissions for current role
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPerms() {
+      setPermLoading(true);
+      try {
+        const r = String(role || "viewer").toLowerCase();
+        const ref = doc(db, "rolePermissions", r);
+        const snap = await getDoc(ref);
+        const permissions = snap.exists() ? (snap.data()?.permissions || {}) : {};
+        if (!cancelled) setPermMap(permissions);
+      } catch (e) {
+        console.error("Failed to load permissions", e);
+        if (!cancelled) setPermMap({});
+      } finally {
+        if (!cancelled) setPermLoading(false);
+      }
+    }
+
+    loadPerms();
+    return () => { cancelled = true; };
+  }, [role]);
+
+  // On prod domain force tunnel mode (optional, keep your existing logic)
   useEffect(() => {
     if (!isMyProdDomain) return;
 
-    // Force tunnel on your Vercel prod domain
     saveBackendMode("tunnel");
     setBackendMode("tunnel");
 
     const t = getBackendUrlTunnel();
     setBackendUrl(t);
-
-    // Optional: unlock tunnel in prod so you can edit it
-    setLockedTunnel(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMyProdDomain]);
 
-  // ✅ Recompute canonical backendUrl when mode/url changes, then test
+  // Recompute canonical backendUrl when mode/url changes, then test
   useEffect(() => {
-    // If in prod domain, always tunnel
     const effectiveMode = isMyProdDomain ? "tunnel" : backendMode;
-
-    const canonical =
-      effectiveMode === "local" ? getBackendUrlLocal() : getBackendUrlTunnel();
+    const canonical = effectiveMode === "local" ? getBackendUrlLocal() : getBackendUrlTunnel();
 
     setBackendUrl(canonical);
 
@@ -163,8 +179,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backendMode, tunnelUrl, localUrl, isMyProdDomain]);
 
-  // ===== DEV/PROD badge logic (FIXED) =====
-  // On mdm-pi.vercel.app => always show PROD
+  // DEV/PROD badge
   const envLabel = isMyProdDomain
     ? "PROD"
     : backendMode === "local" || isLocalhostUrl(backendUrl)
@@ -187,7 +202,11 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
       : "text-gray-400 dark:text-gray-500";
 
   const backendIconTitle =
-    backendStatus === "up"
+    permLoading
+      ? "Backend: Loading permissions..."
+      : !canViewBackend
+      ? "Backend: No permission"
+      : backendStatus === "up"
       ? "Backend: Online"
       : backendStatus === "down"
       ? "Backend: Offline"
@@ -201,49 +220,50 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowUserMenu(false);
       }
-    }
-    if (showUserMenu) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showUserMenu]);
-
-  useEffect(() => {
-    function handleClickOutside(event) {
       if (backendPopoverRef.current && !backendPopoverRef.current.contains(event.target)) {
         setShowBackendPopover(false);
       }
     }
-    if (showBackendPopover) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showBackendPopover]);
 
-  const handleLogout = () => alert("Logout action here!");
+    if (showUserMenu || showBackendPopover) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showUserMenu, showBackendPopover]);
 
   const iconBtnBase =
     "h-9 w-9 inline-flex items-center justify-center rounded-lg " +
     "transition hover:bg-blue-50 dark:hover:bg-gray-800 " +
     "focus:outline-none focus:ring-2 focus:ring-blue-300";
 
-  const canConfigBackend = CAN_CONFIG_BACKEND(role);
-
   return (
-    <div className="sticky top-0 z-20 flex justify-between items-center px-6 py-2 bg-gradient-to-r from-blue-50 via-white to-blue-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 shadow-sm border-b border-blue-100 dark:border-gray-800">
+    <div className="z-20 flex justify-between items-center px-6 py-0.5 bg-gradient-to-r from-blue-50 via-white to-blue-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 shadow-sm border-b border-blue-100 dark:border-gray-800">
       {/* Left */}
-      <div>
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-lg text-blue-700 dark:text-blue-200 tracking-wide">
-            {title}
-          </span>
+      <div className="min-w-0">
+        {/* Breadcrumb */}
+        {breadcrumbs?.length > 0 && (
+          <div className="flex items-center gap-1 text-[11px] font-medium text-gray-400">
+            {breadcrumbs.map((b, i) => (
+              <React.Fragment key={`${b.label}-${i}`}>
+                {b.to ? (
+                  <Link to={b.to} className="hover:text-blue-600 transition">
+                    {b.label}
+                  </Link>
+                ) : (
+                  <span className="text-gray-700 dark:text-gray-200">{b.label}</span>
+                )}
+                {i < breadcrumbs.length - 1 && <span className="mx-1">›</span>}
+              </React.Fragment>
+            ))}
+          </div>
+        )}
 
-          {breadcrumbs.length > 0 && (
-            <span className="ml-4 text-xs text-gray-400 dark:text-gray-400">
-              {breadcrumbs.map((b, i) => (
-                <span key={i}>
-                  {b}
-                  {i < breadcrumbs.length - 1 && " / "}
-                </span>
-              ))}
-            </span>
-          )}
+        {/* Title */}
+        <div className="mt-0.5 flex items-end gap-3 min-w-0">
+          <h1 className="truncate font-extrabold text-[18px] sm:text-[20px] text-blue-700 dark:text-blue-200 tracking-tight">
+            {title}
+          </h1>
+          <span className="hidden sm:inline-block h-[6px] w-10 rounded-full bg-blue-600/30 dark:bg-blue-400/25" />
         </div>
       </div>
 
@@ -254,19 +274,11 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
           {new Date().toLocaleDateString("en-GB")}
         </span>
 
-        <button
-          title="Notifications"
-          className={`${iconBtnBase} text-blue-700 hover:text-blue-900 dark:text-blue-200`}
-          type="button"
-        >
+        <button title="Notifications" className={`${iconBtnBase} text-blue-700 dark:text-blue-200`} type="button">
           <Bell size={18} />
         </button>
 
-        <button
-          title="Help"
-          className={`${iconBtnBase} text-blue-700 hover:text-blue-900 dark:text-blue-200`}
-          type="button"
-        >
+        <button title="Help" className={`${iconBtnBase} text-blue-700 dark:text-blue-200`} type="button">
           <HelpCircle size={18} />
         </button>
 
@@ -275,7 +287,11 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
           <button
             type="button"
             title={backendIconTitle}
-            onClick={() => setShowBackendPopover((v) => !v)}
+            onClick={() => {
+              if (permLoading) return;
+              if (!canViewBackend) return;
+              setShowBackendPopover((v) => !v);
+            }}
             className={`${iconBtnBase} ${backendIconClass} relative`}
           >
             <Server size={18} />
@@ -300,9 +316,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                 backendStatus === "down" && "bg-red-500",
                 backendStatus === "checking" && "bg-yellow-500",
                 backendStatus === "missing" && "bg-gray-400",
-              ]
-                .filter(Boolean)
-                .join(" ")}
+              ].filter(Boolean).join(" ")}
             />
 
             {backendStatus === "checking" && (
@@ -319,9 +333,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                 <div className="flex items-center gap-2">
                   <Server size={18} className={backendIconClass} />
                   <div>
-                    <div className="text-sm font-semibold text-gray-800 dark:text-white">
-                      Backend
-                    </div>
+                    <div className="text-sm font-semibold text-gray-800 dark:text-white">Backend</div>
                     <div className="text-[10px] text-gray-400">{backendMsg}</div>
                   </div>
                 </div>
@@ -336,16 +348,19 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                 </button>
               </div>
 
-              {canConfigBackend ? (
+              {permLoading ? (
+                <div className="mt-3 text-xs text-gray-500 dark:text-gray-300">Loading permissions…</div>
+              ) : !canViewBackend ? (
+                <div className="mt-3 text-xs text-gray-500 dark:text-gray-300">
+                  You don’t have permission to view backend status.
+                </div>
+              ) : canEditBackend ? (
                 <div className="mt-3">
-                  {/* ✅ In PROD domain, disable LOCAL toggle completely */}
+                  {/* Toggle mode only if not prod domain */}
                   {!isMyProdDomain && (
                     <div className="flex items-center justify-between mb-3">
-                      <div className="text-[11px] text-gray-500 dark:text-gray-300">
-                        Backend Mode
-                      </div>
+                      <div className="text-[11px] text-gray-500 dark:text-gray-300">Backend Mode</div>
 
-                      {/* Polished small toggle */}
                       <div className="relative w-[120px] h-[28px] select-none">
                         <div className="absolute inset-0 rounded-full bg-gray-200 dark:bg-gray-800" />
                         <div
@@ -394,14 +409,12 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                     </div>
                   )}
 
-                  {/* Tunnel input always available */}
+                  {/* Tunnel */}
                   <label className="block text-[11px] text-gray-500 dark:text-gray-300">
                     {isMyProdDomain ? "Production Backend URL" : "Tunnel URL"}
                   </label>
-
                   <input
                     value={tunnelUrlInput}
-                    disabled={false} // allow edit in prod if you want
                     onChange={(e) => {
                       const v = e.target.value;
                       setTunnelUrlInput(v);
@@ -422,12 +435,10 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                       className="flex-1 text-xs px-2 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
                       onClick={async () => {
                         const normalized = normalizeUrl(tunnelUrlInput);
-
                         saveBackendUrlTunnel(normalized);
                         setTunnelUrl(normalized);
                         setTunnelUrlInput(normalized);
 
-                        // In prod domain always tunnel
                         saveBackendMode("tunnel");
                         setBackendMode("tunnel");
                         setBackendUrl(normalized);
@@ -463,12 +474,10 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                     </button>
                   </div>
 
-                  {/* Local input only in non-prod domain */}
+                  {/* Local only if not prod domain */}
                   {!isMyProdDomain && backendMode === "local" && (
                     <div className="mt-3">
-                      <label className="block text-[11px] text-gray-500 dark:text-gray-300">
-                        Local URL
-                      </label>
+                      <label className="block text-[11px] text-gray-500 dark:text-gray-300">Local URL</label>
                       <input
                         value={localUrlInput}
                         onChange={(e) => setLocalUrlInput(e.target.value)}
@@ -511,8 +520,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                   )}
 
                   <div className="mt-2 text-[10px] text-gray-400">
-                    Status becomes <b>Online</b> only if{" "}
-                    <span className="select-text">{HEALTH_PATH}</span> returns HTTP 200/2xx.
+                    Status becomes <b>Online</b> only if <span className="select-text">{HEALTH_PATH}</span> returns 200/2xx.
                   </div>
                 </div>
               ) : (
@@ -522,7 +530,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                     <button
                       type="button"
                       className="text-xs px-3 py-1 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300
-                                 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 transition"
+                                dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600 transition"
                       onClick={() => testBackend(getBackendUrl())}
                     >
                       Refresh Status
@@ -534,7 +542,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
           )}
         </div>
 
-        {/* Avatar */}
+        {/* Account icon + dropdown */}
         <div className="relative">
           <button
             title="Account"
@@ -563,7 +571,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
               </div>
 
               <div className="flex justify-center items-center gap-2 text-[10px] text-gray-400 dark:text-gray-400 mb-1">
-                <span>Role: {role || "User"}</span>
+                <span>Role: {role || "viewer"}</span>
                 <span className="hidden sm:inline">|</span>
                 <span>Org: {ORG_COMP}</span>
               </div>
@@ -587,7 +595,6 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
                     showTooltip ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-700"
                   } focus:outline-none`}
-                  tabIndex={0}
                 >
                   <span className="sr-only">Enable Sidebar Tooltip</span>
                   <span
@@ -608,6 +615,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                   className={`ml-2 flex items-center px-2 py-1 rounded-lg ${
                     theme === "dark" ? "bg-blue-700 text-white" : "bg-gray-200 text-gray-700"
                   } transition`}
+                  type="button"
                 >
                   {theme === "dark" ? <Moon size={16} /> : <Sun size={16} />}
                   <span className="ml-1 text-xs">{theme === "dark" ? "Dark" : "Light"}</span>
@@ -616,13 +624,22 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
 
               <div className="w-full border-b my-2 dark:border-gray-600" />
 
+              {/* Logout INSIDE account menu */}
               <div className="w-full flex justify-between items-center mt-1">
                 <span className="text-[10px] text-gray-400 dark:text-gray-400">
                   {APP_FULL_NAME}
                 </span>
                 <button
-                  onClick={handleLogout}
+                  onClick={() => {
+                    setRole?.(null);
+                    try {
+                      localStorage.removeItem(PERM_STORAGE_KEY);
+                      localStorage.removeItem(ROLE_STORAGE_KEY);
+                    } catch {}
+                    navigate("/login");
+                  }}
                   className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-semibold transition"
+                  type="button"
                 >
                   <LogOut size={15} /> Logout
                 </button>
@@ -630,6 +647,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

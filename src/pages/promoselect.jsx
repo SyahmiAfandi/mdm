@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DashboardLayout from '../components/DashboardLayout';
 import { motion } from 'framer-motion';
 import { APP_FULL_NAME } from '../config';
 
@@ -46,10 +45,7 @@ function PromotionsSelectionPage() {
   };
 
   return (
-    <DashboardLayout
-      pageTitle="MDM Tools Version 3.0"
-      breadcrumbs={['Tools', 'Promotions Selection']}
-    >
+    <>
       <div className="min-h-[calc(100vh-75px)] flex flex-col items-center justify-start pt-10 overflow-hidden">
         {/* Header */}
         <div className="text-center mb-6 w-full">
@@ -105,7 +101,7 @@ function PromotionsSelectionPage() {
           match your promotion strategy and workflow.
         </p>
       </div>
-    </DashboardLayout>
+    </>
   );
 }
 

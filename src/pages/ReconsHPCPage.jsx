@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import DashboardLayout from '../components/DashboardLayout';
 import { motion } from 'framer-motion';
 import { useMediaQuery } from 'react-responsive';
 
@@ -223,7 +222,6 @@ function ReconsHPCPage() {
   };
 
   return (
-    <DashboardLayout pageTitle="MDM Tools Version 3.0" breadcrumbs={["Tools","Reconciliation Tools","HPC"]}>
       <div className="p-5 min-h-[calc(100vh-96px)] overflow-hidden flex flex-col items-center justify-start relative">
         <div className="absolute top-0 left-0 z-10">
           <button
@@ -245,7 +243,6 @@ function ReconsHPCPage() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
   );
 }
 

@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from 'react';
-import DashboardLayout from '../components/DashboardLayout';
 import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -419,7 +418,7 @@ const tooltipStyle = `
 
 <style>{tooltipStyle}</style>
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Reports","Reconciliation Summary Report"]}>
+    <>
       <motion.div
         className="p-6 space-y-6"
         initial={{ opacity: 0, y: 20 }}
@@ -460,7 +459,7 @@ const tooltipStyle = `
               onChange={(e) => setFilters({ ...filters, year: e.target.value })}
             >
               <option value="">All Years</option>
-              {[2023, 2024, 2025].map((y) => (
+              {[2023, 2024, 2025, 2026].map((y) => (
                 <option key={y} value={y}>
                   {y}
                 </option>
@@ -944,6 +943,6 @@ const tooltipStyle = `
           )}
         </AnimatePresence>
       </motion.div>
-    </DashboardLayout>
+    </>
   );
 }

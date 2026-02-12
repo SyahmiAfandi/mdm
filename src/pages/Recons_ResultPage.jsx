@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import DashboardLayout from '../components/DashboardLayout';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, FileSpreadsheet, Download } from 'lucide-react';
@@ -193,7 +192,7 @@ function ReconciliationPage() {
 
   if (!resultId) {
     return (
-      <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Tools","Reconciliation Tools",businessType,fromButton,"Reconciliation Result"]}>
+      <>
         <div className="w-full h-[50vh] flex flex-col items-center justify-center gap-4">
           <p className="text-red-600 font-semibold text-lg">
             No reconciliation results found.<br />
@@ -206,12 +205,12 @@ function ReconciliationPage() {
             ← Back to Summary
           </button>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Tools","Reconciliation Tools",businessType,reportType,"Reconciliation Result"]}>
+    <>
       <div className="p-4 max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Reconciliation Result</h2>
@@ -423,7 +422,7 @@ function ReconciliationPage() {
           )}
         </AnimatePresence>
       </div>
-    </DashboardLayout>
+    </>
   );
 }
 

@@ -1,71 +1,61 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import {
-  Home, Sliders, FileText, Settings, Layers,
-  BarChart2, LogOut, UserCircle
-} from 'lucide-react';
-import SidebarLink from './SidebarLink';
-import { useSidebar } from '../context/SidebarContext';
-import { useUser } from '../context/UserContext';
-import { useTooltip } from '../context/TooltipContext';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Home, Sliders, FileText, Settings, Layers, BarChart2, LogOut, UserCircle } from "lucide-react";
+import SidebarLink from "./SidebarLink";
+import { useUser } from "../context/UserContext";
+import { useTooltip } from "../context/TooltipContext";
+import { usePermissions } from "../hooks/usePermissions";
 
-const PERM_STORAGE_KEY = 'ff.permissions';
-const ROLE_STORAGE_KEY = 'ff.role';
+const ROLE_STORAGE_KEY = "ff.role"; // optional (keep if you still store role elsewhere)
 
+/**
+ * Sidebar with Firestore-based permissions + debug
+ * - Shows debug panel when ?permDebug=1 is in URL OR in dev mode
+ * - Console logs permissions after load
+ * - Failsafe fallback: if perms doc empty, show based on role
+ */
 const Sidebar = ({ isOpen }) => {
   const location = useLocation();
-  const { role, setRole, user } = useUser();
   const navigate = useNavigate();
+  const { user, setRole } = useUser();
   const { showTooltip } = useTooltip();
 
-  // Permission snapshot (synchronous first paint)
-  const [permSnapshot, setPermSnapshot] = useState(null);
-  const [ready, setReady] = useState(false);
+  // ✅ Firestore permissions hook
+  const {
+    loading: permLoading,
+    can,
+    role,
+    perms, // { [key]: boolean }
+    user: authUser,
+  } = usePermissions({
+    defaultRole: "viewer",
+    roleCollection: "roles",
+    roleField: "role",
+    rolePermissionsCollection: "rolePermissions",
+  });
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(PERM_STORAGE_KEY);
-      setPermSnapshot(raw ? JSON.parse(raw) : {});
-    } catch {
-      setPermSnapshot({});
-    }
-    setReady(true);
-  }, [role]);
-
-  const SHOW = useMemo(() => {
-    const has = (o, k) => Object.prototype.hasOwnProperty.call(o || {}, k);
-    const get = (k, fallback = false) =>
-      permSnapshot && has(permSnapshot, k) ? !!permSnapshot[k] : fallback;
-
-    const dashboard = get('dashboard.view', false);
-    const settings  = get('settings.view',  false);
-    const utilities  = get('utilities.view',  false);
-    const reports   = has(permSnapshot, 'reports.view')
-      ? get('reports.view', false)
-      : get('reports.status.view', false);
-    const tools = has(permSnapshot, 'tools.view')
-      ? get('tools.view', false)
-      : (role === 'admin' || role === 'user');
-
-    return { dashboard, settings, reports, tools, utilities };
-  }, [permSnapshot, role]);
+  // ✅ Debug toggle (URL: ?permDebug=1) OR dev mode
+  const debugEnabled = useMemo(() => {
+    const qs = new URLSearchParams(location.search);
+    const flag = qs.get("permDebug");
+    const isDev = import.meta?.env?.DEV;
+    return flag === "1" || !!isDev;
+  }, [location.search]);
 
   // 🔒 Suppress hover + transitions briefly on navigation
   const [navigating, setNavigating] = useState(false);
   const hoverTimerRef = useRef(null);
 
   const handleLinkClick = useCallback(() => {
-    // Start suppression immediately at click
     setNavigating(true);
   }, []);
 
-  // Clear suppression ~200ms after the route actually changed
+  // Clear suppression ~200ms after route change
   useEffect(() => {
     if (!navigating) return;
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    hoverTimerRef.current = setTimeout(() => {
-      setNavigating(false);
-    }, 200);
+    hoverTimerRef.current = setTimeout(() => setNavigating(false), 200);
+
     return () => {
       if (hoverTimerRef.current) {
         clearTimeout(hoverTimerRef.current);
@@ -74,15 +64,58 @@ const Sidebar = ({ isOpen }) => {
     };
   }, [location.pathname, navigating]);
 
+  // ✅ Permission debug logs
+  useEffect(() => {
+    if (permLoading) return;
+    // One-time-ish log after load or when role/perms change
+    console.log("[PERMISSIONS DEBUG]", {
+      uid: authUser?.uid,
+      role,
+      perms,
+      keysCount: perms ? Object.keys(perms).length : 0,
+    });
+  }, [permLoading, role, perms, authUser?.uid]);
+
+  // ✅ Determine which main menu items to show
+  const SHOW = useMemo(() => {
+    const currentRoleMapSafe = perms || {};
+    const permsEmpty = Object.keys(currentRoleMapSafe).length === 0;
+
+    // Failsafe: if perms doc empty/missing, fallback by role
+    if (permsEmpty) {
+      const isAdmin = role === "admin";
+      const isUser = role === "user";
+
+      return {
+        dashboard: isAdmin || isUser,
+        tools: isAdmin || isUser,
+        utilities: isAdmin || isUser,
+        reports: isAdmin || isUser,
+        settings: isAdmin, // default settings for admin only
+      };
+    }
+
+    // Normal gating
+    return {
+      dashboard: can("dashboard.view"),
+      tools: can("tools.view") || can("tools.*"),
+      utilities: can("utilities.view") || can("utilities.*"),
+      reports: can("reports.view") || can("reports.status.view") || can("reports.*"),
+      settings: can("settings.view") || can("settings.*"),
+    };
+  }, [can, role, perms]);
+
   // Skeleton (fixed height to avoid layout nudges)
-  const SkeletonItem = () => <div className="h-10 mx-2 my-1 rounded-md bg-gray-100 dark:bg-gray-800 animate-pulse" />;
+  const SkeletonItem = () => (
+    <div className="h-10 mx-2 my-1 rounded-md bg-gray-100 dark:bg-gray-800 animate-pulse" />
+  );
 
   return (
     <aside
       className={`
         fixed top-0 left-0 h-full z-20
         bg-white dark:bg-gray-900 shadow-lg dark:shadow-xl border-r dark:border-gray-800
-        ${isOpen ? 'w-64' : 'w-16'} flex flex-col
+        ${isOpen ? "w-64" : "w-16"} flex flex-col
         transition-[width] duration-300 ease-in-out
         overflow-x-visible
       `}
@@ -92,7 +125,9 @@ const Sidebar = ({ isOpen }) => {
         <img
           src={isOpen ? "/ff3.png" : "/ff2.png"}
           alt="Sidebar Logo"
-          className={`${isOpen ? 'rounded-lg' : 'rounded-full'} transition-[border-color,box-shadow] duration-150 bg-white dark:bg-gray-200 shadow-sm`}
+          className={`${
+            isOpen ? "rounded-lg" : "rounded-full"
+          } transition-[border-color,box-shadow] duration-150 bg-white dark:bg-gray-200 shadow-sm`}
           style={
             isOpen
               ? { width: "100%", maxWidth: 210, height: 52, objectFit: "contain", border: "0.5px solid #e5e7eb" }
@@ -101,16 +136,55 @@ const Sidebar = ({ isOpen }) => {
         />
       </div>
 
+      {/* 🔎 Debug Panel (only when sidebar open & debug enabled) */}
+      {isOpen && debugEnabled && (
+        <div className="mx-3 mb-2 rounded-xl border border-amber-200 bg-amber-50 dark:bg-gray-800 dark:border-gray-700 p-3 text-xs">
+          <div className="flex items-center justify-between">
+            <div className="font-semibold text-amber-800 dark:text-gray-100">Permissions Debug</div>
+            <div className="text-[10px] text-amber-700 dark:text-gray-300">
+              {permLoading ? "loading..." : "ready"}
+            </div>
+          </div>
+
+          <div className="mt-2 space-y-1 text-amber-900 dark:text-gray-200">
+            <div>
+              <span className="text-amber-700 dark:text-gray-400">UID:</span>{" "}
+              <span className="font-mono">{authUser?.uid || "-"}</span>
+            </div>
+            <div>
+              <span className="text-amber-700 dark:text-gray-400">Role:</span>{" "}
+              <span className="font-semibold">{role || "-"}</span>
+            </div>
+            <div>
+              <span className="text-amber-700 dark:text-gray-400">Perm keys:</span>{" "}
+              <span className="font-semibold">{perms ? Object.keys(perms).length : 0}</span>
+            </div>
+
+            <div className="mt-2 text-[11px] text-amber-700 dark:text-gray-400">
+              SHOW:
+              <span className="ml-2 font-mono text-amber-900 dark:text-gray-200">
+                {JSON.stringify(SHOW)}
+              </span>
+            </div>
+
+            <div className="mt-2 text-[11px] text-amber-700 dark:text-gray-400">
+              Tip: open Console and search{" "}
+              <span className="font-mono">[PERMISSIONS DEBUG]</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Nav */}
       <nav className="relative flex-1 font-medium flex flex-col gap-1 px-1">
         {/* Invisible overlay to block hover while navigating */}
-        {navigating && (
-          <div className="absolute inset-0 z-50 pointer-events-auto select-none" />
-        )}
+        {navigating && <div className="absolute inset-0 z-50 pointer-events-auto select-none" />}
 
-        {!ready ? (
+        {permLoading ? (
           <>
-            <SkeletonItem /><SkeletonItem /><SkeletonItem />
+            <SkeletonItem />
+            <SkeletonItem />
+            <SkeletonItem />
           </>
         ) : (
           <>
@@ -137,11 +211,7 @@ const Sidebar = ({ isOpen }) => {
                 onClick={handleLinkClick}
                 suppressHover={navigating}
                 disableTransitions={navigating}
-                activeMatch={(p) =>
-                  p.startsWith('/tools') ||
-                  p.startsWith('/recons') ||
-                  p.startsWith('/promotion')
-                }
+                activeMatch={(p) => p.startsWith("/tools") || p.startsWith("/recons") || p.startsWith("/promotion")}
               />
             )}
 
@@ -200,12 +270,19 @@ const Sidebar = ({ isOpen }) => {
 
       {/* User Info */}
       <div className="absolute bottom-16 left-0 w-full px-3">
-        <div className={`${isOpen ? 'gap-3 px-3 py-2 bg-blue-50 dark:bg-gray-800' : 'justify-center w-10 h-10'} flex items-center rounded-xl transition-colors duration-150`}>
+        <div
+          className={`${
+            isOpen ? "gap-3 px-3 py-2 bg-blue-50 dark:bg-gray-800" : "justify-center w-10 h-10"
+          } flex items-center rounded-xl transition-colors duration-150`}
+        >
           <UserCircle size={22} className="text-blue-500 dark:text-blue-300" />
           {isOpen && (
             <div className="overflow-hidden">
-              <p className="text-sm font-semibold truncate text-gray-800 dark:text-gray-100">{user?.name || 'User Name'}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email || 'email@example.com'}</p>
+              <p className="text-sm font-semibold truncate text-gray-800 dark:text-gray-100">
+                {user?.name || "User Name"}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email || "email@example.com"}</p>
+              <p className="text-[11px] text-gray-400 truncate mt-0.5">Role: {role || "-"}</p>
             </div>
           )}
         </div>
@@ -215,18 +292,17 @@ const Sidebar = ({ isOpen }) => {
       <div className="absolute bottom-4 left-0 w-full px-3">
         <button
           onClick={() => {
-            setRole(null);
+            setRole?.(null);
             try {
-              localStorage.removeItem(PERM_STORAGE_KEY);
               localStorage.removeItem(ROLE_STORAGE_KEY);
             } catch {}
-            navigate('/login');
+            navigate("/login");
           }}
           className={`
             flex items-center w-full rounded-lg transition-colors duration-150
             hover:bg-blue-50 dark:hover:bg-gray-800
             text-sm text-gray-700 dark:text-gray-200
-            ${isOpen ? 'gap-3 px-3 py-2' : 'justify-center w-10 h-10'}
+            ${isOpen ? "gap-3 px-3 py-2" : "justify-center w-10 h-10"}
             focus:outline-none
           `}
         >

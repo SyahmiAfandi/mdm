@@ -1,11 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate, useLocation } from 'react-router-dom';
-import DashboardLayout from '../components/DashboardLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { BriefcaseIcon, DocumentTextIcon } from '@heroicons/react/24/solid';
-import { APP_FULL_NAME } from '../config';
 import { getBackendUrl } from "../config/backend";
 
 function ReconciliationUploadPage() {
@@ -287,7 +285,7 @@ const handleUploadOSDP = async () => {
 
 
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Tools", "Reconciliation Tools", businessType, fromButton, "Upload Files"]}>
+    <>
       {/* Navigation Buttons */}
       <div className=" flex justify-between items-center mb-6">
         <motion.button
@@ -546,7 +544,7 @@ const handleUploadOSDP = async () => {
           </div>
         </div>
       )}
-    </DashboardLayout>
+    </>
   );
 }
 

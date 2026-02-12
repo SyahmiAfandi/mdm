@@ -4,28 +4,27 @@ import { useSidebar } from "../context/SidebarContext";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Header from "./Header";
 
-const sidebarWidth = 256;     // must match Sidebar open width (16rem -> ml-64)
-const collapsedWidth = 64;    // must match Sidebar collapsed width (4rem -> ml-16)
+const sidebarWidth = 256;     // 16rem
+const collapsedWidth = 64;    // 4rem
 const btnSize = 20;
 
 const DashboardLayout = ({ children, pageTitle, breadcrumbs }) => {
   const { isSidebarOpen, toggleSidebar } = useSidebar();
 
   return (
-    <div className="flex min-h-screen bg-gray-100 overflow-x-hidden">
+    <div className="flex h-screen overflow-hidden bg-gray-100">
       <Sidebar isOpen={isSidebarOpen} />
 
-      {/* Floating sidebar toggle button */}
       <button
         onClick={toggleSidebar}
         aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
         className="
           fixed z-30
-          transition-all duration-300
+          transition-[left] duration-300 ease-in-out
           bg-white shadow-md border border-gray-200
           flex items-center justify-center
           rounded-full
-          hover:bg-blue-100 active:bg-blue-200
+          hover:bg-blue-100
           focus:outline-none focus:ring-2 focus:ring-blue-300
         "
         style={{
@@ -43,15 +42,22 @@ const DashboardLayout = ({ children, pageTitle, breadcrumbs }) => {
         )}
       </button>
 
-      {/* Content area: allow it to shrink next to the sidebar & never widen the page */}
       <main
-        className={`${isSidebarOpen ? "ml-64" : "ml-16"} relative flex-1 min-w-0 overflow-x-hidden transition-all duration-300`}
+        className={`${
+          isSidebarOpen ? "ml-64" : "ml-16"
+        } flex-1 min-w-0 h-screen overflow-hidden transition-[margin-left] duration-300 ease-in-out`}
       >
-        {/* Header */}
-        <Header title={pageTitle} breadcrumbs={breadcrumbs} />
+        <div className="flex flex-col h-full min-w-0">
+          {/* Header is NOT sticky anymore; it's in a non-scrolling region */}
+          <div className="shrink-0">
+            <Header title={pageTitle} breadcrumbs={breadcrumbs} />
+          </div>
 
-        {/* Page body (min-w-0 helps nested wide content like tables) */}
-        <div className="p-3 min-w-0 page-wrap">{children}</div>
+          {/* ✅ Always show scrollbar (prevents sudden scrollbar + blink) */}
+          <div className="flex-1 min-w-0 overflow-y-scroll overflow-x-hidden p-3 page-wrap">
+            {children}
+          </div>
+        </div>
       </main>
     </div>
   );

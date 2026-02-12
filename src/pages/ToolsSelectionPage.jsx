@@ -2,8 +2,6 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sliders, Gift, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import DashboardLayout from '../components/DashboardLayout';
-import { APP_FULL_NAME } from '../config';
 
 const ToolCard = ({ title, description, icon, onClick, delay }) => {
   return (
@@ -65,7 +63,6 @@ const ToolsSelectionPage = () => {
   ];
 
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Tools"]}>
       <div className="relative py-0 px-2 sm:px-8 h-[calc(100vh-100px)] bg-gray-50 transition-all duration-300">
         <div className="max-w-6xl mx-auto h-full flex flex-col">
           {/* Sticky header */}
@@ -99,7 +96,6 @@ const ToolsSelectionPage = () => {
           </div>
         </div>
       </div>
-    </DashboardLayout>
   );
 };
 

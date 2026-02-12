@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import DashboardLayout from '../components/DashboardLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { saveAs } from 'file-saver';
 import { DownloadIcon, Loader2, ChevronDownIcon } from 'lucide-react';
@@ -186,13 +185,13 @@ function ReconciliationSummary() {
   // --- Early return after all hooks, for safety ---
   if (!resultId) {
     return (
-      <DashboardLayout pageTitle={APP_FULL_NAME}>
+      <>
         <div className="w-full h-[60vh] flex items-center justify-center">
           <div className="text-red-600 font-semibold text-lg">
             No reconciliation result found. Please upload and process files first.
           </div>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
@@ -204,17 +203,17 @@ function ReconciliationSummary() {
 
   if (loading) {
     return (
-      <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Tools","Reconciliation Tools",businessType,fromButton,"Reconciliation Summary"]}>
+      <>
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
           <Loader2 className="animate-spin h-10 w-10 text-blue-600 mb-4" />
           <div className="text-blue-800 font-medium text-lg">Processing reconciliation summary, please wait...</div>
         </div>
-      </DashboardLayout>
+      </>
     );
   }
 
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Tools","Reconciliation Tools",businessType,fromButton,"Reconciliation Summary"]}>
+    <>
       <div className="grid grid-cols-3 items-center mb-6">
         <div className="flex gap-2 justify-start relative">
           <motion.button
@@ -458,7 +457,7 @@ function ReconciliationSummary() {
           </motion.div>
         )}
       </AnimatePresence>
-    </DashboardLayout>
+    </>
   );
 }
 

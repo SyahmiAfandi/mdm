@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DashboardLayout from '../components/DashboardLayout';
 import { motion } from 'framer-motion';
-import { APP_FULL_NAME } from '../config';
 
 function ReconsMainPage() {
   const navigate = useNavigate();
@@ -52,7 +50,6 @@ function ReconsMainPage() {
   };
 
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Tools","Reconciliation Tools"]}>
       <div className="min-h-[calc(100vh-75px)] flex flex-col items-center justify-start pt-10 overflow-hidden">
         <div className="text-center mb-6 w-full">
           <h2 className="text-3xl font-bold mb-2">Reconciliation Tools</h2>
@@ -120,7 +117,6 @@ function ReconsMainPage() {
           </motion.button>
         </div>
       </div>
-    </DashboardLayout>
   );
 }
 
