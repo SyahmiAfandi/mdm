@@ -8,6 +8,10 @@ const utilities = [
     description: 'Track, assign, and manage incoming MDM emails to ensure clear ownership and timely resolution',
   },
   {
+    title: 'Manual Recons Entry',
+    description: 'Add description here',
+  },
+  {
     title: 'Date Converter',
     description: 'Convert date format (e.g. MM/DD/YYYY → DD/MM/YYYY)',
   },
@@ -52,6 +56,7 @@ function UtilitiesPage() {
                 onClick={() => {
                   if (tool.title === 'Date Converter') navigate('/utilities/date-converter');
                   else if (tool.title === 'MDM Email Tracker') navigate('/utilities/emailtracker');
+                  else if (tool.title === 'Manual Recons Entry') navigate('/utilities/manualrecons');
                   else if (tool.title === 'Data Cleaner') navigate('/utilities/data-cleaner');
                   else if (tool.title === 'Column Mapper') navigate('/utilities/column-mapper');
                   else if (tool.title === 'Google Sheets Sync') navigate('/utilities/sheets-sync');

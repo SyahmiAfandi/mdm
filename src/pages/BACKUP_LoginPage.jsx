@@ -1,38 +1,28 @@
-// src/pages/LoginPage.jsx
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { CheckCircle } from "lucide-react";
-import { useUser } from "../context/UserContext";
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { CheckCircle } from 'lucide-react';
+import { useUser } from '../context/UserContext';
 
-/**
- * IMPORTANT:
- * - This version logs in ONLY ONCE via loginWithUsername()
- * - loginWithUsername() already does Firebase Auth signInWithEmailAndPassword()
- * - We do NOT signIn again in this page (prevents "double login" + signOut issues)
- */
-
+// ⬇️ from your firebaseClient (as provided earlier)
 import {
   loginWithUsername,
   logout,
   buildPermissionSnapshot,
   persistPermissionSnapshot,
-} from "../firebaseClient";
+} from '../firebaseClient';
 
-const PERM_STORAGE_KEY = "ff.permissions";
-const ROLE_STORAGE_KEY = "ff.role";
+const PERM_STORAGE_KEY = 'ff.permissions';
+const ROLE_STORAGE_KEY = 'ff.role';
 
-export default function LoginPage() {
-  const [username, setUserName] = useState("");
-  const [password, setPassword] = useState("");
-
-  const [error, setError] = useState("");
+function LoginPage() {
+  const [username, setUserName] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
   const [success, setSuccess] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
-
   const [showToast, setShowToast] = useState(false);
-  const [expiredToast, setExpiredToast] = useState("");
+  const [expiredToast, setExpiredToast] = useState('');
 
   const navigate = useNavigate();
   const { setRole, setUser } = useUser();
@@ -41,64 +31,52 @@ export default function LoginPage() {
     try {
       localStorage.removeItem(PERM_STORAGE_KEY);
       localStorage.removeItem(ROLE_STORAGE_KEY);
-      localStorage.removeItem("username");
     } catch {}
-  };
-
-  const hardSignOutEverywhere = async () => {
-    // logout firebase (via your helper)
-    try {
-      await logout();
-    } catch {}
-    clearLocalPerms();
   };
 
   const handleLogin = async () => {
     setLoading(true);
-    setError("");
-    setExpiredToast("");
+    setError('');
+    setExpiredToast('');
 
     try {
-      // ✅ Single login source-of-truth:
-      // This already signs into Firebase Auth (alias email flow)
       const result = await loginWithUsername(username, password);
-      const { user, role, profile, license, licenseValid, permissions } = result;
+      const { role, profile, license, licenseValid, permissions } = result;
+      const resolvedRole = role || 'viewer';
 
-      const resolvedRole = role || "viewer";
-
-      // ✅ License gate (if expired, kick out)
+      // License check (and show the expiry date if available)
       if (!licenseValid) {
-        await hardSignOutEverywhere();
+        await logout();
         setLoading(false);
 
-        let expText = "N/A";
+        let expText = 'N/A';
         try {
-          const d = license?.validUntil?.toDate?.() || null;
+          const d =
+            (license && license.validUntil && license.validUntil.toDate && license.validUntil.toDate()) ||
+            null;
           if (d) expText = d.toISOString().slice(0, 10);
         } catch {}
 
         setExpiredToast(`Your account has expired on ${expText}!`);
-        setTimeout(() => setExpiredToast(""), 1500);
+        setTimeout(() => setExpiredToast(''), 1500);
+        clearLocalPerms();
         return;
       }
 
-      // ✅ Put into context (for UI / headers / permissions)
+      // Save user context
       setRole(resolvedRole);
       setUser({
-        uid: user?.uid || "",
         name: profile?.name || profile?.username || username,
-        email: profile?.email || user?.email || "", // may be alias if you don’t store real email
+        email: profile?.email || '',
       });
 
-      // ✅ Persist UI bits
-      localStorage.setItem(
-        "username",
-        profile?.name || profile?.username || username
-      );
+      // Persist username (optional)
+      localStorage.setItem('username', profile?.name || profile?.username || username);
       localStorage.setItem(ROLE_STORAGE_KEY, resolvedRole);
 
-      // ✅ Permission snapshot for sidebar/guards
+      // 🔐 Build + store permission snapshot (from Firestore rolePermissions or fallback)
       const permSnapshot = buildPermissionSnapshot(resolvedRole, permissions);
+      // write to localStorage so Sidebar can read instantly (no flicker)
       persistPermissionSnapshot(resolvedRole, permSnapshot);
 
       setLoading(false);
@@ -108,15 +86,12 @@ export default function LoginPage() {
       // Navigate after a short success animation
       setTimeout(() => {
         setFadeOut(true);
-        setTimeout(() => navigate("/"), 400);
+        setTimeout(() => navigate('/'), 400);
       }, 1200);
     } catch (e) {
-      console.error(e);
       setLoading(false);
-
-      // Ensure no partial session remains
-      await hardSignOutEverywhere();
-      setError(e?.message || "Invalid credentials");
+      setError(e?.message || 'Invalid credentials');
+      clearLocalPerms();
     }
   };
 
@@ -147,7 +122,7 @@ export default function LoginPage() {
 
         <div
           className={`bg-white shadow-2xl rounded-xl p-6 sm:p-8 w-full max-w-md transform transition duration-500 hover:scale-[1.02] mt-[-40px] sm:mt-0 ${
-            fadeOut ? "animate-fade-out" : "animate-fade-in"
+            fadeOut ? 'animate-fade-out' : 'animate-fade-in'
           }`}
         >
           <h2 className="text-2xl sm:text-3xl font-bold text-center text-blue-700 mb-4 sm:mb-6 animate-slide-down">
@@ -165,11 +140,7 @@ export default function LoginPage() {
             onChange={(e) => setUserName(e.target.value)}
             disabled={loading || success}
             autoComplete="username"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !loading && !success) handleLogin();
-            }}
           />
-
           <input
             type="password"
             placeholder="Password"
@@ -178,23 +149,19 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             disabled={loading || success}
             autoComplete="current-password"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !loading && !success) handleLogin();
-            }}
           />
 
           <button
             onClick={handleLogin}
             className="w-full bg-blue-600 text-white py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-all duration-300 disabled:opacity-50 flex justify-center items-center"
-            disabled={loading || success || !username.trim() || !password}
-            title={!username.trim() || !password ? "Enter username and password" : ""}
+            disabled={loading || success}
           >
             {loading ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : success ? (
               <CheckCircle className="text-white animate-scale-in" size={24} />
             ) : (
-              "Login"
+              'Login'
             )}
           </button>
 
@@ -220,3 +187,5 @@ export default function LoginPage() {
     </>
   );
 }
+
+export default LoginPage;

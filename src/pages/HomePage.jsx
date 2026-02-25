@@ -405,22 +405,6 @@ function HomePage() {
               Last sync: {lastSync}
             </p>
           </div>
-
-          <div className="flex gap-2 shrink-0">
-            <a
-              href="/upload"
-              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition"
-            >
-              <UploadCloud size={16} /> Upload
-            </a>
-
-            <a
-              href="/result_summary"
-              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 bg-white text-gray-800 ring-1 ring-gray-200 hover:ring-gray-300 dark:bg-gray-900/30 dark:text-gray-100 dark:ring-gray-700 transition text-sm font-semibold"
-            >
-              <BarChart2 size={16} /> Summary
-            </a>
-          </div>
         </div>
       </section>
 

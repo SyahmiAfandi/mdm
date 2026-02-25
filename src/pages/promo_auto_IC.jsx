@@ -2,7 +2,6 @@
 
 import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DashboardLayout from '../components/DashboardLayout';
 import { Upload, RotateCcw, FileDown, ArrowLeft } from 'lucide-react';
 import { APP_FULL_NAME } from '../config';
 
@@ -126,8 +125,7 @@ function AutoGenerateMonthlyICPromotion() {
   };
 
   return (
-    <DashboardLayout
-      pageTitle={APP_FULL_NAME}  breadcrumbs={['Tools', 'Promotions', 'Auto Generate (IC Promotions)']}>
+    <>
       <div className="flex flex-col min-h-[calc(100vh-75px)] px-6 pt-6 pb-4">
         {/* Title */}
         <h1 className="text-3xl font-semibold text-gray-900 mb-4">
@@ -261,7 +259,7 @@ function AutoGenerateMonthlyICPromotion() {
           </button>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   );
 }
 

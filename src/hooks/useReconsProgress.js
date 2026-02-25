@@ -221,7 +221,7 @@ export default function useReconsProgress(params = {}) {
   // ✅ Processed = eligible rows where status in Column G is filled (meaningful)
   const processedRows = useMemo(() => {
     // numerator = only Match or Mismatch
-    return rows.filter((r) => r.status === "match" || r.status === "mismatch");
+    return rows.filter((r) => r.status === "match"|| r.status === "mismatch" || r.status === "pending");
   }, [rows]);
 
   const total = rows.length;

@@ -1,6 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Home, Sliders, FileText, Settings, Layers, BarChart2, LogOut, UserCircle } from "lucide-react";
+import {
+  Home,
+  Sliders,
+  FileText,
+  Settings,
+  Layers,
+  BarChart2,
+  LogOut,
+  UserCircle,
+  Database, // ✅ added
+} from "lucide-react";
 import SidebarLink from "./SidebarLink";
 import { useUser } from "../context/UserContext";
 import { useTooltip } from "../context/TooltipContext";
@@ -67,7 +77,6 @@ const Sidebar = ({ isOpen }) => {
   // ✅ Permission debug logs
   useEffect(() => {
     if (permLoading) return;
-    // One-time-ish log after load or when role/perms change
     console.log("[PERMISSIONS DEBUG]", {
       uid: authUser?.uid,
       role,
@@ -91,16 +100,18 @@ const Sidebar = ({ isOpen }) => {
         tools: isAdmin || isUser,
         utilities: isAdmin || isUser,
         reports: isAdmin || isUser,
-        settings: isAdmin, // default settings for admin only
+        masterData: isAdmin,      // ✅ added (admin only)
+        settings: isAdmin,        // default settings for admin only
       };
     }
 
-    // Normal gating
+    // Normal gating (permission-based)
     return {
       dashboard: can("dashboard.view"),
       tools: can("tools.view") || can("tools.*"),
       utilities: can("utilities.view") || can("utilities.*"),
       reports: can("reports.view") || can("reports.status.view") || can("reports.*"),
+      masterData: can("masterData.view") || can("masterData.*"), // ✅ added
       settings: can("settings.view") || can("settings.*"),
     };
   }, [can, role, perms]);
@@ -125,9 +136,7 @@ const Sidebar = ({ isOpen }) => {
         <img
           src={isOpen ? "/ff3.png" : "/ff2.png"}
           alt="Sidebar Logo"
-          className={`${
-            isOpen ? "rounded-lg" : "rounded-full"
-          } transition-[border-color,box-shadow] duration-150 bg-white dark:bg-gray-200 shadow-sm`}
+          className={`${isOpen ? "rounded-lg" : "rounded-full"} transition-[border-color,box-shadow] duration-150 bg-white dark:bg-gray-200 shadow-sm`}
           style={
             isOpen
               ? { width: "100%", maxWidth: 210, height: 52, objectFit: "contain", border: "0.5px solid #e5e7eb" }
@@ -225,6 +234,22 @@ const Sidebar = ({ isOpen }) => {
                 onClick={handleLinkClick}
                 suppressHover={navigating}
                 disableTransitions={navigating}
+                activeMatch={(p) => p.startsWith("/utilities")} // ✅ keeps highlighted for subpages
+              />
+            )}
+
+            {/* ✅ NEW: Master Data (Admin) */}
+            {SHOW.masterData && (
+              <SidebarLink
+                to="/master-data"
+                label="Master Data"
+                icon={<Database size={22} />}
+                isOpen={isOpen}
+                showTooltip={showTooltip}
+                onClick={handleLinkClick}
+                suppressHover={navigating}
+                disableTransitions={navigating}
+                activeMatch={(p) => p.startsWith("/master-data")}
               />
             )}
 
@@ -238,6 +263,7 @@ const Sidebar = ({ isOpen }) => {
                 onClick={handleLinkClick}
                 suppressHover={navigating}
                 disableTransitions={navigating}
+                activeMatch={(p) => p.startsWith("/reports")}
               />
             )}
 
@@ -251,6 +277,7 @@ const Sidebar = ({ isOpen }) => {
                 onClick={handleLinkClick}
                 suppressHover={navigating}
                 disableTransitions={navigating}
+                activeMatch={(p) => p.startsWith("/settings")}
               />
             )}
 
@@ -263,6 +290,7 @@ const Sidebar = ({ isOpen }) => {
               onClick={handleLinkClick}
               suppressHover={navigating}
               disableTransitions={navigating}
+              activeMatch={(p) => p.startsWith("/contact")}
             />
           </>
         )}
@@ -271,9 +299,7 @@ const Sidebar = ({ isOpen }) => {
       {/* User Info */}
       <div className="absolute bottom-16 left-0 w-full px-3">
         <div
-          className={`${
-            isOpen ? "gap-3 px-3 py-2 bg-blue-50 dark:bg-gray-800" : "justify-center w-10 h-10"
-          } flex items-center rounded-xl transition-colors duration-150`}
+          className={`${isOpen ? "gap-3 px-3 py-2 bg-blue-50 dark:bg-gray-800" : "justify-center w-10 h-10"} flex items-center rounded-xl transition-colors duration-150`}
         >
           <UserCircle size={22} className="text-blue-500 dark:text-blue-300" />
           {isOpen && (

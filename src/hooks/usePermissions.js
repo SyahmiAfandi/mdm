@@ -156,7 +156,17 @@ export function usePermissions(options = {}) {
         let perms = {};
         if (role) {
           const rp = await getDoc(doc(db, opts.rolePermissionsCollection, role));
-          perms = rp.exists() ? rp.data()?.permissions || {} : {};
+          if (rp.exists()) {
+            const data = rp.data() || {};
+            // Support BOTH:
+            // A) { permissions: { "a.b": true } }
+            // B) { "a.b": true } (your current Firestore)
+            perms = data.permissions && typeof data.permissions === "object"
+              ? data.permissions
+              : data;
+          } else {
+            perms = {};
+          }
         }
 
         setState({ loading: false, user: u, role, perms });

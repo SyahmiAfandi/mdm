@@ -17,12 +17,12 @@ function PromotionsSelectionPage() {
 
   const buttons = [
     {
-      path: '/',
+      path: '/in-progress',
       img: '/images/promo_manual_bw.png',
       hoverImg: '/images/promo_manual_color.png',
     },
     {
-      path: '/promoautoIC',
+      path: '/promotions/auto-IC',
       img: '/images/promo_auto_bw.png',
       hoverImg: '/images/promo_auto_color.png',
     },

@@ -83,7 +83,8 @@ const PERMISSION_TREE = [
               { key: "mdmEmailTracker.view", label: "View Tracker" },
               { key: "mdmEmailTracker.assign", label: "Assign Email to Self / PIC" },
               { key: "mdmEmailTracker.edit", label: "Edit Status / Remark" },
-              { key: "mdmEmailTracker.export", label: "Export Tracker" },
+              { key: "mdmEmailTracker.delete", label: "Delete Email" },
+              { key: "mdmEmailTracker.bulkImport", label: "Import Bulk Email" },
             ],
           },
         ],
@@ -137,6 +138,36 @@ const PERMISSION_TREE = [
         permissions: [
           { key: "admin.manageUsers", label: "Manage Users" },
           { key: "admin.license", label: "Manage Licenses" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "masterData",
+    label: "Master Data",
+    icon: "🗂️",
+    children: [
+      {
+        id: "masterData-core",
+        label: "Master Data Access",
+        permissions: [
+          { key: "masterData.view", label: "View Master Data Section" },
+        ],
+      },
+      {
+        id: "masterData-distributors",
+        label: "Distributors Master",
+        permissions: [
+          { key: "masterData.distributors.view", label: "View Distributors" },
+          { key: "masterData.distributors.edit", label: "Create / Edit / Delete Distributors" },
+        ],
+      },
+      {
+        id: "masterData-Countries",
+        label: "Countries Master",
+        permissions: [
+          { key: "masterData.countries.view", label: "View Countries" },
+          { key: "masterData.countries.edit", label: "Create / Edit / Delete Countries" },
         ],
       },
     ],

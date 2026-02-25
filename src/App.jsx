@@ -20,7 +20,6 @@ const ChatPage = lazy(() => import("./pages/ChatPage"));
 const UtilitiesDate = lazy(() => import("./pages/DateConverterPage"));
 
 const ToolSelection = lazy(() => import("./pages/ToolsSelectionPage"));
-const UtilitiesSelection = lazy(() => import("./pages/UtilitiesPage"));
 const ReportSelection = lazy(() => import("./pages/ReportsPage"));
 const ReportSummary = lazy(() => import("./pages/ReportSummaryPage"));
 const MismatchTrackerReport = lazy(() => import("./pages/MismatchTrackerReport"));
@@ -41,14 +40,29 @@ const Recons_ResultPage = lazy(() => import("./pages/Recons_ResultPage.jsx"));
 const Recons_SummaryPage = lazy(() => import("./pages/Recons_SummaryPage.jsx"));
 const ReconsCustom = lazy(() => import("./pages/ReconsCustom.jsx"));
 
+//Master Data
+const MasterDataPage = lazy(() => import("./pages/MasterData/MasterDataHome.jsx"));
+const MasterDistributorPage = lazy(() => import("./pages/MasterData/MasterDistributorPage.jsx"));
+const MasterCountryPage = lazy(() => import("./pages/MasterData/MasterCountryPage.jsx"));
+const MasterBusinessPage = lazy(() => import("./pages/MasterData/MasterBusinessPage.jsx"));
+const MasterReportTypePage = lazy(() => import("./pages/MasterData/MasterReportTypePage.jsx"));
+const MasterBusinessReportTypeMapPage = lazy(() => import("./pages/MasterData/MasterBusinessReportTypeMapPage.jsx"));
+
 // Settings
 const Settings = lazy(() => import("./pages/Settings"));
+
+//Admin Control
 const AdminManageControl = lazy(() => import("./pages/AdminUsersPage.jsx"));
 const AdminLicenses = lazy(() => import("./pages/LicenseExpiryPage.jsx"));
 const RolePermission = lazy(() => import("./pages/RolesPermissionsPage.jsx"));
+const RegisterPICPage = lazy(() => import("./pages/Admin-RegisterPICPage.jsx"));
 
 // Utilities
-const EmailTracker = lazy(() => import("./pages/Utilities-EmailTracker.jsx"));
+const UtilitiesSelection = lazy(() => import("./pages/Utilities/UtilitiesHomePage"));
+const EmailTracker = lazy(() => import("./pages/Utilities/EmailTracker.jsx"));
+const EmailBulkUpload = lazy(() => import("./pages/Utilities/EmailTrackerBulkImport.jsx"));
+const ManualReconsEntry = lazy(() => import("./pages/Utilities/ManualReconsEntry.jsx"));
+
 
 // About
 const ContactPage = lazy(() => import("./pages/ContactPage"));
@@ -172,11 +186,13 @@ export default function App() {
 
           <Route path="/tools" element={<ToolSelection />} />
           <Route path="/promotions" element={<PromoSelection />} />
-          <Route path="/promoautoIC" element={<PromoAutoIC />} />
+          <Route path="/promotions/auto-IC" element={<PromoAutoIC />} />
           <Route path="/chat" element={<ChatPage />} />
 
           <Route path="/utilities" element={<UtilitiesSelection />} />
           <Route path="/utilities/emailtracker" element={<EmailTracker />} />
+          <Route path="/utilities/emailtracker/bulk-import" element={<EmailBulkUpload />} />
+          <Route path="/utilities/manualrecons" element={<ManualReconsEntry />} />
           <Route path="/utilities/date-converter" element={<UtilitiesDate />} />
 
           <Route path="/reports" element={<ReportSelection />} />
@@ -196,10 +212,18 @@ export default function App() {
           <Route path="/detailed-view" element={<DetailedView />} />
           <Route path="/in-progress" element={<InProgressPage />} />
 
+          <Route path="/master-data" element={<MasterDataPage />} />
+          <Route path="/master-data/distributors" element={<MasterDistributorPage />} />
+          <Route path="/master-data/countries" element={<MasterCountryPage />} />
+          <Route path="/master-data/business" element={<MasterBusinessPage />} />
+          <Route path="/master-data/report-types" element={<MasterReportTypePage />} />
+          <Route path="/master-data/map-report-business" element={<MasterBusinessReportTypeMapPage />} />
+
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/admin/users" element={<AdminManageControl />} />
           <Route path="/settings/admin/licenses" element={<AdminLicenses />} />
           <Route path="/settings/admin/permission" element={<RolePermission />} />
+          <Route path="/settings/admin/register-pic" element={<RegisterPICPage />} />
 
           <Route path="/contact" element={<ContactPage />} />
         </Route>

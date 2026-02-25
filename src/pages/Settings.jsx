@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../context/UserContext';
-import { Sun, Shield } from 'lucide-react';
+import { Sun, Shield, UserPlus2 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { motion } from 'framer-motion';
 
@@ -45,7 +45,7 @@ function SettingsPage() {
               {i === 1 && <><Sun size={20} /> Preferences (Disabled)</>}
               {i === 2 && <>Security</>}
               {i === 3 && <>Data Management</>}
-              {i === 4 && role === 'admin' && <>Admin Controls</>}
+              {i === 4 && role === 'admin' && <>User Management</>}
             </h2>
 
             {i === 0 && (
@@ -89,10 +89,20 @@ function SettingsPage() {
 
             {i === 2 && (
               <div className="space-y-4">
-                <motion.button variants={buttonVariants} whileHover="hover" whileTap="tap" className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white px-4 py-2 rounded">
+                <motion.button
+                  variants={buttonVariants}
+                  whileHover="hover"
+                  whileTap="tap"
+                  className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white px-4 py-2 rounded"
+                >
                   Change Password
                 </motion.button>
-                <motion.button variants={buttonVariants} whileHover="hover" whileTap="tap" className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white px-4 py-2 rounded">
+                <motion.button
+                  variants={buttonVariants}
+                  whileHover="hover"
+                  whileTap="tap"
+                  className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-white px-4 py-2 rounded"
+                >
                   Enable 2FA (Coming Soon)
                 </motion.button>
               </div>
@@ -108,28 +118,41 @@ function SettingsPage() {
                 </motion.button>
               </div>
             )}
+          {i === 4 && role === 'admin' && (
+            <div className="space-y-4">
 
-            {i === 4 && role === 'admin' && (
-              <div className="space-y-4">
-                <motion.button
-                  variants={buttonVariants}
-                  whileHover="hover"
-                  whileTap="tap"
-                  onClick={() => navigate('/settings/admin/users')}
-                  className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-4 py-2 rounded text-gray-800 dark:text-white"
-                >
-                  Manage Users
-                </motion.button>
-                <motion.button
-                  variants={buttonVariants}
-                  whileHover="hover"
-                  whileTap="tap"
-                  onClick={() => navigate('/settings/admin/permission')}
-                  className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-4 py-2 rounded text-gray-800 dark:text-white"
-                >
-                  Configure Roles & Permissions
-                </motion.button>
-                <motion.button
+              <motion.button
+                variants={buttonVariants}
+                whileHover="hover"
+                whileTap="tap"
+                onClick={() => navigate('/settings/admin/users')}
+                className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-4 py-2 rounded text-gray-800 dark:text-white"
+              >
+                Manage Users
+              </motion.button>
+
+              <motion.button
+                variants={buttonVariants}
+                whileHover="hover"
+                whileTap="tap"
+                onClick={() => navigate('/settings/admin/register-pic')}
+                className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-white font-semibold inline-flex items-center justify-center gap-2"
+              >
+                <UserPlus2 size={18} />
+                Create User Account
+              </motion.button>
+
+              <motion.button
+                variants={buttonVariants}
+                whileHover="hover"
+                whileTap="tap"
+                onClick={() => navigate('/settings/admin/permission')}
+                className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-4 py-2 rounded text-gray-800 dark:text-white"
+              >
+                Configure Roles & Permissions
+              </motion.button>
+
+              <motion.button
                   variants={buttonVariants}
                   whileHover="hover"
                   whileTap="tap"
@@ -138,6 +161,7 @@ function SettingsPage() {
                 >
                   Check License Expiry
                 </motion.button>
+
                 <motion.button
                   variants={buttonVariants}
                   whileHover="hover"
@@ -146,8 +170,8 @@ function SettingsPage() {
                 >
                   Adjust File Upload Quota
                 </motion.button>
-              </div>
-            )}
+            </div>
+          )}
           </motion.section>
         ))}
       </div>
