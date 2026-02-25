@@ -33,6 +33,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  setDoc,
   doc,
   serverTimestamp,
   runTransaction,
@@ -304,6 +305,16 @@ export default function EmailTracker() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  //--------------ping stats
+  async function pingEmailStats() {
+  // one tiny doc to signal HomePage to refresh counts
+  await setDoc(
+    doc(db, "stats_ping", "email_tasks"),
+    { updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+}
+
   // ===== Actions: Assign / Done / Remark =====
   async function assignToMe(row) {
     const rowId = row._id;
@@ -344,7 +355,7 @@ export default function EmailTracker() {
       });
 
       toast.success("Assigned successfully ✅");
-      await fetchTasks();
+      await Promise.all([fetchTasks(), pingEmailStats()]);
     } catch (e) {
       console.error(e);
       toast.error(String(e?.message || e));
@@ -376,7 +387,7 @@ export default function EmailTracker() {
       });
 
       toast.success("Marked COMPLETE ✅");
-      await fetchTasks();
+      await Promise.all([fetchTasks(), pingEmailStats()]);
     } catch (e) {
       console.error(e);
       toast.error(String(e?.message || e));
@@ -403,7 +414,7 @@ export default function EmailTracker() {
       });
 
       toast.success("Remark saved ✅");
-      await fetchTasks();
+      await Promise.all([fetchTasks(), pingEmailStats()]);
     } catch (e) {
       console.error(e);
       toast.error(String(e?.message || e));
@@ -569,7 +580,7 @@ export default function EmailTracker() {
       }
 
       toast.success(`Submitted ${ready.length} email task(s) ✅`);
-      await fetchTasks();
+      await Promise.all([fetchTasks(), pingEmailStats()]);
       closeEmailModal();
     } catch (err) {
       console.error(err);
@@ -589,7 +600,7 @@ export default function EmailTracker() {
       await deleteDoc(doc(db, "email_tasks", rowId));
       toast.success("Deleted ✅");
       setDeleteRow(null);
-      await fetchTasks();
+      await Promise.all([fetchTasks(), pingEmailStats()]);
     } catch (e) {
       console.error(e);
       toast.error(String(e?.message || e));

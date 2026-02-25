@@ -21,9 +21,10 @@ import {
 } from "lucide-react";
 
 /* Firestore */
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { db } from "../firebaseClient";
 import useReconsProgress from "../hooks/useReconsProgress";
+import useEmailTrackerSummaryCounts from "../hooks/useEmailTrackerSummaryCounts";
 
 /**
  * HomePage — One-screen Dashboard (fits most laptops)
@@ -36,9 +37,6 @@ import useReconsProgress from "../hooks/useReconsProgress";
 const GAS_HEALTH_URL = import.meta.env.VITE_GAS_HEALTH_URL;
 const FLASK_HEALTH_URL = import.meta.env.VITE_FLASK_HEALTH_URL;
 const HEALTH_POLL_MS = 60000;
-
-const EMAIL_TRACKER_SHEET_ID = import.meta.env.VITE_EMAIL_TRACKER_SHEET_ID;
-const EMAIL_TRACKER_SHEET_NAME = import.meta.env.VITE_EMAIL_TRACKER_SHEET_NAME || "";
 
 function HomePage() {
   const lastSync = useMemo(() => new Date().toLocaleString(), []);
@@ -374,10 +372,17 @@ function HomePage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ✅ Homepage widgets data
-  const emailSummary = useEmailTrackerSummary({
-    sheetId: EMAIL_TRACKER_SHEET_ID,
-    sheetName: EMAIL_TRACKER_SHEET_NAME,
-  });
+  const emailSummary = useEmailTrackerSummaryCounts();
+
+  useEffect(() => {
+    const ref = doc(db, "stats_ping", "email_tasks");
+    const unsub = onSnapshot(
+      ref,
+      () => emailSummary.refresh(),
+      (err) => console.error("stats_ping listener error:", err)
+    );
+    return () => unsub();
+  }, [emailSummary.refresh]);
 
   return (
     <div className="w-full min-w-0">
@@ -424,13 +429,7 @@ function HomePage() {
           icon={<Mail size={18} />}
           accent="blue"
           percent={emailSummary.percentComplete}
-          hint={
-            !EMAIL_TRACKER_SHEET_ID
-              ? "Set VITE_EMAIL_TRACKER_SHEET_ID in .env"
-              : emailSummary.error
-              ? emailSummary.error
-              : ""
-          }
+          hint={emailSummary.error ? emailSummary.error : ""}
           footer={
             <div className="grid grid-cols-2 gap-2">
               <TinyPill icon={AlertTriangle} label="New" value={emailSummary.counts.new} tone="red" />
@@ -650,33 +649,6 @@ function TinyPill({ icon: Icon, label, value, sub, tone = "blue" }) {
   );
 }
 
-/* ------------------------- Email Tracker (GViz) ------------------------- */
-
-function normalizeStatus(v) {
-  const s = String(v || "").trim().toLowerCase();
-  if (!s) return "new";
-  if (s === "new") return "new";
-  if (s.includes("progress")) return "inProgress";
-  if (s === "in_progress" || s === "inprogress") return "inProgress";
-  if (s.includes("complete") || s === "done" || s === "completed") return "complete";
-  return "new";
-}
-
-function toGvizUrl(sheetId, sheetName = "") {
-  const params = new URLSearchParams();
-  params.set("tqx", "out:json");
-  if (sheetName) params.set("sheet", sheetName);
-  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?${params.toString()}`;
-}
-
-function parseGviz(text) {
-  const json = JSON.parse(text.substring(text.indexOf("{"), text.lastIndexOf("}") + 1));
-  const cols = json?.table?.cols || [];
-  const rows = json?.table?.rows || [];
-  const headers = cols.map((c) => String(c?.label || "").trim());
-  const data = rows.map((r) => (r?.c || []).map((cell) => cell?.v ?? ""));
-  return { headers, data };
-}
 
 function useEmailTrackerSummary({ sheetId, sheetName = "" } = {}) {
   const [loading, setLoading] = useState(Boolean(sheetId));
