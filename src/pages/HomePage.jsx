@@ -21,7 +21,17 @@ import {
 } from "lucide-react";
 
 /* Firestore */
-import { doc, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  serverTimestamp,
+  onSnapshot,
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+} from "firebase/firestore";
 import { db } from "../firebaseClient";
 import useReconsProgress from "../hooks/useReconsProgress";
 import useEmailTrackerSummaryCounts from "../hooks/useEmailTrackerSummaryCounts";
@@ -73,202 +83,266 @@ function HomePage() {
   }
   /*--------------FLIP CARD-------------------- */
   function FlipReconsCard() {
-  const now = new Date();
+    const now = new Date();
 
-  // calculate previous month properly
-  let defaultYear = now.getFullYear();
-  let defaultMonth = now.getMonth(); // 0-based previous month
+    // calculate previous month properly
+    let defaultYear = now.getFullYear();
+    let defaultMonth = now.getMonth(); // 0-based previous month
+    if (defaultMonth === 0) {
+      defaultMonth = 12;
+      defaultYear = defaultYear - 1;
+    }
 
-  if (defaultMonth === 0) {
-    // if current month is January, go to Dec last year
-    defaultMonth = 12;
-    defaultYear = defaultYear - 1;
-  } else {
-    defaultMonth = defaultMonth; // already previous month
-  }
+    // ✅ master years state
+    const [yearsLoading, setYearsLoading] = useState(true);
+    const [masterYears, setMasterYears] = useState([]); // numbers e.g. [2026, 2025, 2024]
+    const didInitRef = useRef(false);
 
+    // ✅ Applied filter (used for fetching)
+    const [year, setYear] = useState(defaultYear);
+    const [month, setMonth] = useState(String(defaultMonth));
 
-  // ✅ Applied filter (used for fetching)
-  const [year, setYear] = useState(defaultYear);
-  const [month, setMonth] = useState(String(defaultMonth));
+    const [draftYear, setDraftYear] = useState(defaultYear);
+    const [draftMonth, setDraftMonth] = useState(String(defaultMonth));
 
-  const [draftYear, setDraftYear] = useState(defaultYear);
-  const [draftMonth, setDraftMonth] = useState(String(defaultMonth));
+    const [flipped, setFlipped] = useState(false);
 
+    // ✅ Fetch years from master_years (active only)
+    useEffect(() => {
+      let alive = true;
 
-  const [flipped, setFlipped] = useState(false);
+      async function loadYears() {
+        try {
+          setYearsLoading(true);
 
-  const reconsProgress = useReconsProgress({
-    year,
-    month: month === "" ? undefined : Number(month),
-  });
+          const q = query(
+            collection(db, "master_years"),
+            orderBy("year", "desc") // ✅ single-field orderBy (no composite index)
+          );
 
-  const yearOptions = useMemo(() => {
-  return Array.from({ length: 5 }, (_, i) => defaultYear - 2 + i);
-  }, [defaultYear]);
+          const snap = await getDocs(q);
 
+          // ✅ filter active in code (also supports missing active default true)
+          const years = snap.docs
+            .map((d) => d.data())
+            .filter((r) => r && (r.active !== false)) // treat missing active as Active
+            .map((r) => Number(r.year))
+            .filter((y) => Number.isFinite(y));
 
-  const monthOptions = useMemo(
-    () => [
-      { value: "", label: "All months" },
-      { value: "1", label: "January" },
-      { value: "2", label: "February" },
-      { value: "3", label: "March" },
-      { value: "4", label: "April" },
-      { value: "5", label: "May" },
-      { value: "6", label: "June" },
-      { value: "7", label: "July" },
-      { value: "8", label: "August" },
-      { value: "9", label: "September" },
-      { value: "10", label: "October" },
-      { value: "11", label: "November" },
-      { value: "12", label: "December" },
-    ],
-    []
-  );
+          if (!alive) return;
 
-  function openSettings() {
-    // sync drafts with current applied values
-    setDraftYear(year);
-    setDraftMonth(month);
-    setFlipped(true);
-  }
+          setMasterYears(years);
 
-  function applyFilter() {
-    setYear(Number(draftYear));
-    setMonth(draftMonth); // "" or "1".."12"
-    setFlipped(false);
-  }
+          // ✅ init default year from master (once)
+          if (!didInitRef.current && years.length) {
+            didInitRef.current = true;
+            setYear(years[0]);
+            setDraftYear(years[0]);
+          }
+        } catch (e) {
+          console.error("loadYears:", e);
+          // fallback to local defaults (keep whatever state currently is)
+        } finally {
+          if (alive) setYearsLoading(false);
+        }
+      }
 
-  return (
-    <div className="relative [perspective:1200px] h-full min-h-[240px]">
-      <div
-        className={[
-          "relative w-full h-full transition-transform duration-500 [transform-style:preserve-3d]",
-          flipped ? "[transform:rotateY(180deg)]" : "",
-        ].join(" ")}
-      >
-        {/* FRONT */}
-        <div className="absolute inset-0 h-full [backface-visibility:hidden]">
-          <SummaryCardCompact
-            className="h-full"
-            title="Recons Progress"
-            subtitle={reconsProgress.loading ? "Loading..." : reconsProgress.hasData ? "Latest run" : "No data yet"}
-            icon={<FileSpreadsheet size={18} />}
-            accent="emerald"
-            percent={reconsProgress.percentDone}
-            hint={year ? `Filter: ${year}${month ? ` • ${monthOptions.find(m=>m.value===String(month))?.label || ""}` : ""}` : ""}
-            footer={
-              <div className="grid grid-cols-2 gap-2">
-                <TinyPill
-                  icon={FileSpreadsheet}
-                  label="Processed"
-                  value={reconsProgress.processed}
-                  sub={`/ ${reconsProgress.total}`}
-                  tone="blue"
-                />
-                <TinyPill icon={AlertTriangle} label="Mismatch" value={reconsProgress.mismatches} tone="red" />
-                <TinyPill icon={CheckCircle2} label="Matched" value={reconsProgress.matched} tone="green" />
-                <TinyPill icon={Clock3} label="Last Run" value={reconsProgress.lastRunLabel} tone="gray" />
-              </div>
-            }
-            cta={{ href: "/reports/matrix_recons", label: "Open" }}
-          />
+      loadYears();
+      return () => {
+        alive = false;
+      };
+    }, []);
 
-          {/* ✅ gear bottom-right */}
-          <button
-            type="button"
-            onClick={openSettings}
-            className="absolute bottom-3 right-3 inline-flex items-center justify-center w-9 h-9 rounded-xl ring-1 ring-gray-200 dark:ring-gray-700 bg-white/90 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-900 transition"
-            title="Filter"
-          >
-            <Settings size={16} className="text-gray-600 dark:text-gray-300" />
-          </button>
-        </div>
+    const reconsProgress = useReconsProgress({
+      year,
+      month: month === "" ? undefined : Number(month),
+    });
 
-        {/* BACK */}
-        <div className="absolute inset-0 h-full [backface-visibility:hidden] [transform:rotateY(180deg)]">
-          <div className="bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 rounded-2xl p-4 h-full">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
-                Recons Filters
-              </div>
+    // ✅ Year options now based on master data (fallback if empty)
+    const yearOptions = useMemo(() => {
+      if (masterYears.length) return masterYears;
+      return Array.from({ length: 5 }, (_, i) => defaultYear - 2 + i); // fallback
+    }, [masterYears, defaultYear]);
 
-              <button
-                type="button"
-                onClick={() => setFlipped(false)}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:underline"
-              >
-                <ArrowLeft size={16} /> Back
-              </button>
-            </div>
+    const monthOptions = useMemo(
+      () => [
+        { value: "", label: "All months" },
+        { value: "1", label: "January" },
+        { value: "2", label: "February" },
+        { value: "3", label: "March" },
+        { value: "4", label: "April" },
+        { value: "5", label: "May" },
+        { value: "6", label: "June" },
+        { value: "7", label: "July" },
+        { value: "8", label: "August" },
+        { value: "9", label: "September" },
+        { value: "10", label: "October" },
+        { value: "11", label: "November" },
+        { value: "12", label: "December" },
+      ],
+      []
+    );
 
-            <div className="grid grid-cols-1 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  Year (default: current year)
-                </label>
-                <select
-                  value={draftYear}
-                  onChange={(e) => setDraftYear(e.target.value)}
-                  className="w-full rounded-xl px-3 py-2 bg-white dark:bg-gray-900/30 ring-1 ring-gray-200 dark:ring-gray-700 text-sm"
-                >
-                  {yearOptions.map((y) => (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  ))}
-                </select>
-              </div>
+    function openSettings() {
+      setDraftYear(year);
+      setDraftMonth(month);
+      setFlipped(true);
+    }
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  Month
-                </label>
-                <select
-                  value={draftMonth}
-                  onChange={(e) => setDraftMonth(e.target.value)}
-                  className="w-full rounded-xl px-3 py-2 bg-white dark:bg-gray-900/30 ring-1 ring-gray-200 dark:ring-gray-700 text-sm"
-                >
-                  {monthOptions.map((m) => (
-                    <option key={m.value || "all"} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+    function applyFilter() {
+      setYear(Number(draftYear));
+      setMonth(draftMonth);
+      setFlipped(false);
+    }
 
-                <div className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-                  Tip: leave “All months” to view the full year summary.
+    return (
+      <div className="relative [perspective:1200px] h-full min-h-[240px]">
+        <div
+          className={[
+            "relative w-full h-full transition-transform duration-500 [transform-style:preserve-3d]",
+            flipped ? "[transform:rotateY(180deg)]" : "",
+          ].join(" ")}
+        >
+          {/* FRONT */}
+          <div className="absolute inset-0 h-full [backface-visibility:hidden]">
+            <SummaryCardCompact
+              className="h-full"
+              title="Recons Progress"
+              subtitle={
+                reconsProgress.loading
+                  ? "Loading..."
+                  : reconsProgress.hasData
+                  ? "Latest run"
+                  : "No data yet"
+              }
+              icon={<FileSpreadsheet size={18} />}
+              accent="emerald"
+              percent={reconsProgress.percentDone}
+              hint={
+                year
+                  ? `Filter: ${year}${
+                      month
+                        ? ` • ${monthOptions.find((m) => m.value === String(month))?.label || ""}`
+                        : ""
+                    }`
+                  : ""
+              }
+              footer={
+                <div className="grid grid-cols-2 gap-2">
+                  <TinyPill
+                    icon={FileSpreadsheet}
+                    label="Processed"
+                    value={reconsProgress.processed}
+                    sub={`/ ${reconsProgress.total}`}
+                    tone="blue"
+                  />
+                  <TinyPill icon={AlertTriangle} label="Mismatch" value={reconsProgress.mismatches} tone="red" />
+                  <TinyPill icon={CheckCircle2} label="Matched" value={reconsProgress.matched} tone="green" />
+                  <TinyPill icon={Clock3} label="Last Run" value={reconsProgress.lastRunLabel} tone="gray" />
                 </div>
+              }
+              cta={{ href: "/reports/matrix_recons", label: "Open" }}
+            />
+
+            <button
+              type="button"
+              onClick={openSettings}
+              className="absolute bottom-3 right-3 inline-flex items-center justify-center w-9 h-9 rounded-xl ring-1 ring-gray-200 dark:ring-gray-700 bg-white/90 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-900 transition"
+              title="Filter"
+            >
+              <Settings size={16} className="text-gray-600 dark:text-gray-300" />
+            </button>
+          </div>
+
+          {/* BACK */}
+          <div className="absolute inset-0 h-full [backface-visibility:hidden] [transform:rotateY(180deg)]">
+            <div className="bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 rounded-2xl p-4 h-full">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                  Recons Filters
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setFlipped(false)}
+                  className="inline-flex items-center gap-1 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:underline"
+                >
+                  <ArrowLeft size={16} /> Back
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={applyFilter}
-                className="-mt-1 inline-flex items-center justify-center gap-1 rounded-xl px-3 py-2 bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition"
-              >
-                <Check size={16} /> Apply
-              </button>
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Year (from Master Data)
+                  </label>
+
+                  <select
+                    value={draftYear}
+                    onChange={(e) => setDraftYear(e.target.value)}
+                    disabled={yearsLoading}
+                    className="w-full rounded-xl px-3 py-2 bg-white dark:bg-gray-900/30 ring-1 ring-gray-200 dark:ring-gray-700 text-sm disabled:opacity-60"
+                  >
+                    {yearsLoading ? (
+                      <option value={draftYear}>Loading…</option>
+                    ) : (
+                      yearOptions.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Month
+                  </label>
+                  <select
+                    value={draftMonth}
+                    onChange={(e) => setDraftMonth(e.target.value)}
+                    className="w-full rounded-xl px-3 py-2 bg-white dark:bg-gray-900/30 ring-1 ring-gray-200 dark:ring-gray-700 text-sm"
+                  >
+                    {monthOptions.map((m) => (
+                      <option key={m.value || "all"} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+                    Tip: leave “All months” to view the full year summary.
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={applyFilter}
+                  className="-mt-1 inline-flex items-center justify-center gap-1 rounded-xl px-3 py-2 bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition"
+                >
+                  <Check size={16} /> Apply
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* keeps height stable during flip */}
-      <div className="invisible h-[240px] sm:h-[252px]">
-        <SummaryCardCompact
-          title="Recons Progress"
-          subtitle="Latest run"
-          icon={<FileSpreadsheet size={18} />}
-          accent="emerald"
-          percent={86}
-          footer={<div className="h-[92px]" />}
-          cta={{ href: "#", label: "Open" }}
-        />
+        {/* keeps height stable during flip */}
+        <div className="invisible h-[240px] sm:h-[252px]">
+          <SummaryCardCompact
+            title="Recons Progress"
+            subtitle="Latest run"
+            icon={<FileSpreadsheet size={18} />}
+            accent="emerald"
+            percent={86}
+            footer={<div className="h-[92px]" />}
+            cta={{ href: "#", label: "Open" }}
+          />
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
 
   /* ---- Fetchers ---- */

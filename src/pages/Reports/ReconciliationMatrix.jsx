@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import classNames from "classnames";
-import { APP_FULL_NAME } from "../config";
+import { APP_FULL_NAME } from "../../config";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../../firebaseClient";
 
 const apiUrl = import.meta.env.VITE_GAS_MATRIX_URL;
 
@@ -109,6 +111,8 @@ export default function ReconciliationMatrix() {
   const [sortConfig, setSortConfig] = useState({ key: "code", direction: "asc" });
   const [loading, setLoading] = useState(true);
   const [tooltipEnabled, setTooltipEnabled] = useState(true);
+  const [yearOptions, setYearOptions] = useState([]); // ["2026","2025","2024"]
+  const [yearsLoading, setYearsLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
@@ -179,6 +183,45 @@ export default function ReconciliationMatrix() {
     if (sortConfig.key !== colKey) return <span className="inline-block w-2" />;
     return sortConfig.direction === "asc" ? <span>▲</span> : <span>▼</span>;
   };
+
+  //Use Master Data Year
+  useEffect(() => {
+    let alive = true;
+
+    async function loadYears() {
+      try {
+        setYearsLoading(true);
+
+        const snap = await getDocs(collection(db, "master_years"));
+        const years = snap.docs
+          .map((d) => d.data() || {})
+          .filter((r) => r.active !== false) // treat missing active as Active
+          .map((r) => String(r.year ?? "").trim())
+          .filter(Boolean)
+          .sort((a, b) => Number(b) - Number(a));
+
+        if (!alive) return;
+
+        setYearOptions(Array.from(new Set(years)));
+
+        // ✅ If current selectedYear not in master list, set to latest master year
+        if (years.length && !years.includes(String(selectedYear))) {
+          setSelectedYear(String(years[0]));
+        }
+      } catch (e) {
+        console.error("loadYears:", e);
+        // fallback: keep whatever selectedYear already is
+      } finally {
+        if (alive) setYearsLoading(false);
+      }
+    }
+
+    loadYears();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
       <div className="px-4 py-0 font-sans text-[9px]">
@@ -347,8 +390,8 @@ export default function ReconciliationMatrix() {
             {/* Year Selector */}
             <div>
               <div className="text-[11px] font-bold mb-1">Year</div>
-              <div className="grid grid-cols-2 grid-rows-2 gap-2">
-                {["2024", "2025","2026"].map((y) => (
+              <div className="grid grid-cols-2 gap-2">
+                {(yearOptions.length ? yearOptions : [selectedYear]).map((y) => (
                   <button
                     key={y}
                     onClick={() => setSelectedYear(y)}

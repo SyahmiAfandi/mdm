@@ -20,11 +20,7 @@ const ChatPage = lazy(() => import("./pages/ChatPage"));
 const UtilitiesDate = lazy(() => import("./pages/DateConverterPage"));
 
 const ToolSelection = lazy(() => import("./pages/ToolsSelectionPage"));
-const ReportSelection = lazy(() => import("./pages/ReportsPage"));
-const ReportSummary = lazy(() => import("./pages/ReportSummaryPage"));
-const MismatchTrackerReport = lazy(() => import("./pages/MismatchTrackerReport"));
-const MatrixReconsReport = lazy(() => import("./pages/ReconciliationMatrix"));
-const DSSreport = lazy(() => import("./pages/DailySalesSummary"));
+
 
 // Tools - Promotions
 const PromoSelection = lazy(() => import("./pages/promoselect"));
@@ -46,7 +42,15 @@ const MasterDistributorPage = lazy(() => import("./pages/MasterData/MasterDistri
 const MasterCountryPage = lazy(() => import("./pages/MasterData/MasterCountryPage.jsx"));
 const MasterBusinessPage = lazy(() => import("./pages/MasterData/MasterBusinessPage.jsx"));
 const MasterReportTypePage = lazy(() => import("./pages/MasterData/MasterReportTypePage.jsx"));
+const MasterYearPage = lazy(() => import("./pages/MasterData/MasterYearPage.jsx"));
 const MasterBusinessReportTypeMapPage = lazy(() => import("./pages/MasterData/MasterBusinessReportTypeMapPage.jsx"));
+
+//Reports
+const ReportSelection = lazy(() => import("./pages/ReportsPage"));
+const ReportSummary = lazy(() => import("./pages/ReportSummaryPage"));
+const MismatchTrackerReport = lazy(() => import("./pages/MismatchTrackerReport"));
+const MatrixReconsReport = lazy(() => import("./pages/Reports/ReconciliationMatrix"));
+const DSSreport = lazy(() => import("./pages/DailySalesSummary"));
 
 // Settings
 const Settings = lazy(() => import("./pages/Settings"));
@@ -217,6 +221,7 @@ export default function App() {
           <Route path="/master-data/countries" element={<MasterCountryPage />} />
           <Route path="/master-data/business" element={<MasterBusinessPage />} />
           <Route path="/master-data/report-types" element={<MasterReportTypePage />} />
+          <Route path="/master-data/years" element={<MasterYearPage />} />
           <Route path="/master-data/map-report-business" element={<MasterBusinessReportTypeMapPage />} />
 
           <Route path="/settings" element={<Settings />} />

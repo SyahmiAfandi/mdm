@@ -1,11 +1,14 @@
-// src/components/ProtectedRoute.jsx
-import React from 'react';
-import { Navigate } from 'react-router-dom';
-import { useUser } from '../context/UserContext';
+import React from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { useUser } from "../context/UserContext";
 
-function ProtectedRoute({ children }) {
-  const { role } = useUser();
-  return role ? children : <Navigate to="/login" />;
+export default function ProtectedRoute({ children }) {
+  const location = useLocation();
+  const { loading, isAuthed } = useUser();
+
+  if (loading) return null; // or a spinner
+
+  return isAuthed ? children : (
+    <Navigate to="/login" replace state={{ from: location }} />
+  );
 }
-
-export default ProtectedRoute;

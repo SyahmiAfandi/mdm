@@ -4,6 +4,7 @@ import { db } from "../../firebaseClient";
 import { collection, getCountFromServer, query, where } from "firebase/firestore";
 import { usePermissions } from "../../hooks/usePermissions";
 import {
+  CalendarDays,
   Database,
   Building2,
   Globe,
@@ -368,6 +369,14 @@ export default function MasterDataHome() {
         status: "ready",
       },
       // next page
+      {
+        key: "years",
+        title: "Years",
+        desc: "Maintain year list for dropdowns and reporting filters.",
+        to: "/master-data/years",
+        icon: <CalendarDays className="w-5 h-5 text-gray-900 dark:text-gray-100" />,
+        status: "ready",
+      },
       {
         key: "sku",
         title: "SKU",

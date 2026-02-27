@@ -48,6 +48,9 @@ export default function ManualReconsEntry() {
   // Business dropdown options (codes)
   const [businessTypes, setBusinessTypes] = useState([]); // ["HPC","IC","UFS"]
 
+  //Year Master Data
+  const [yearOptions, setYearOptions] = useState([]); // ["2024","2025","2026"]
+
   /**
    * Report types:
    * - master_reporttypes gives: code -> name
@@ -120,6 +123,19 @@ export default function ManualReconsEntry() {
         const name = normalize(d.name);
         if (code && name) rtMap[code] = name;
       });
+
+      // 0) Years (master_years) — no composite index needed
+      const yearSnap = await getDocs(collection(db, "master_years"));
+      const years = yearSnap.docs
+        .map((doc) => doc.data() || {})
+        .filter((d) => d.active !== false) // treat missing active as Active
+        .map((d) => String(d.year ?? "").trim())
+        .filter(Boolean)
+        .sort((a, b) => Number(b) - Number(a));
+
+      setYearOptions(Array.from(new Set(years)));
+      const latest = years[0];
+      if (latest) setYear((y) => (years.includes(String(y)) ? String(y) : String(latest)));
 
       // 4) Mapping business -> reportTypeCode
       // Your collection name shown as "map_business_repor..." (truncated),
@@ -314,8 +330,29 @@ export default function ManualReconsEntry() {
       >
         {/* Row 1 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Field label="Year">
-            <input className="w-full input" value={year} onChange={(e) => setYear(e.target.value)} />
+          <Field label="Year (master)">
+            <select
+              className="w-full input"
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              disabled={loadingMaster}
+            >
+              {yearOptions.length ? (
+                yearOptions.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))
+              ) : (
+                <option value={year}>{year}</option> // fallback (keeps current value)
+              )}
+            </select>
+
+            {!yearOptions.length && !loadingMaster && (
+              <div className="text-xs text-amber-600 mt-1">
+                No years found (collection: <b>master_years</b>, field: <b>year</b>).
+              </div>
+            )}
           </Field>
 
           <Field label="Month">
