@@ -1,0 +1,28 @@
+[33m9860269[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Fix on vercel issue for reroute to login page
+[33m591e3a4[m Fix protectedroute issue
+[33m5837da1[m Add Master Data Year, align with reports, dashboard and fix bug on protected route
+[33m43db735[m Fix widget for Email tracker at homepage
+[33mc404686[m Added Master Data feature and enhance UIUX and DB integration for MDM Email Tracker
+[33mf3cacec[m Update overall interface and add feature email tracker
+[33ma0f065b[m Update: Replace backend with Tunnel URL stage 6
+[33me54702f[m Update: Replace backend with Tunnel URL stage 5
+[33m04468a7[m Update: Replace backend with Tunnel URL stage 4
+[33m0df9277[m Update: Replace backend with Tunnel URL stage 3
+[33me9dbb22[m Update: Replace backend with Tunnel URL stage 2
+[33m970b3dc[m Update: Replace backend with Tunnel URL stage 1
+[33m70e1dfd[m Added promotions tools auto generate
+[33m762ae43[m Refactor: move Firebase credentials to .env for security
+[33m5cb7084[m Refactor: moved credentials to .env and updated secure configs
+[33m1a551b3[m[33m ([m[1;32mrestore-v3[m[33m)[m Fix tooltip logic and minor bug
+[33mde603e8[m add tooltip to table data in recons reports
+[33maffb2f8[m Add reconciliation logic and report logic
+[33me95aa8a[m add vercel.json to fix refresh issue on vercel
+[33m9550c1a[m fix: group by Distributor Code only and populate Distributor Name correctly
+[33mcb9a3ba[m Enhance sidebar with structured sections: dashboard, tools, reports, settings, and contact
+[33mabb80fe[m Add animated Tools Selection page and remove submenu from sidebar
+[33mc47a223[m Update: reconciliation export formatting and cell style fixes
+[33m8d1a677[m Update: Added IQ Salesman logic into recons and add endpoint
+[33m83f8cee[m Fix API endpoint on FCS_HPC_SummaryPage
+[33m5422507[m Fix API endpoint on FCSHPC part
+[33m5ec580f[m Update API endpoints to Render backend
+[33mb704b40[m First commit: Initial React app
