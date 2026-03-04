@@ -29,6 +29,8 @@ function ReconsICPage() {
       color: BUTTON_COLORS[0],
       state: {
         fromButton: 'Daily Sales Summary',
+        reportTypeId: "R001",
+        reportTypeName: "Daily Sales Summary",   // or reuse label
         businessType,
         uploadEndpointOSDP: '/upload_ICDSS_OSDP',
         uploadEndpointPBI: '/upload_ICDSS_PBI',

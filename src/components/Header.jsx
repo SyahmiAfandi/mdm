@@ -183,8 +183,8 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
   const envLabel = isMyProdDomain
     ? "PROD"
     : backendMode === "local" || isLocalhostUrl(backendUrl)
-    ? "DEV"
-    : "PROD";
+      ? "DEV"
+      : "PROD";
 
   const envBadgeClass =
     envLabel === "DEV"
@@ -196,23 +196,23 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
     backendStatus === "up"
       ? "text-green-600 dark:text-green-300"
       : backendStatus === "down"
-      ? "text-red-600 dark:text-red-300"
-      : backendStatus === "checking"
-      ? "text-yellow-600 dark:text-yellow-300"
-      : "text-gray-400 dark:text-gray-500";
+        ? "text-red-600 dark:text-red-300"
+        : backendStatus === "checking"
+          ? "text-yellow-600 dark:text-yellow-300"
+          : "text-gray-400 dark:text-gray-500";
 
   const backendIconTitle =
     permLoading
       ? "Backend: Loading permissions..."
       : !canViewBackend
-      ? "Backend: No permission"
-      : backendStatus === "up"
-      ? "Backend: Online"
-      : backendStatus === "down"
-      ? "Backend: Offline"
-      : backendStatus === "checking"
-      ? "Backend: Checking..."
-      : "Backend: Missing URL";
+        ? "Backend: No permission"
+        : backendStatus === "up"
+          ? "Backend: Online"
+          : backendStatus === "down"
+            ? "Backend: Offline"
+            : backendStatus === "checking"
+              ? "Backend: Checking..."
+              : "Backend: Missing URL";
 
   // Close menus on outside click
   useEffect(() => {
@@ -231,55 +231,52 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showUserMenu, showBackendPopover]);
 
-  const iconBtnBase =
-    "h-9 w-9 inline-flex items-center justify-center rounded-lg " +
-    "transition hover:bg-blue-50 dark:hover:bg-gray-800 " +
-    "focus:outline-none focus:ring-2 focus:ring-blue-300";
+  const iconBtn =
+    "h-8 w-8 inline-flex items-center justify-center rounded-xl text-slate-500 dark:text-slate-400 " +
+    "transition hover:bg-slate-100 dark:hover:bg-slate-800 " +
+    "focus:outline-none focus:ring-2 focus:ring-blue-200";
 
   return (
-    <div className="z-20 flex justify-between items-center px-6 py-0.5 bg-gradient-to-r from-blue-50 via-white to-blue-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 shadow-sm border-b border-blue-100 dark:border-gray-800">
-      {/* Left */}
+    <div className="shrink-0 flex justify-between items-center px-5 py-2.5 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md rounded-2xl border border-white/40 dark:border-slate-800 shadow-sm shadow-slate-200/50 dark:shadow-black/20 transition-all duration-300 z-20 relative">
+      {/* ── Left: breadcrumb + title ── */}
       <div className="min-w-0">
         {/* Breadcrumb */}
         {breadcrumbs?.length > 0 && (
-          <div className="flex items-center gap-1 text-[11px] font-medium text-gray-400">
+          <div className="flex items-center gap-1 text-[10px] font-medium text-slate-400 dark:text-slate-500 mb-0.5">
             {breadcrumbs.map((b, i) => (
               <React.Fragment key={`${b.label}-${i}`}>
                 {b.to ? (
-                  <Link to={b.to} className="hover:text-blue-600 transition">
+                  <Link to={b.to} className="hover:text-blue-500 transition">
                     {b.label}
                   </Link>
                 ) : (
-                  <span className="text-gray-700 dark:text-gray-200">{b.label}</span>
+                  <span className="text-slate-600 dark:text-slate-300">{b.label}</span>
                 )}
-                {i < breadcrumbs.length - 1 && <span className="mx-1">›</span>}
+                {i < breadcrumbs.length - 1 && <span className="text-slate-300 dark:text-slate-600">/</span>}
               </React.Fragment>
             ))}
           </div>
         )}
 
         {/* Title */}
-        <div className="mt-0.5 flex items-end gap-3 min-w-0">
-          <h1 className="truncate font-extrabold text-[18px] sm:text-[20px] text-blue-700 dark:text-blue-200 tracking-tight">
-            {title}
-          </h1>
-          <span className="hidden sm:inline-block h-[6px] w-10 rounded-full bg-blue-600/30 dark:bg-blue-400/25" />
-        </div>
+        <h1 className="text-[15px] sm:text-base font-black tracking-tight text-slate-800 dark:text-slate-100 truncate leading-tight mt-0.5">
+          {title}
+        </h1>
       </div>
 
-      {/* Right */}
-      <div className="flex items-center gap-3 relative">
-        <span className="flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-300 tracking-wide">
-          <CalendarDays size={14} className="text-blue-400 dark:text-blue-300" />
-          {new Date().toLocaleDateString("en-GB")}
-        </span>
+      {/* ── Right: actions ── */}
+      <div className="flex items-center gap-1 relative">
+        <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 rounded-xl px-3 py-1 mr-1">
+          <CalendarDays size={12} className="text-slate-400 dark:text-slate-500" />
+          {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+        </div>
 
-        <button title="Notifications" className={`${iconBtnBase} text-blue-700 dark:text-blue-200`} type="button">
-          <Bell size={18} />
+        <button title="Notifications" className={iconBtn} type="button">
+          <Bell size={16} />
         </button>
 
-        <button title="Help" className={`${iconBtnBase} text-blue-700 dark:text-blue-200`} type="button">
-          <HelpCircle size={18} />
+        <button title="Help" className={iconBtn} type="button">
+          <HelpCircle size={16} />
         </button>
 
         {/* Backend icon + popover */}
@@ -292,15 +289,15 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
               if (!canViewBackend) return;
               setShowBackendPopover((v) => !v);
             }}
-            className={`${iconBtnBase} ${backendIconClass} relative`}
+            className={`${iconBtn} relative`}
           >
-            <Server size={18} />
+            <Server size={16} className={backendIconClass} />
 
             {/* DEV/PROD badge */}
             <span
               className={[
-                "absolute -bottom-1 left-1/2 -translate-x-1/2",
-                "px-1.5 py-[1px] rounded-full text-[9px] font-bold",
+                "absolute -bottom-0.5 left-1/2 -translate-x-1/2",
+                "px-1 py-[1px] rounded-full text-[8px] font-extrabold",
                 "border shadow-sm",
                 envBadgeClass,
               ].join(" ")}
@@ -311,7 +308,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
             {/* Status dot */}
             <span
               className={[
-                "absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full border border-white dark:border-gray-900",
+                "absolute top-1.5 right-1.5 w-2 h-2 rounded-full border border-white dark:border-slate-900",
                 backendStatus === "up" && "bg-green-500",
                 backendStatus === "down" && "bg-red-500",
                 backendStatus === "checking" && "bg-yellow-500",
@@ -327,7 +324,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
           {showBackendPopover && (
             <div
               ref={backendPopoverRef}
-              className="absolute right-0 mt-2 w-80 bg-white border shadow-2xl rounded-2xl z-50 p-4 dark:bg-gray-800 dark:border-gray-700"
+              className="absolute right-0 mt-2 w-80 bg-white/90 border border-slate-200/60 shadow-2xl rounded-3xl backdrop-blur-xl z-50 p-4 dark:bg-slate-800/90 dark:border-slate-700/60"
             >
               <div className="w-full flex items-start justify-between">
                 <div className="flex items-center gap-2">
@@ -546,17 +543,19 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
         <div className="relative">
           <button
             title="Account"
-            className={`${iconBtnBase} text-blue-700 hover:text-blue-900 dark:text-blue-200`}
+            className={`${iconBtn} ml-1`}
             onClick={() => setShowUserMenu((prev) => !prev)}
             type="button"
           >
-            <UserCircle size={22} className="text-blue-600 dark:text-blue-200" />
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[11px] font-extrabold shadow-sm">
+              {user?.name ? user.name.charAt(0).toUpperCase() : <UserCircle size={16} />}
+            </div>
           </button>
 
           {showUserMenu && (
             <div
               ref={dropdownRef}
-              className="absolute right-0 mt-2 w-72 bg-white border shadow-2xl rounded-2xl z-50 p-4 min-w-[200px] flex flex-col items-center dark:bg-gray-800 dark:border-gray-700"
+              className="absolute right-0 mt-2 w-72 bg-white/90 border border-slate-200/60 shadow-2xl rounded-3xl backdrop-blur-xl z-50 p-4 min-w-[200px] flex flex-col items-center dark:bg-slate-800/90 dark:border-slate-700/60"
             >
               <div className="w-14 h-14 flex items-center justify-center rounded-full bg-gradient-to-tr from-blue-100 to-blue-200 shadow-inner border-2 border-blue-100 dark:border-gray-600 mb-2">
                 <User size={38} className="text-blue-500 dark:text-blue-200" />
@@ -592,15 +591,13 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                   id="tooltip-toggle"
                   type="button"
                   onClick={() => setShowTooltip((v) => !v)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${
-                    showTooltip ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-700"
-                  } focus:outline-none`}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${showTooltip ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-700"
+                    } focus:outline-none`}
                 >
                   <span className="sr-only">Enable Sidebar Tooltip</span>
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
-                      showTooltip ? "translate-x-4" : "translate-x-1"
-                    }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${showTooltip ? "translate-x-4" : "translate-x-1"
+                      }`}
                   />
                 </button>
               </div>
@@ -612,9 +609,8 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                 </label>
                 <button
                   onClick={toggleTheme}
-                  className={`ml-2 flex items-center px-2 py-1 rounded-lg ${
-                    theme === "dark" ? "bg-blue-700 text-white" : "bg-gray-200 text-gray-700"
-                  } transition`}
+                  className={`ml-2 flex items-center px-2 py-1 rounded-lg ${theme === "dark" ? "bg-blue-700 text-white" : "bg-gray-200 text-gray-700"
+                    } transition`}
                   type="button"
                 >
                   {theme === "dark" ? <Moon size={16} /> : <Sun size={16} />}
@@ -635,7 +631,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                     try {
                       localStorage.removeItem(PERM_STORAGE_KEY);
                       localStorage.removeItem(ROLE_STORAGE_KEY);
-                    } catch {}
+                    } catch { }
                     navigate("/login");
                   }}
                   className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-semibold transition"

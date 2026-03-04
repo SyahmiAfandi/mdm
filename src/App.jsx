@@ -13,6 +13,7 @@ import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardLayout from "./components/DashboardLayout";
 import { PAGE_META } from "./config/pageMeta";
+import ReconsPeriodsPage from "./pages/Tools/Reconciliation/Data/ReconsPeriodsPage.jsx";
 
 // -------------------- Lazy pages --------------------
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -35,6 +36,10 @@ const ReconciliationUploadPage = lazy(() => import("./pages/ReconciliationUpload
 const Recons_ResultPage = lazy(() => import("./pages/Recons_ResultPage.jsx"));
 const Recons_SummaryPage = lazy(() => import("./pages/Recons_SummaryPage.jsx"));
 const ReconsCustom = lazy(() => import("./pages/ReconsCustom.jsx"));
+const ReconsCellsPage = lazy(() => import("./pages/Tools/Reconciliation/Data/reconCellsPage.jsx"));
+const PeriodReconsPage = lazy(() => import("./pages/Tools/Reconciliation/Data/ReconsPeriodsPage.jsx"));
+const ReconsConfigPage = lazy(() => import("./pages/Tools/Reconciliation/Data/reconsConfigPage.jsx"));
+const ReconsBulkImportPage = lazy(() => import("./pages/Tools/Reconciliation/Data/BulkReconCellsImportPage.jsx"));
 
 //Master Data
 const MasterDataPage = lazy(() => import("./pages/MasterData/MasterDataHome.jsx"));
@@ -212,6 +217,11 @@ export default function App() {
           <Route path="/recons/summary" element={<Recons_SummaryPage />} />
           <Route path="/recons/result" element={<Recons_ResultPage />} />
           <Route path="/recons/upload" element={<ReconciliationUploadPage />} />
+
+          <Route path="/recons/period" element={<PeriodReconsPage />} />
+          <Route path="/recons/cells" element={<ReconsCellsPage />} />
+          <Route path="/recons/config" element={<ReconsConfigPage />} />
+          <Route path="/recons/bulk_import" element={<ReconsBulkImportPage />} />
 
           <Route path="/detailed-view" element={<DetailedView />} />
           <Route path="/in-progress" element={<InProgressPage />} />

@@ -99,6 +99,48 @@ export const PAGE_META = [
       { label: "Tools", to: "/tools" }, 
       { label: "Reconciliation" }],
   },
+  {
+    match: /^\/recons\/period/,
+    title: "Recons Period Setup",
+    breadcrumbs: [
+      { label: "Home", to: "/" }, 
+      { label: "Tools", to: "/tools" }, 
+      { label: "Reconciliation", to: "/recons" },
+      { label: "Recons Period Setup" }
+    ],
+  },
+
+  {
+    match: /^\/recons\/cells/,
+    title: "Recons Data Management",
+    breadcrumbs: [
+      { label: "Home", to: "/" }, 
+      { label: "Tools", to: "/tools" }, 
+      { label: "Reconciliation", to: "/recons" },
+      { label: "Recons Data Management" }
+    ],
+  },
+
+  {
+    match: /^\/recons\/config/,
+    title: "Recons Configuration",
+    breadcrumbs: [
+      { label: "Home", to: "/" }, 
+      { label: "Tools", to: "/tools" }, 
+      { label: "Reconciliation", to: "/recons" },
+      { label: "Recons Configuration" }
+    ],
+  },
+  {
+    match: /^\/recons\/bulk/,
+    title: "Bulk Import Recons Data",
+    breadcrumbs: [
+      { label: "Home", to: "/" }, 
+      { label: "Tools", to: "/tools" }, 
+      { label: "Reconciliation", to: "/recons" },
+      { label: "Bulk Import" }
+    ],
+  },
 
   {
     match: /^\/recons\/hpc/,

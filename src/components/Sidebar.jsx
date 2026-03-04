@@ -1,15 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  Home,
-  Sliders,
-  FileText,
-  Settings,
-  Layers,
-  BarChart2,
+  LayoutDashboard, // For Dashboard
+  Wrench,          // For Tools
+  Briefcase,       // For Utilities
+  Database,        // For Master Data
+  LineChart,       // For Reports
+  Settings,        // For Settings
+  MessageSquare,   // For Contact
   LogOut,
   UserCircle,
-  Database, // ✅ added
+  User,
 } from "lucide-react";
 import SidebarLink from "./SidebarLink";
 import { useUser } from "../context/UserContext";
@@ -125,22 +126,22 @@ const Sidebar = ({ isOpen }) => {
     <aside
       className={`
         fixed top-0 left-0 h-full z-20
-        bg-white dark:bg-gray-900 shadow-lg dark:shadow-xl border-r dark:border-gray-800
-        ${isOpen ? "w-64" : "w-16"} flex flex-col
-        transition-[width] duration-300 ease-in-out
+        bg-gradient-to-b from-slate-900 to-slate-950 dark:from-slate-950 dark:to-black shadow-2xl shadow-black/50 border-r border-slate-700/50 backdrop-blur-xl
+        ${isOpen ? "w-56" : "w-[60px]"} flex flex-col
+        transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
         overflow-x-visible
       `}
     >
       {/* Logo */}
-      <div className="flex items-center justify-center h-20 mb-2 px-3">
+      <div className="flex items-center justify-center h-[72px] mb-4 px-3 border-b border-transparent">
         <img
           src={isOpen ? "/ff3.png" : "/ff2.png"}
           alt="Sidebar Logo"
-          className={`${isOpen ? "rounded-lg" : "rounded-full"} transition-[border-color,box-shadow] duration-150 bg-white dark:bg-gray-200 shadow-sm`}
+          className={`${isOpen ? "rounded-xl" : "rounded-xl"} transition-all duration-300 bg-slate-800 shadow-md`}
           style={
             isOpen
-              ? { width: "100%", maxWidth: 210, height: 52, objectFit: "contain", border: "0.5px solid #e5e7eb" }
-              : { width: 38, height: 38, objectFit: "contain", border: "2px solid #e5e7eb" }
+              ? { width: "100%", maxWidth: 190, height: 46, objectFit: "contain", border: "1px solid rgba(255,255,255,0.05)" }
+              : { width: 34, height: 34, objectFit: "contain", border: "1px solid rgba(255,255,255,0.1)" }
           }
         />
       </div>
@@ -185,7 +186,7 @@ const Sidebar = ({ isOpen }) => {
       )}
 
       {/* Nav */}
-      <nav className="relative flex-1 font-medium flex flex-col gap-1 px-1">
+      <nav className={`relative flex-1 font-medium flex flex-col gap-1.5 ${isOpen ? "px-3" : "px-2"} overflow-y-auto overflow-x-hidden no-scrollbar pt-2`}>
         {/* Invisible overlay to block hover while navigating */}
         {navigating && <div className="absolute inset-0 z-50 pointer-events-auto select-none" />}
 
@@ -201,7 +202,7 @@ const Sidebar = ({ isOpen }) => {
               <SidebarLink
                 to="/"
                 label="Dashboard"
-                icon={<Home size={22} />}
+                icon={<LayoutDashboard size={20} />}
                 isOpen={isOpen}
                 showTooltip={showTooltip}
                 onClick={handleLinkClick}
@@ -214,7 +215,7 @@ const Sidebar = ({ isOpen }) => {
               <SidebarLink
                 to="/tools"
                 label="Tools"
-                icon={<Sliders size={22} />}
+                icon={<Wrench size={20} />}
                 isOpen={isOpen}
                 showTooltip={showTooltip}
                 onClick={handleLinkClick}
@@ -228,7 +229,7 @@ const Sidebar = ({ isOpen }) => {
               <SidebarLink
                 to="/utilities"
                 label="Utilities"
-                icon={<Layers size={22} />}
+                icon={<Briefcase size={20} />}
                 isOpen={isOpen}
                 showTooltip={showTooltip}
                 onClick={handleLinkClick}
@@ -243,7 +244,7 @@ const Sidebar = ({ isOpen }) => {
               <SidebarLink
                 to="/master-data"
                 label="Master Data"
-                icon={<Database size={22} />}
+                icon={<Database size={20} />}
                 isOpen={isOpen}
                 showTooltip={showTooltip}
                 onClick={handleLinkClick}
@@ -257,7 +258,7 @@ const Sidebar = ({ isOpen }) => {
               <SidebarLink
                 to="/reports"
                 label="Reports"
-                icon={<BarChart2 size={22} />}
+                icon={<LineChart size={20} />}
                 isOpen={isOpen}
                 showTooltip={showTooltip}
                 onClick={handleLinkClick}
@@ -271,7 +272,7 @@ const Sidebar = ({ isOpen }) => {
               <SidebarLink
                 to="/settings"
                 label="Settings"
-                icon={<Settings size={22} />}
+                icon={<Settings size={20} />}
                 isOpen={isOpen}
                 showTooltip={showTooltip}
                 onClick={handleLinkClick}
@@ -284,7 +285,7 @@ const Sidebar = ({ isOpen }) => {
             <SidebarLink
               to="/contact"
               label="Contact"
-              icon={<FileText size={22} />}
+              icon={<MessageSquare size={20} />}
               isOpen={isOpen}
               showTooltip={showTooltip}
               onClick={handleLinkClick}
@@ -297,45 +298,50 @@ const Sidebar = ({ isOpen }) => {
       </nav>
 
       {/* User Info */}
-      <div className="absolute bottom-16 left-0 w-full px-3">
+      <div className={`relative mt-auto border-t border-slate-700/60 pt-3 pb-16 overflow-hidden ${isOpen ? "px-2" : "px-0 flex justify-center"}`}>
         <div
-          className={`${isOpen ? "gap-3 px-3 py-2 bg-blue-50 dark:bg-gray-800" : "justify-center w-10 h-10"} flex items-center rounded-xl transition-colors duration-150`}
+          className={`${isOpen ? "gap-2.5 px-3 py-2 bg-slate-800/80 rounded-2xl flex-row items-center justify-start w-full" : "justify-center w-[38px] h-[38px] rounded-xl flex-col mx-auto"} flex transition-all duration-200 select-none group border border-transparent ${isOpen ? "hover:border-slate-700 hover:shadow-sm" : ""}`}
         >
-          <UserCircle size={22} className="text-blue-500 dark:text-blue-300" />
+          <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+            <User size={15} className="drop-shadow-sm" />
+          </div>
           {isOpen && (
-            <div className="overflow-hidden">
-              <p className="text-sm font-semibold truncate text-gray-800 dark:text-gray-100">
+            <div className="overflow-hidden min-w-0">
+              <p className="text-[12px] font-bold truncate text-slate-100 mb-0.5 leading-tight">
                 {user?.name || "User Name"}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email || "email@example.com"}</p>
-              <p className="text-[11px] text-gray-400 truncate mt-0.5">Role: {role || "-"}</p>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] px-1.5 py-[1px] rounded bg-slate-900 border border-slate-700 text-slate-400 font-bold uppercase tracking-widest shadow-inner">
+                  {role || "user"}
+                </span>
+              </div>
             </div>
           )}
         </div>
       </div>
 
       {/* Logout */}
-      <div className="absolute bottom-4 left-0 w-full px-3">
+      <div className={`absolute bottom-3 left-0 w-full ${isOpen ? "px-2" : "px-0 flex justify-center"}`}>
         <button
           onClick={() => {
             setRole?.(null);
             try {
               localStorage.removeItem(ROLE_STORAGE_KEY);
-            } catch {}
+            } catch { }
             navigate("/login");
           }}
           className={`
-            flex items-center w-full rounded-lg transition-colors duration-150
-            hover:bg-blue-50 dark:hover:bg-gray-800
-            text-sm text-gray-700 dark:text-gray-200
-            ${isOpen ? "gap-3 px-3 py-2" : "justify-center w-10 h-10"}
-            focus:outline-none
+            flex items-center w-full rounded-xl transition-all duration-200
+            hover:bg-red-500/10 hover:text-red-400
+            text-[12px] font-semibold text-slate-500
+            ${isOpen ? "gap-3 px-3 py-2.5" : "justify-center w-[36px] h-[36px] mx-auto"}
+            focus:outline-none group
           `}
         >
-          <span className="flex justify-center items-center">
-            <LogOut size={22} className="text-red-400" />
+          <span className="flex justify-center items-center shrink-0">
+            <LogOut size={16} className="text-slate-500 group-hover:text-red-500 transition-colors drop-shadow-sm" />
           </span>
-          {isOpen && <span>Logout</span>}
+          {isOpen && <span className="truncate tracking-wide">LOGOUT</span>}
         </button>
       </div>
     </aside>

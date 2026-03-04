@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import DashboardLayout from '../components/DashboardLayout';
 import { APP_FULL_NAME } from '../config';
 
 const stepTitles = [
@@ -142,7 +141,6 @@ function CustomReconcilePage() {
   };
 
   return (
-    <DashboardLayout pageTitle={APP_FULL_NAME} breadcrumbs={["Tools","Reconciliation Tools","Custom Reports"]}>
     <div className="max-w-3xl mx-auto py-10 px-4">
       {/* Stepper */}
       <div className="flex justify-between mb-8">
@@ -169,7 +167,6 @@ function CustomReconcilePage() {
         {renderStepContent()}
       </div>
     </div>
-    </DashboardLayout>
   );
 }
 

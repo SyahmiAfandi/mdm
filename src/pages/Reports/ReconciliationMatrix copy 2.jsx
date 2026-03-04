@@ -243,17 +243,11 @@ export default function ReconciliationMatrix() {
             reportTypeId;
 
           const status = toSheetLikeStatus(x.status);
-          const pic = normalize(x.updatedBy);
+          const pic = normalize(x.pic);
 
           const time =
             x.updatedAt?.toDate?.()
-              ? (() => {
-                  const d = x.updatedAt.toDate();
-                  const mm = String(d.getMonth() + 1).padStart(2, "0");
-                  const dd = String(d.getDate()).padStart(2, "0");
-                  const yyyy = d.getFullYear();
-                  return `${dd}/${mm}/${yyyy}`;
-                })()
+              ? x.updatedAt.toDate().toLocaleString()
               : (x.updatedAt ? String(x.updatedAt) : "");
 
           return {

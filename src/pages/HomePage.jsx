@@ -1,3 +1,4 @@
+// src/pages/HomePage.jsx
 import React, { useMemo, useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -17,7 +18,7 @@ import {
   ArrowRight,
   ArrowLeft,
   Check,
-  Settings
+  Settings,
 } from "lucide-react";
 
 /* Firestore */
@@ -28,20 +29,19 @@ import {
   onSnapshot,
   collection,
   query,
-  where,
   orderBy,
   getDocs,
 } from "firebase/firestore";
 import { db } from "../firebaseClient";
+
 import useReconsProgress from "../hooks/useReconsProgress";
 import useEmailTrackerSummaryCounts from "../hooks/useEmailTrackerSummaryCounts";
 
 /**
- * HomePage — One-screen Dashboard (fits most laptops)
- * Layout:
- *  - Top header (compact)
- *  - Row 1: Email | Recons | System Health
- *  - Row 2: Shortcuts (2 cols wide) | Helpful Links
+ * HomePage — Responsive Dashboard (desktop + mobile)
+ * Fixes:
+ *  - Email tracker "loading/failed loop" caused by re-subscribing onSnapshot due to refresh function identity changes
+ *  - Prevents overlapping health polls + reduces UI flicker
  */
 
 const GAS_HEALTH_URL = import.meta.env.VITE_GAS_HEALTH_URL;
@@ -64,6 +64,10 @@ function HomePage() {
 
   const abortRef = useRef(null);
 
+  // ✅ prevent overlapping health polls + reduce UI flicker
+  const inFlightRef = useRef(false);
+  const lastHealthRef = useRef({ api: null, sheets: null, storage: null });
+
   /* Write to Firestore */
   async function writeHealthDoc(docId, payload, sourceOverride) {
     const ref = doc(db, "health", docId);
@@ -81,21 +85,23 @@ function HomePage() {
       { merge: true }
     );
   }
+
   /*--------------FLIP CARD-------------------- */
   function FlipReconsCard() {
     const now = new Date();
 
-    // calculate previous month properly
+    // ✅ previous month properly
     let defaultYear = now.getFullYear();
-    let defaultMonth = now.getMonth(); // 0-based previous month
-    if (defaultMonth === 0) {
-      defaultMonth = 12;
-      defaultYear = defaultYear - 1;
+    let prevMonthIndex = now.getMonth() - 1;
+    if (prevMonthIndex < 0) {
+      prevMonthIndex = 11;
+      defaultYear -= 1;
     }
+    const defaultMonth = prevMonthIndex + 1; // 1..12
 
     // ✅ master years state
     const [yearsLoading, setYearsLoading] = useState(true);
-    const [masterYears, setMasterYears] = useState([]); // numbers e.g. [2026, 2025, 2024]
+    const [masterYears, setMasterYears] = useState([]);
     const didInitRef = useRef(false);
 
     // ✅ Applied filter (used for fetching)
@@ -115,17 +121,12 @@ function HomePage() {
         try {
           setYearsLoading(true);
 
-          const q = query(
-            collection(db, "master_years"),
-            orderBy("year", "desc") // ✅ single-field orderBy (no composite index)
-          );
-
+          const q = query(collection(db, "master_years"), orderBy("year", "desc"));
           const snap = await getDocs(q);
 
-          // ✅ filter active in code (also supports missing active default true)
           const years = snap.docs
             .map((d) => d.data())
-            .filter((r) => r && (r.active !== false)) // treat missing active as Active
+            .filter((r) => r && r.active !== false)
             .map((r) => Number(r.year))
             .filter((y) => Number.isFinite(y));
 
@@ -133,7 +134,6 @@ function HomePage() {
 
           setMasterYears(years);
 
-          // ✅ init default year from master (once)
           if (!didInitRef.current && years.length) {
             didInitRef.current = true;
             setYear(years[0]);
@@ -141,7 +141,6 @@ function HomePage() {
           }
         } catch (e) {
           console.error("loadYears:", e);
-          // fallback to local defaults (keep whatever state currently is)
         } finally {
           if (alive) setYearsLoading(false);
         }
@@ -158,10 +157,9 @@ function HomePage() {
       month: month === "" ? undefined : Number(month),
     });
 
-    // ✅ Year options now based on master data (fallback if empty)
     const yearOptions = useMemo(() => {
       if (masterYears.length) return masterYears;
-      return Array.from({ length: 5 }, (_, i) => defaultYear - 2 + i); // fallback
+      return Array.from({ length: 5 }, (_, i) => defaultYear - 2 + i);
     }, [masterYears, defaultYear]);
 
     const monthOptions = useMemo(
@@ -196,7 +194,7 @@ function HomePage() {
     }
 
     return (
-      <div className="relative [perspective:1200px] h-full min-h-[240px]">
+      <div className="relative [perspective:1200px] h-full">
         <div
           className={[
             "relative w-full h-full transition-transform duration-500 [transform-style:preserve-3d]",
@@ -212,19 +210,19 @@ function HomePage() {
                 reconsProgress.loading
                   ? "Loading..."
                   : reconsProgress.hasData
-                  ? "Latest run"
-                  : "No data yet"
+                    ? "Latest run"
+                    : "No data yet"
               }
               icon={<FileSpreadsheet size={18} />}
               accent="emerald"
               percent={reconsProgress.percentDone}
               hint={
                 year
-                  ? `Filter: ${year}${
-                      month
-                        ? ` • ${monthOptions.find((m) => m.value === String(month))?.label || ""}`
-                        : ""
+                  ? `Filter: ${year}${month
+                    ? ` • ${monthOptions.find((m) => m.value === String(month))?.label || ""
                     }`
+                    : ""
+                  }`
                   : ""
               }
               footer={
@@ -247,33 +245,33 @@ function HomePage() {
             <button
               type="button"
               onClick={openSettings}
-              className="absolute bottom-3 right-3 inline-flex items-center justify-center w-9 h-9 rounded-xl ring-1 ring-gray-200 dark:ring-gray-700 bg-white/90 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-900 transition"
+              className="absolute bottom-3 right-3 inline-flex items-center justify-center w-8 h-8 rounded-xl ring-1 ring-gray-200 dark:ring-gray-700 bg-white/90 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-900 transition text-gray-500 dark:text-gray-300"
               title="Filter"
             >
-              <Settings size={16} className="text-gray-600 dark:text-gray-300" />
+              <Settings size={14} />
             </button>
           </div>
 
-          {/* BACK */}
+          {/* BACK: Filters */}
           <div className="absolute inset-0 h-full [backface-visibility:hidden] [transform:rotateY(180deg)]">
             <div className="bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 rounded-2xl p-4 h-full">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
-                  Recons Filters
+                <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                  <Settings size={14} className="text-blue-500" /> Recons Filters
                 </div>
 
                 <button
                   type="button"
                   onClick={() => setFlipped(false)}
-                  className="inline-flex items-center gap-1 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:underline"
+                  className="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white transition"
                 >
-                  <ArrowLeft size={16} /> Back
+                  <ArrowLeft size={14} /> Back
                 </button>
               </div>
 
               <div className="grid grid-cols-1 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">
                     Year (from Master Data)
                   </label>
 
@@ -281,47 +279,42 @@ function HomePage() {
                     value={draftYear}
                     onChange={(e) => setDraftYear(e.target.value)}
                     disabled={yearsLoading}
-                    className="w-full rounded-xl px-3 py-2 bg-white dark:bg-gray-900/30 ring-1 ring-gray-200 dark:ring-gray-700 text-sm disabled:opacity-60"
+                    className="w-full rounded-xl px-3 py-2 bg-white dark:bg-gray-900/30 ring-1 ring-gray-200 dark:ring-gray-700 text-sm text-gray-800 dark:text-gray-100 disabled:opacity-60"
                   >
                     {yearsLoading ? (
                       <option value={draftYear}>Loading…</option>
                     ) : (
                       yearOptions.map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
+                        <option key={y} value={y}>{y}</option>
                       ))
                     )}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">
                     Month
                   </label>
                   <select
                     value={draftMonth}
                     onChange={(e) => setDraftMonth(e.target.value)}
-                    className="w-full rounded-xl px-3 py-2 bg-white dark:bg-gray-900/30 ring-1 ring-gray-200 dark:ring-gray-700 text-sm"
+                    className="w-full rounded-xl px-3 py-2 bg-white dark:bg-gray-900/30 ring-1 ring-gray-200 dark:ring-gray-700 text-sm text-gray-800 dark:text-gray-100"
                   >
                     {monthOptions.map((m) => (
-                      <option key={m.value || "all"} value={m.value}>
-                        {m.label}
-                      </option>
+                      <option key={m.value || "all"} value={m.value}>{m.label}</option>
                     ))}
                   </select>
-
-                  <div className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-                    Tip: leave “All months” to view the full year summary.
+                  <div className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
+                    Tip: leave "All months" to view the full year summary.
                   </div>
                 </div>
 
                 <button
                   type="button"
                   onClick={applyFilter}
-                  className="-mt-1 inline-flex items-center justify-center gap-1 rounded-xl px-3 py-2 bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition"
+                  className="inline-flex items-center justify-center gap-1 rounded-xl px-3 py-2 bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition active:scale-[0.98]"
                 >
-                  <Check size={16} /> Apply
+                  <Check size={15} /> Apply
                 </button>
               </div>
             </div>
@@ -329,7 +322,7 @@ function HomePage() {
         </div>
 
         {/* keeps height stable during flip */}
-        <div className="invisible h-[240px] sm:h-[252px]">
+        <div className="invisible h-[260px] sm:h-[252px] lg:h-[240px]">
           <SummaryCardCompact
             title="Recons Progress"
             subtitle="Latest run"
@@ -343,7 +336,6 @@ function HomePage() {
       </div>
     );
   }
-
 
   /* ---- Fetchers ---- */
   async function fetchApiHealth(signal) {
@@ -375,212 +367,224 @@ function HomePage() {
     return norm;
   }
 
+  // ✅ Health poll with guard (no overlapping) + no flicker
   useEffect(() => {
     const controller = new AbortController();
     abortRef.current = controller;
 
     const hydrate = async () => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+
       try {
+        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+          setApiStatus("OFFLINE");
+          setSheetStatus("OFFLINE");
+          setStorageStatus("OFFLINE");
+          setApiHint("No internet connection");
+          setSheetHint("No internet connection");
+          setStorageHint("No internet connection");
+          setApiLatency(null);
+          setSheetLatency(null);
+          setStorageLatency(null);
+          return;
+        }
+
         const [api, sheets, storage] = await Promise.allSettled([
           fetchApiHealth(controller.signal),
           fetchSheetsHealth(controller.signal),
           fetchStorageHealth(controller.signal),
         ]);
 
-        if (api.status === "fulfilled") {
-          setApiStatus(api.value.status);
-          setApiHint(api.value.hint || "");
-          setApiLatency(api.value.latencyMs ?? null);
-          await writeHealthDoc("apiService", api.value, "Flask");
-        } else {
-          setApiStatus("DOWN");
-          setApiLatency(null);
-          setApiHint("");
-          await writeHealthDoc("apiService", { status: "DOWN", hint: String(api.reason), url: FLASK_HEALTH_URL }, "Flask");
-        }
+        const apply = async (key, result, setStatus, setHint, setLatency, docId, fallbackUrl, source) => {
+          let next =
+            result.status === "fulfilled"
+              ? result.value
+              : { status: "DOWN", hint: String(result.reason || ""), latencyMs: null, url: fallbackUrl, source };
 
-        if (sheets.status === "fulfilled") {
-          setSheetStatus(sheets.value.status);
-          setSheetHint(sheets.value.hint || "");
-          setSheetLatency(sheets.value.latencyMs ?? null);
-          await writeHealthDoc("googleSheets", sheets.value, "GAS");
-        } else {
-          setSheetStatus("DOWN");
-          setSheetHint("");
-          setSheetLatency(null);
-          await writeHealthDoc("googleSheets", { status: "DOWN", hint: String(sheets.reason), url: GAS_HEALTH_URL }, "GAS");
-        }
+          const prev = lastHealthRef.current[key];
+          const changed =
+            !prev ||
+            prev.status !== next.status ||
+            (prev.hint || "") !== (next.hint || "") ||
+            (prev.latencyMs ?? null) !== (next.latencyMs ?? null);
 
-        if (storage.status === "fulfilled") {
-          setStorageStatus(storage.value.status);
-          setStorageHint(storage.value.hint || "");
-          setStorageLatency(storage.value.latencyMs ?? null);
-          await writeHealthDoc("storage", storage.value, storage.value.source || "GAS");
-        } else {
-          setStorageStatus("DOWN");
-          setStorageHint("");
-          setStorageLatency(null);
-          await writeHealthDoc("storage", { status: "DOWN", hint: String(storage.reason), url: GAS_HEALTH_URL }, "GAS");
-        }
+          if (changed) {
+            setStatus(next.status);
+            setHint(next.hint || "");
+            setLatency(next.latencyMs ?? null);
+            await writeHealthDoc(docId, next, source);
+
+            lastHealthRef.current[key] = {
+              status: next.status,
+              hint: next.hint || "",
+              latencyMs: next.latencyMs ?? null,
+            };
+          }
+        };
+
+        await apply("api", api, setApiStatus, setApiHint, setApiLatency, "apiService", FLASK_HEALTH_URL, "Flask");
+        await apply("sheets", sheets, setSheetStatus, setSheetHint, setSheetLatency, "googleSheets", GAS_HEALTH_URL, "GAS");
+        await apply("storage", storage, setStorageStatus, setStorageHint, setStorageLatency, "storage", GAS_HEALTH_URL, "GAS");
       } catch (err) {
-        await Promise.allSettled([
-          writeHealthDoc("apiService", { status: "DOWN", hint: String(err), url: FLASK_HEALTH_URL }, "Flask"),
-          writeHealthDoc("googleSheets", { status: "DOWN", hint: String(err), url: GAS_HEALTH_URL }, "GAS"),
-          writeHealthDoc("storage", { status: "DOWN", hint: String(err), url: GAS_HEALTH_URL }, "GAS"),
-        ]);
         setApiStatus("DOWN");
         setSheetStatus("DOWN");
         setStorageStatus("DOWN");
+        setApiHint(String(err));
+        setSheetHint(String(err));
+        setStorageHint(String(err));
         setApiLatency(null);
         setSheetLatency(null);
         setStorageLatency(null);
+      } finally {
+        inFlightRef.current = false;
       }
     };
 
     hydrate();
     const t = setInterval(hydrate, HEALTH_POLL_MS);
+
     return () => {
       clearInterval(t);
       controller.abort();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // keep []
 
-  // ✅ Homepage widgets data
+  // ✅ Email Tracker Summary
   const emailSummary = useEmailTrackerSummaryCounts();
+
+  // ✅ Fix: subscribe once, avoid infinite resubscribe loop
+  const refreshRef = useRef(() => { });
+  useEffect(() => {
+    refreshRef.current = emailSummary.refresh;
+  }, [emailSummary]);
 
   useEffect(() => {
     const ref = doc(db, "stats_ping", "email_tasks");
     const unsub = onSnapshot(
       ref,
-      () => emailSummary.refresh(),
+      () => refreshRef.current?.(),
       (err) => console.error("stats_ping listener error:", err)
     );
     return () => unsub();
-  }, [emailSummary.refresh]);
+  }, []);
+
+  const emailHint = useMemo(() => {
+    if (!emailSummary.error) return "";
+    return String(emailSummary.error).slice(0, 160);
+  }, [emailSummary.error]);
 
   return (
-    <div className="w-full min-w-0">
-      {/* ✅ Header (more compact to fit one screen) */}
-      <section className="relative overflow-hidden rounded-2xl bg-white dark:bg-gray-800 border border-gray-200/70 dark:border-gray-700 ring-1 ring-black/5 dark:ring-white/10 shadow-md p-4 mb-3">
-        {/* Hero strip (quiet but premium) */}
-        <div className="absolute top-0 left-0 right-0 h-[3px] sm:h-[4px] bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600" />
+    <div className="w-full min-w-0 px-3 sm:px-5 pb-3">
 
-        <div className="relative flex items-start md:items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black tracking-tight text-gray-900 dark:text-gray-100">
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
-                  MDM Operations Dashboard
-                </span>
+      {/* ── Header Banner ── */}
+      <div className="relative overflow-hidden rounded-xl mb-3 bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-200 dark:shadow-blue-950/40 px-4 py-3 sm:py-4">
+        {/* decorative circles */}
+        <div className="pointer-events-none absolute -top-8 -right-8 w-36 h-36 rounded-full bg-white/10" />
+        <div className="pointer-events-none absolute -bottom-10 right-20 w-24 h-24 rounded-full bg-white/10" />
+
+        <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
+                MDM Operations Dashboard
               </h1>
-              <VersionPill version="v3.0" />
+              <span className="inline-flex items-center rounded-full bg-white/20 text-white px-2 py-0.5 text-[10px] font-bold tracking-wide border border-white/30">
+                v3.0
+              </span>
             </div>
-
-            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1">
-              Real-time visibility into email assignments, reconciliation progress, and system health — all in one place.
-            </p>
-
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-              Last sync: {lastSync}
+            <p className="text-blue-100 text-xs sm:text-sm">
+              Real-time visibility into email, reconciliation &amp; system health.
             </p>
           </div>
+          <div className="flex items-center gap-1.5 self-start sm:self-center bg-white/15 rounded-full px-3 py-1.5 border border-white/20 shrink-0">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+            </span>
+            <span className="text-[11px] font-semibold text-white/90">Live · {lastSync}</span>
+          </div>
         </div>
-      </section>
+      </div>
 
+      {/* ── Row 1: 3 summary cards ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 mb-2.5">
 
-      {/* ✅ ROW 1: Email | Recons | Health (fits one row on lg) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-stretch">
+        {/* Email Tracker */}
         <SummaryCardCompact
-          className="h-full"
           title="Email Tracker"
-          subtitle={
-            emailSummary.loading
-              ? "Loading..."
-              : emailSummary.error
-              ? "Failed"
-              : "Live overview"
-          }
-          icon={<Mail size={18} />}
+          subtitle={emailSummary.loading ? "Loading..." : emailSummary.error ? "Failed" : "Live overview"}
+          icon={<Mail size={16} />}
           accent="blue"
           percent={emailSummary.percentComplete}
-          hint={emailSummary.error ? emailSummary.error : ""}
+          hint={emailHint}
           footer={
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 mt-0.5">
               <TinyPill icon={AlertTriangle} label="New" value={emailSummary.counts.new} tone="red" />
               <TinyPill icon={Clock3} label="In Progress" value={emailSummary.counts.inProgress} tone="amber" />
               <TinyPill icon={CheckCircle2} label="Done" value={emailSummary.counts.complete} tone="green" />
               <TinyPill icon={Mail} label="Total" value={emailSummary.counts.total} tone="gray" />
             </div>
           }
-          cta={{ href: "/utilities/emailtracker", label: "Open" }}
+          cta={{ href: "/utilities/emailtracker", label: "Open Tracker" }}
         />
 
+        {/* Recons Progress (flip card) */}
         <FlipReconsCard />
 
-        <Card className="h-full">
-          <div className="flex items-center justify-between mb-2">
-            <SectionTitleCompact icon={<ShieldCheck size={16} />} title="System Health" />
-          </div>
-
-          <div className="space-y-2">
+        {/* System Health */}
+        <DashCard
+          title="System Health"
+          icon={<ShieldCheck size={15} />}
+          iconColor="text-emerald-600 dark:text-emerald-400"
+          iconBg="bg-emerald-50 dark:bg-emerald-900/30"
+          footer={
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 inline-flex items-center gap-1 mt-1">
+              <Info size={10} /> Auto-refresh every {Math.round(HEALTH_POLL_MS / 1000)}s
+            </p>
+          }
+        >
+          <div className="space-y-2.5 mt-3">
             <HealthRowCompact label="API" status={apiStatus} hint={apiHint} latency={apiLatency} />
             <HealthRowCompact label="Sheets" status={sheetStatus} hint={sheetHint} latency={sheetLatency} />
             <HealthRowCompact label="Storage" status={storageStatus} hint={storageHint} latency={storageLatency} />
           </div>
-
-          <div className="mt-3 text-[11px] text-gray-500 dark:text-gray-400 inline-flex items-center gap-1">
-            <Info size={13} /> Auto refresh {Math.round(HEALTH_POLL_MS / 1000)}s
-          </div>
-        </Card>
+        </DashCard>
       </div>
 
-      {/* ✅ ROW 2: Shortcuts (wide) | Helpful Links (narrow) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
-        <Card className="lg:col-span-2 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <SectionTitleCompact icon={<ExternalLink size={16} />} title="Shortcuts" />
-          </div>
+      {/* ── Row 2: Quick Actions + Helpful Links ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
 
-          {/* 2x2 grid to keep height small */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <ShortcutTile
-              href="/upload"
-              title="Upload OSDP & PBI"
-              desc="Drag & drop reconciliation"
-              icon={<UploadCloud size={18} />}
-            />
-            <ShortcutTile
-              href="/result_summary"
-              title="Summary Reports"
-              desc="Matched vs mismatch"
-              icon={<BarChart2 size={18} />}
-            />
-            <ShortcutTile
-              href="/reports/matrix_recons"
-              title="Recons Matrix"
-              desc="Track by period"
-              icon={<RefreshCw size={18} />}
-            />
-            <ShortcutTile
-              href="/about"
-              title="Documentation"
-              desc="Formats & FAQs"
-              icon={<FileText size={18} />}
-            />
+        {/* Quick Actions – spans 2/3 width */}
+        <DashCard
+          className="md:col-span-2"
+          title="Quick Actions"
+          icon={<ExternalLink size={15} />}
+          iconColor="text-indigo-600 dark:text-indigo-400"
+          iconBg="bg-indigo-50 dark:bg-indigo-900/30"
+        >
+          <div className="grid grid-cols-2 gap-2.5 mt-3">
+            <ShortcutTile href="/upload" title="Upload OSDP & PBI" desc="Drag & drop reconciliation" icon={<UploadCloud size={18} />} color="blue" />
+            <ShortcutTile href="/result_summary" title="Summary Reports" desc="Matched vs mismatch" icon={<BarChart2 size={18} />} color="violet" />
+            <ShortcutTile href="/reports/matrix_recons" title="Recons Matrix" desc="Track by period" icon={<RefreshCw size={18} />} color="emerald" />
+            <ShortcutTile href="/about" title="Documentation" desc="Formats & FAQs" icon={<FileText size={18} />} color="amber" />
           </div>
-        </Card>
+        </DashCard>
 
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <SectionTitleCompact icon={<LinkIcon size={16} />} title="Helpful Links" />
-          </div>
-
-          <div className="space-y-2">
-            <HelpLinkCompact href="/about#file-templates" title="File Templates" desc="Headers & examples" />
+        {/* Helpful Links */}
+        <DashCard
+          title="Resources"
+          icon={<LinkIcon size={15} />}
+          iconColor="text-rose-500 dark:text-rose-400"
+          iconBg="bg-rose-50 dark:bg-rose-900/30"
+        >
+          <div className="space-y-2 mt-3">
+            <HelpLinkCompact href="/about#file-templates" title="File Templates" desc="Headers & valid examples" />
             <HelpLinkCompact href="/about#common-errors" title="Common Errors" desc="Validation fixes" />
             <HelpLinkCompact href="/about#best-practices" title="Best Practices" desc="Clean workflow" />
           </div>
-        </Card>
+        </DashCard>
+
       </div>
     </div>
   );
@@ -604,283 +608,153 @@ function normalizeHealthPayload(data, url) {
   return { status: String(status), hint: String(hint), latencyMs, updatedAt, url };
 }
 
-/* ------------------------- Compact Summary Card ------------------------- */
+/* ─── SummaryCardCompact ─── */
 
-function SummaryCardCompact({
-  title,
-  subtitle,
-  icon,
-  accent = "blue",
-  percent = 0,
-  footer,
-  hint,
-  cta,
-  className = "",
-}) {
+function SummaryCardCompact({ title, subtitle, icon, accent = "blue", percent = 0, footer, hint, cta, className = "" }) {
   const accentMap = {
-    blue: {
-      badge:
-        "bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/40",
-      bar: "bg-blue-600",
-      link: "text-blue-600 dark:text-blue-400",
-    },
-    emerald: {
-      badge:
-        "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/40",
-      bar: "bg-emerald-600",
-      link: "text-emerald-600 dark:text-emerald-400",
-    },
+    blue: { iconBg: "bg-blue-100 dark:bg-blue-900/40", iconText: "text-blue-600 dark:text-blue-300", bar: "bg-blue-500", barBg: "bg-blue-100 dark:bg-blue-900/30", pct: "text-blue-600 dark:text-blue-400", link: "text-blue-600 dark:text-blue-400 hover:text-blue-800" },
+    emerald: { iconBg: "bg-emerald-100 dark:bg-emerald-900/40", iconText: "text-emerald-600 dark:text-emerald-300", bar: "bg-emerald-500", barBg: "bg-emerald-100 dark:bg-emerald-900/30", pct: "text-emerald-600 dark:text-emerald-400", link: "text-emerald-600 dark:text-emerald-400 hover:text-emerald-800" },
   };
-
   const a = accentMap[accent] || accentMap.blue;
-
   return (
-    <div className={`bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 rounded-2xl p-4 h-full ${className}`}>
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
+    <div className={["bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 shadow-sm hover:shadow-md transition-shadow duration-200 p-3.5 sm:p-4 flex flex-col", className].join(" ")}>
+      <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div
-            className={`w-9 h-9 rounded-xl border flex items-center justify-center ${a.badge}`}
-          >
-            {icon}
-          </div>
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${a.iconBg} ${a.iconText}`}>{icon}</div>
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-              {title}
-            </div>
-            <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
-              {subtitle}
-            </div>
+            <div className="text-sm font-bold text-gray-800 dark:text-gray-100 truncate">{title}</div>
+            <div className="text-[11px] text-gray-400 dark:text-gray-500 truncate">{subtitle}</div>
           </div>
         </div>
-
         <div className="text-right shrink-0">
-          <div className="text-[10px] text-gray-500 dark:text-gray-400">
-            Done
-          </div>
-          <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
-            {Math.round(percent)}%
-          </div>
+          <div className={`text-xl font-black ${a.pct}`}>{Math.round(percent)}%</div>
+          <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide">done</div>
         </div>
       </div>
-
-      {/* Progress bar */}
-      <div className="mt-2">
-        <div className="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-          <div
-            className={`h-full ${a.bar}`}
-            style={{ width: `${Math.max(0, Math.min(100, percent))}%` }}
-          />
-        </div>
+      <div className={`w-full h-2 rounded-full ${a.barBg} overflow-hidden mb-3`}>
+        <div className={`h-full rounded-full ${a.bar} transition-all duration-700`} style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} />
       </div>
-
-      {/* Footer (pills) */}
-      {footer ? <div className="mt-2">{footer}</div> : null}
-
-      {/* Hint */}
-      {hint ? (
-        <div className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">
-          {hint}
-        </div>
-      ) : null}
-
-      {/* CTA (React Router Link) */}
-      {cta?.href ? (
-        <div className="mt-2">
-          <Link
-            to={cta.href}
-            className={`inline-flex items-center gap-1 text-sm font-semibold hover:underline ${a.link}`}
-          >
-            {cta.label} <ArrowRight size={16} />
+      {footer && <div className="flex-1 mb-2">{footer}</div>}
+      {hint && <p className="text-[11px] text-amber-600 dark:text-amber-400 mb-1">{hint}</p>}
+      {cta?.href && (
+        <div className="mt-auto pt-2.5 border-t border-gray-100 dark:border-gray-700/60">
+          <Link to={cta.href} className={`inline-flex items-center gap-1 text-xs font-semibold transition-colors ${a.link}`}>
+            {cta.label} <ArrowRight size={12} />
           </Link>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
 
-
-function TinyPill({ icon: Icon, label, value, sub, tone = "blue" }) {
-  const toneMap = {
-    blue: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/40",
-    green: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/40",
-    amber: "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/40",
-    red: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900/40",
-    gray: "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800/60 dark:text-gray-200 dark:border-gray-700",
+function TinyPill({ icon: Icon, label, value, sub, tone = "gray" }) {
+  const t = {
+    blue: "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-100 dark:border-blue-900/50",
+    green: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-100 dark:border-emerald-900/50",
+    amber: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-100 dark:border-amber-900/50",
+    red: "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-100 dark:border-rose-900/50",
+    gray: "bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-100 dark:border-gray-700",
   };
-
   return (
-    <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border ${toneMap[tone]}`}>
-      <Icon size={14} />
+    <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl border ${t[tone] || t.gray}`}>
+      <Icon size={12} className="shrink-0" />
       <div className="leading-tight">
-        <div className="text-[10px] font-medium">{label}</div>
-        <div className="text-xs font-semibold">
-          {value}
-          {sub ? <span className="ml-1 text-[10px] font-medium opacity-80">{sub}</span> : null}
-        </div>
+        <div className="text-[8px] font-semibold uppercase tracking-wide opacity-70">{label}</div>
+        <div className="text-[11px] font-bold">{value}{sub && <span className="ml-0.5 text-[9px] opacity-60">{sub}</span>}</div>
       </div>
     </div>
   );
 }
 
-
-function useEmailTrackerSummary({ sheetId, sheetName = "" } = {}) {
-  const [loading, setLoading] = useState(Boolean(sheetId));
-  const [error, setError] = useState("");
-  const [counts, setCounts] = useState({ new: 0, inProgress: 0, complete: 0, total: 0 });
-
-  useEffect(() => {
-    let alive = true;
-
-    async function run() {
-      if (!sheetId) {
-        setLoading(false);
-        setError("Missing sheet ID.");
-        return;
-      }
-
-      setLoading(true);
-      setError("");
-
-      try {
-        const url = toGvizUrl(sheetId, sheetName);
-        const res = await fetch(url, { cache: "no-store" });
-        const text = await res.text();
-
-        const { headers, data } = parseGviz(text);
-        const lower = headers.map((h) => h.toLowerCase());
-
-        let statusIdx = lower.findIndex((h) => h === "status");
-        if (statusIdx === -1) statusIdx = lower.findIndex((h) => h.includes("status"));
-        if (statusIdx === -1) throw new Error("No 'Status' column found in Email Tracker sheet.");
-
-        let n = 0, p = 0, c = 0;
-        for (const row of data) {
-          const st = normalizeStatus(row[statusIdx]);
-          if (st === "new") n++;
-          else if (st === "inProgress") p++;
-          else if (st === "complete") c++;
-        }
-
-        const total = n + p + c;
-        if (!alive) return;
-        setCounts({ new: n, inProgress: p, complete: c, total });
-      } catch (e) {
-        if (!alive) return;
-        setError(e?.message || "Failed to load Email Tracker summary.");
-      } finally {
-        if (!alive) return;
-        setLoading(false);
-      }
-    }
-
-    run();
-    return () => {
-      alive = false;
-    };
-  }, [sheetId, sheetName]);
-
-  const percentComplete = useMemo(() => {
-    if (!counts.total) return 0;
-    return Math.round((counts.complete / counts.total) * 100);
-  }, [counts]);
-
-  return { loading, error, counts, percentComplete };
-}
-
-
-/* ------------------------- UI Components ------------------------- */
-
-function VersionPill({ version }) {
+/* ─── DashCard ─── */
+function DashCard({ title, icon, iconColor = "text-gray-500 dark:text-gray-400", iconBg = "bg-gray-100 dark:bg-gray-700", children, footer, className = "" }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 px-2.5 py-1 text-xs font-semibold ring-1 ring-blue-200/70 dark:ring-blue-800">
-      {version}
-    </span>
+    <div className={["bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 shadow-sm hover:shadow-md transition-shadow duration-200 p-3.5 sm:p-4 flex flex-col", className].join(" ")}>
+      <div className="flex items-center gap-2.5">
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${iconBg} ${iconColor}`}>{icon}</div>
+        <h2 className="text-sm font-bold text-gray-800 dark:text-gray-100">{title}</h2>
+      </div>
+      <div className="flex-1">{children}</div>
+      {footer && <div className="mt-auto">{footer}</div>}
+    </div>
   );
 }
 
+/* ─── VersionPill (used in header banner) ─── */
+function VersionPill({ version }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-white/20 border border-white/30 text-white px-2 py-0.5 text-[10px] font-bold tracking-wide">{version}</span>
+  );
+}
+
+/* ─── Card & SectionTitleCompact kept for FlipReconsCard ─── */
 function Card({ children, className = "" }) {
   return (
-    <div
-      className={`bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 rounded-2xl p-4 h-full ${className}`}
-    >
+    <div className={["bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 shadow-sm p-4 sm:p-5", className].join(" ")}>
       {children}
     </div>
   );
 }
-
 function SectionTitleCompact({ icon, title }) {
   return (
-    <h2 className="text-sm font-extrabold text-gray-900 dark:text-gray-100 inline-flex items-center gap-2">
-      <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gray-50 dark:bg-gray-700/60">
-        {icon}
-      </span>
+    <h2 className="text-sm font-bold text-gray-800 dark:text-gray-100 inline-flex items-center gap-2">
+      <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300">{icon}</span>
       {title}
     </h2>
   );
 }
 
-function ShortcutTile({ href, title, desc, icon }) {
+/* ─── ShortcutTile ─── */
+function ShortcutTile({ href, title, desc, icon, color = "blue" }) {
+  const colorMap = {
+    blue: "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300",
+    violet: "bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300",
+    emerald: "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-300",
+    amber: "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-300",
+  };
+  const ic = colorMap[color] || colorMap.blue;
   return (
-    <a
-      href={href}
-      className="group rounded-xl px-3 py-3 ring-1 ring-gray-100 dark:ring-gray-700 bg-gray-50/60 dark:bg-gray-800/60 hover:bg-white dark:hover:bg-gray-800 transition block"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="rounded-lg bg-white dark:bg-gray-800 p-2 ring-1 ring-gray-100 dark:ring-gray-700 shrink-0">
-            {icon}
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{title}</div>
-            <div className="text-xs text-gray-600 dark:text-gray-300 truncate">{desc}</div>
-          </div>
-        </div>
-        <ArrowRight className="opacity-0 group-hover:opacity-100 transition text-gray-400 shrink-0" size={18} />
+    <a href={href} className="group flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/40 border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-700/60 hover:bg-white dark:hover:bg-gray-700/70 transition-all duration-150 active:scale-[0.98]">
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${ic}`}>{icon}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate leading-tight">{title}</div>
+        <div className="text-xs text-gray-400 dark:text-gray-500 truncate">{desc}</div>
       </div>
+      <ArrowRight size={14} className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
     </a>
   );
 }
 
+/* ─── HelpLinkCompact ─── */
 function HelpLinkCompact({ href, title, desc }) {
   return (
-    <a
-      href={href}
-      className="rounded-xl px-3 py-3 ring-1 ring-gray-100 dark:ring-gray-700 bg-gray-50/60 dark:bg-gray-800/60 hover:bg-white dark:hover:bg-gray-800 transition block"
-    >
-      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</div>
-      <div className="text-xs text-gray-600 dark:text-gray-300">{desc}</div>
+    <a href={href} className="group flex items-center justify-between gap-2 p-2.5 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+      <div>
+        <div className="text-sm font-semibold text-gray-700 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{title}</div>
+        <div className="text-xs text-gray-400 dark:text-gray-500">{desc}</div>
+      </div>
+      <ArrowRight size={13} className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
     </a>
   );
 }
 
+/* ─── HealthRowCompact ─── */
 function HealthRowCompact({ label, status, hint, latency }) {
   const s = String(status || "");
   const ok = s.toLowerCase() === "up" || s.toLowerCase().includes("operational");
-
   return (
-    <div className="flex items-center gap-2 py-1">
-      <div className="text-xs font-semibold text-gray-800 dark:text-gray-100 w-16">{label}</div>
-
-      <div className="flex items-center gap-2 text-[11px] flex-wrap">
-        {ok ? (
-          <CheckCircle2 className="text-emerald-600 dark:text-emerald-400" size={14} />
-        ) : (
-          <AlertTriangle className="text-amber-600 dark:text-amber-400" size={14} />
-        )}
-
-        <span
-          className={`font-semibold px-2 py-1 rounded-full ${
-            ok
-              ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"
-              : "bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900"
-          }`}
-        >
+    <div className="flex items-center gap-3">
+      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-14 shrink-0">{label}</span>
+      <div className="flex items-center gap-2 flex-1 flex-wrap">
+        <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${ok
+          ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/50"
+          : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900/50"
+          }`}>
+          {ok ? <CheckCircle2 size={10} strokeWidth={3} /> : <AlertTriangle size={10} strokeWidth={2.5} />}
           {s}
         </span>
-
-        {latency != null && <span className="text-gray-500 dark:text-gray-400">{latency} ms</span>}
-        {hint && <span className="text-gray-500 dark:text-gray-400">{hint}</span>}
+        {latency != null && <span className="text-[11px] text-gray-400 dark:text-gray-500 font-mono">{latency}ms</span>}
+        {hint && <span className="text-[11px] text-gray-400 dark:text-gray-500 truncate max-w-[20ch]">{hint}</span>}
       </div>
     </div>
   );

@@ -12,6 +12,11 @@ const monthNames = [
   'July','August','September','October','November','December'
 ];
 
+const monthNameToNumber = (m) => {
+  const idx = monthNames.indexOf(m);
+  return idx >= 0 ? idx + 1 : null; // January => 1
+};
+
 // Get last month (if Jan, should go to Dec last year)
 function getDefaultMonthYear() {
   const now = new Date();
@@ -44,6 +49,8 @@ function ReconciliationSummary() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const fromButton = location.state?.fromButton || sessionStorage.getItem('fromButton') || 'N/A';
   const businessType = location.state?.businessType || sessionStorage.getItem('businessType') || 'N/A';
+  const reportTypeId =location.state?.reportTypeId || sessionStorage.getItem("reportTypeId") || "";
+  const reportTypeName =location.state?.reportTypeName || sessionStorage.getItem("reportTypeName") || fromButton;
   const [exporting, setExporting] = useState(false);
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -69,6 +76,12 @@ function ReconciliationSummary() {
       navigate('/recons/hpc_fcs');
     }
   }, [resultId, navigate]);
+
+  // optional: persist if coming from state
+  useEffect(() => {
+    if (location.state?.reportTypeId) sessionStorage.setItem("reportTypeId", location.state.reportTypeId);
+    if (location.state?.reportTypeName) sessionStorage.setItem("reportTypeName", location.state.reportTypeName);
+  }, [location.state?.reportTypeId, location.state?.reportTypeName]);
 
   // --- Data fetching effect ---
   useEffect(() => {
@@ -132,8 +145,10 @@ function ReconciliationSummary() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           year: exportYear,
-          month: exportMonth,
+          month: monthNameToNumber(exportMonth),
           businessType,
+          reportTypeId,       // ✅ master id
+          reportTypeName,     // ✅ display name
           reportType: fromButton,
           records: dataToExport,
           source,

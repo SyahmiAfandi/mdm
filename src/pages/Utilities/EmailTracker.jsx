@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import PostalMime from "postal-mime";
+import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "../../context/UserContext";
 import { usePermissions } from "../../hooks/usePermissions";
 import { useNavigate } from "react-router-dom";
@@ -21,6 +22,15 @@ import {
   UploadCloud,
   Loader2,
   Database,
+  Layers,
+  Clock,
+  ShieldCheck,
+  Search,
+  Filter,
+  ArrowUpRight,
+  PlusCircle,
+  Activity,
+  History,
 } from "lucide-react";
 
 /* Firestore */
@@ -65,7 +75,7 @@ import {
  */
 
 // ====== CONFIG ======
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 4;
 
 // Toggle showing Firestore doc id (debug)
 const SHOW_DOC_ID = false;
@@ -307,13 +317,13 @@ export default function EmailTracker() {
 
   //--------------ping stats
   async function pingEmailStats() {
-  // one tiny doc to signal HomePage to refresh counts
-  await setDoc(
-    doc(db, "stats_ping", "email_tasks"),
-    { updatedAt: serverTimestamp() },
-    { merge: true }
-  );
-}
+    // one tiny doc to signal HomePage to refresh counts
+    await setDoc(
+      doc(db, "stats_ping", "email_tasks"),
+      { updatedAt: serverTimestamp() },
+      { merge: true }
+    );
+  }
 
   // ===== Actions: Assign / Done / Remark =====
   async function assignToMe(row) {
@@ -646,7 +656,7 @@ export default function EmailTracker() {
 
       return hay.includes(queryText);
     });
-  }, [mergedRows, q, statusFilters, picFilter,newOnly]);
+  }, [mergedRows, q, statusFilters, picFilter, newOnly]);
 
   const sortedRows = useMemo(() => {
     const copy = [...filteredRows];
@@ -711,89 +721,122 @@ export default function EmailTracker() {
   const totalCount = emlItems.length;
 
   return (
-    <div className="p-6 space-y-5">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-            MDM Email Tracker
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Firestore-powered email task tracker. Upload .eml to create tasks, assign PIC, update
-            status, and manage remarks.
-          </p>
+    <div className="px-4 pb-4 pt-2 md:pt-4 space-y-3 max-w-[1600px] mx-auto min-h-screen bg-slate-50 dark:bg-slate-950/20">
+
+      {/* Header Section */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 p-4"
+      >
+        <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+          <Database size={160} />
         </div>
 
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={openEmailModal}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-            title="Add new email tasks by uploading .eml files"
-          >
-            <Plus className="h-4 w-4" />
-            Email Task
-          </button>
-          {canBulkImport && (  
-            <button
-              onClick={() => navigate("/utilities/emailtracker/bulk-import")}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-              title="Bulk import email tasks (CSV)"
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between relative z-10">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-2 bg-indigo-500/10 text-indigo-500 rounded-xl">
+                <Layers size={20} />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500/80">Utility Console</span>
+            </div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              Email <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-500">Tracker</span>
+            </h1>
+            <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5 max-w-xl">
+              Smart email automation that manages your tasks and keeps your team in sync.
+            </p>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={openEmailModal}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-700 transition-all"
             >
-              <Database className="h-4 w-4" />
-              Bulk Import
-            </button>
-          )}
+              <Plus className="h-4 w-4" />
+              New Task
+            </motion.button>
 
-          <button
-            onClick={fetchTasks}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-          >
-            <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
+            {canBulkImport && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => navigate("/utilities/emailtracker/bulk-import")}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 shadow-sm transition-all"
+              >
+                <Database className="h-4 w-4" />
+                Bulk Import
+              </motion.button>
+            )}
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={fetchTasks}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 shadow-sm transition-all"
+            >
+              <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Sync
+            </motion.button>
+          </div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-        <SummaryCard label="Total" value={summary.total} />
-        <SummaryCard label="NEW" value={summary.NEW} />
-        <SummaryCard label="IN PROGRESS" value={summary.IN_PROGRESS} />
-        <SummaryCard label="COMPLETE" value={summary.COMPLETE} />
-      </div>
+      {/* Summary Stats Grid */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+      >
+        <SummaryCard label="Total Emails" value={summary.total} icon={Layers} color="slate" />
+        <SummaryCard label="New Requests" value={summary.NEW} icon={PlusCircle} color="blue" />
+        <SummaryCard label="Processing" value={summary.IN_PROGRESS} icon={Clock} color="indigo" />
+        <SummaryCard label="Completed" value={summary.COMPLETE} icon={CheckCircle2} color="emerald" />
+      </motion.div>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {/* Search */}
-        <div className="flex flex-1 gap-2">
+      {/* Filters & Actions Toolbar */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+      >
+        {/* Search Bar */}
+        <div className="flex flex-1 max-w-md relative group">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+            <Search size={14} />
+          </div>
           <input
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
               setPage(1);
             }}
-            placeholder="Search title / sender / PIC / remark..."
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            placeholder="Search by title, sender, PIC or remark..."
+            className="w-full rounded-2xl border border-slate-200 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm pl-10 pr-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:border-slate-800 dark:text-slate-100 transition-all font-medium"
           />
         </div>
 
-        {/* Right controls */}
-        <div className="flex items-center gap-2 justify-end">
-          {/* Sort (compact) */}
-          <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Sort</span>
-
+        {/* Action Controls */}
+        <div className="flex items-center gap-3 justify-end">
+          {/* Enhanced Sort Trigger */}
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm px-3 py-2 text-sm dark:border-slate-800 shadow-sm transition-all focus-within:border-indigo-500">
+            <History size={14} className="text-slate-400" />
             <select
               value={sortBy}
               onChange={(e) => {
                 setSortBy(e.target.value);
                 setPage(1);
               }}
-              className="bg-transparent text-sm outline-none"
+              className="bg-transparent text-xs font-bold outline-none text-slate-600 dark:text-slate-300 cursor-pointer"
             >
-              <option value="receivedAt">Received</option>
-              <option value="createdAt">Created</option>
+              <option value="receivedAt">Received At</option>
+              <option value="createdAt">Created At</option>
             </select>
 
             <button
@@ -801,717 +844,694 @@ export default function EmailTracker() {
                 setSortDir((d) => (d === "desc" ? "asc" : "desc"));
                 setPage(1);
               }}
-              className="ml-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+              className="ml-1 rounded-lg bg-slate-100/50 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-black text-slate-700 dark:text-slate-300 hover:bg-indigo-500 hover:text-white transition-all uppercase"
               title={sortDir === "desc" ? "Newest first" : "Oldest first"}
             >
-              {sortDir === "desc" ? "↓" : "↑"}
+              {sortDir === "desc" ? "Desc" : "Asc"}
             </button>
           </div>
 
-          {/* Filter popover */}
+          {/* Advanced Filter Popover */}
           <div className="relative" ref={filterRef}>
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setFilterOpen((v) => !v)}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+              className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-bold shadow-sm transition-all ${filterOpen || statusFilters.length > 0 || picFilter !== "All" || newOnly
+                ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400"
+                : "border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80 text-slate-700 dark:text-slate-200 hover:border-slate-400"
+                }`}
             >
-              Filter
-              <ChevronDown className={`h-4 w-4 transition ${filterOpen ? "rotate-180" : ""}`} />
-            </button>
+              <Filter className={`h-4 w-4 transition-transform ${filterOpen ? "rotate-180" : ""}`} />
+              Filters
+              {(statusFilters.length > 0 || picFilter !== "All" || newOnly) && (
+                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse ml-1" />
+              )}
+            </motion.button>
 
-            {filterOpen && (
-              <div className="absolute right-0 mt-2 w-[340px] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-900 z-40">
-                {/* Status */}
-                <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">
-                  Status
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={selectAllStatuses}
-                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold border ${
-                      statusFilters.length === 0
-                        ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-900/30 dark:text-blue-200"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-                    }`}
-                  >
-                    All
-                  </button>
-
-                  {STATUS_OPTIONS.map((s) => {
-                    const active = statusFilters.includes(s);
-                    return (
-                      <button
-                        key={s}
-                        onClick={() => toggleStatus(s)}
-                        className={`rounded-xl px-3 py-1.5 text-xs font-semibold border ${
-                          active
-                            ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-900/30 dark:text-blue-200"
-                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-                        }`}
-                      >
-                        {statusLabel(s)}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="my-3 h-px bg-slate-100 dark:bg-slate-800" />
-
-                {/* PIC + Last 24h */}
-                <div className="grid grid-cols-2 gap-2 items-center">
-                  <div>
-                    <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">PIC</div>
-                    <select
-                      value={picFilter}
-                      onChange={(e) => {
-                        setPicFilter(e.target.value);
-                        setPage(1);
-                      }}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                    >
-                      {allPICs.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
-                      Last 24h
-                    </div>
-
+            <AnimatePresence>
+              {filterOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute right-0 mt-3 w-[360px] rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900 z-[100] backdrop-blur-xl"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white">Active Filters</h4>
                     <button
                       onClick={() => {
-                        setNewOnly((v) => !v);
+                        setStatusFilters([]);
+                        setPicFilter("All");
+                        setNewOnly(false);
                         setPage(1);
                       }}
-                      className="w-full inline-flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+                      className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600 transition-colors uppercase underline"
                     >
-                      <span>{newOnly ? "On" : "Off"}</span>
-                      <span
-                        className={[
-                          "relative inline-flex h-5 w-9 items-center rounded-full transition",
-                          newOnly ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-700",
-                        ].join(" ")}
-                      >
-                        <span
-                          className={[
-                            "inline-block h-4 w-4 transform rounded-full bg-white transition",
-                            newOnly ? "translate-x-4" : "translate-x-1",
-                          ].join(" ")}
-                        />
-                      </span>
+                      Clear All
                     </button>
                   </div>
-                </div>
 
-                <div className="mt-3 flex justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      setStatusFilters([]);
-                      setPicFilter("All");
-                      setNewOnly(false); // recommended default
-                      setPage(1);
-                    }}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-                  >
-                    Reset
-                  </button>
+                  {/* Status Options */}
+                  <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 px-1">
+                    Workflow Status
+                  </div>
+                  <div className="flex flex-wrap gap-2 mb-5">
+                    <button
+                      onClick={selectAllStatuses}
+                      className={`rounded-xl px-4 py-2 text-xs font-bold border transition-all ${statusFilters.length === 0
+                        ? "border-indigo-500 bg-indigo-500 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-800/50"
+                        }`}
+                    >
+                      All
+                    </button>
+                    {STATUS_OPTIONS.map((s) => {
+                      const active = statusFilters.includes(s);
+                      return (
+                        <button
+                          key={s}
+                          onClick={() => toggleStatus(s)}
+                          className={`rounded-xl px-4 py-2 text-xs font-bold border transition-all ${active
+                            ? "border-indigo-500 bg-indigo-500 text-white"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-800/50"
+                            }`}
+                        >
+                          {statusLabel(s)}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 px-1">PIC</div>
+                      <select
+                        value={picFilter}
+                        onChange={(e) => {
+                          setPicFilter(e.target.value);
+                          setPage(1);
+                        }}
+                        className="w-full rounded-xl border border-slate-200 bg-white dark:bg-slate-800/50 px-3 py-2 text-xs font-bold dark:border-slate-700 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      >
+                        {allPICs.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 px-1">Fresh Influx</div>
+                      <button
+                        onClick={() => {
+                          setNewOnly((v) => !v);
+                          setPage(1);
+                        }}
+                        className={`w-full flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-bold transition-all ${newOnly
+                          ? "border-indigo-500/50 bg-indigo-500/10 text-indigo-500"
+                          : "border-slate-200 bg-white dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 dark:border-slate-700"
+                          }`}
+                      >
+                        <span>NEW (24h)</span>
+                        <div className={`w-2 h-2 rounded-full ${newOnly ? "bg-indigo-500 animate-pulse" : "bg-slate-300 dark:bg-slate-600"}`} />
+                      </button>
+                    </div>
+                  </div>
+
                   <button
                     onClick={() => setFilterOpen(false)}
-                    className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                    className="w-full mt-5 rounded-2xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white py-3 text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-slate-900/20"
                   >
-                    Done
+                    Apply Criteria
                   </button>
-                </div>
-              </div>
-            )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-        <table className="min-w-[980px] w-full text-sm">
-          <thead className="bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-            <tr>
-              {SHOW_DOC_ID && <Th>Doc ID</Th>}
-              <Th>Email</Th>
-              <Th>Date Receive</Th>
-              <Th>Time Receive</Th>
-              <Th>PIC</Th>
-              <Th>Status</Th>
-              <Th>Remark</Th>
-              <Th className="text-right">Actions</Th>
-            </tr>
-          </thead>
 
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {pagedRows.length === 0 ? (
+      {/* Main Table Content */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+        className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/50 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-lg"
+      >
+        <div className="overflow-x-auto">
+          <table className="min-w-[1000px] w-full border-collapse">
+            <thead className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
               <tr>
-                <td className="p-6 text-center text-slate-500" colSpan={SHOW_DOC_ID ? 8 : 7}>
-                  No records found.
-                </td>
+                {SHOW_DOC_ID && <Th>System ID</Th>}
+                <Th className="pl-8">Email Title</Th>
+                <Th>Received At</Th>
+                <Th>PIC</Th>
+                <Th>Status</Th>
+                <Th>Remark</Th>
+                <Th className="text-right pr-8">Actions</Th>
               </tr>
-            ) : (
-              pagedRows.map((r) => {
-                const status = normalizeStatus(r.status);
-                const title = safeStr(r.title);
-                const sender = safeStr(r.senderEmail);
-                const pic = getPicName(r.pic_assign);
-                const busy = rowLoading[r._id]; // "assign" | "done" | "remark" | undefined
-                const assignBusy = busy === "assign";
-                const doneBusy = busy === "done";
-                const remarkBusy = busy === "remark";
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+              {pagedRows.length === 0 ? (
+                <tr>
+                  <td className="p-16 text-center text-slate-400 dark:text-slate-600 font-medium" colSpan={SHOW_DOC_ID ? 8 : 7}>
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-full opacity-50">
+                        <Activity size={32} />
+                      </div>
+                      <p className="text-sm uppercase tracking-widest font-black">No intelligence records found</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                pagedRows.map((r, idx) => {
+                  const status = normalizeStatus(r.status);
+                  const title = safeStr(r.title);
+                  const sender = safeStr(r.senderEmail);
+                  const pic = getPicName(r.pic_assign);
+                  const busy = rowLoading[r._id];
+                  const assignBusy = busy === "assign";
+                  const doneBusy = busy === "done";
+                  const remarkBusy = busy === "remark";
 
-                const isComplete = status === "COMPLETE";
-                const canAssign = status === "NEW" && !isComplete;
+                  const isComplete = status === "COMPLETE";
+                  const canAssign = status === "NEW" && !isComplete;
 
-                const assignedUid = getPicUid(r.pic_assign);
-                const assignedName = getPicName(r.pic_assign);
-                const meName = safeStr(CURRENT_USER).toLowerCase();
-                const okByUid = CURRENT_UID && assignedUid && CURRENT_UID === assignedUid;
-                const okByName = !assignedUid && assignedName && assignedName.toLowerCase() === meName;
+                  const assignedUid = getPicUid(r.pic_assign);
+                  const assignedName = getPicName(r.pic_assign);
+                  const meName = safeStr(CURRENT_USER).toLowerCase();
+                  const okByUid = CURRENT_UID && assignedUid && CURRENT_UID === assignedUid;
+                  const okByName = !assignedUid && assignedName && assignedName.toLowerCase() === meName;
 
-                const canDone = status === "IN_PROGRESS" && (okByUid || okByName);
+                  const canDone = status === "IN_PROGRESS" && (okByUid || okByName);
+                  const showNew = isNewWithin24h(r);
 
-                const showNew = isNewWithin24h(r);
+                  return (
+                    <motion.tr
+                      key={r._id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.03 }}
+                      className="group border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-indigo-500/5 transition-colors text-[13px]"
+                    >
+                      {SHOW_DOC_ID && <Td className="text-[10px] font-mono text-slate-400">{r._id}</Td>}
 
-                return (
-                  <tr key={r._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                    {SHOW_DOC_ID && <Td className="text-xs text-slate-500">{r._id}</Td>}
-
-                    {/* Email Title + Sender inside one cell */}
-                    <Td className="min-w-[380px]">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-start gap-2">
-                          <div className="font-semibold text-slate-900 dark:text-slate-100 leading-snug">
-                            {title || "-"}
-                          </div>
-
-                          {showNew && (
-                            <span className="shrink-0 inline-flex items-center rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 px-2 py-0.5 text-[11px] font-extrabold text-white shadow-sm">
-                              NEW
+                      <Td className="min-w-[420px] pl-8">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-start gap-2">
+                            <span className="font-bold text-slate-900 dark:text-white leading-tight group-hover:text-indigo-500 transition-colors">
+                              {title || "(No Intelligence Title)"}
                             </span>
+                            {showNew && (
+                              <span className="shrink-0 inline-flex items-center rounded-lg bg-indigo-500 px-1.5 py-0.5 text-[9px] font-black text-white shadow-lg shadow-indigo-500/20">
+                                NEW
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700" />
+                            <span className="text-xs font-medium text-slate-400 truncate max-w-[320px]" title={sender}>
+                              {sender || "unknown_origin"}
+                            </span>
+                          </div>
+                        </div>
+                      </Td>
+
+                      <Td className="whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-700 dark:text-slate-300">{formatDate(r.receivedAt)}</span>
+                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">{formatTime(r.receivedAt)}</span>
+                        </div>
+                      </Td>
+
+                      <Td className="whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${pic ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-700"}`} />
+                          <span className={`font-bold ${pic ? "text-slate-800 dark:text-slate-200" : "text-slate-400"}`}>
+                            {pic || "UNASSIGNED"}
+                          </span>
+                        </div>
+                      </Td>
+
+                      <Td>
+                        <StatusPill status={status} />
+                      </Td>
+
+                      <Td className="max-w-[220px]" title={safeStr(r.remark)}>
+                        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 line-clamp-2 italic">
+                          {safeStr(r.remark) || "No operational notes recorded..."}
+                        </div>
+                      </Td>
+
+                      <Td className="text-right pr-8">
+                        <div className="inline-flex items-center gap-2">
+                          <IconBtn
+                            title="View Intelligence Detail"
+                            onClick={() => openDetail(r)}
+                            disabled={assignBusy || doneBusy || remarkBusy}
+                          >
+                            <PlusCircle size={14} />
+                          </IconBtn>
+
+                          <IconBtn
+                            title={assignBusy ? "Assimilating..." : "Assign to Entity"}
+                            onClick={() => assignToMe(r)}
+                            disabled={!canAssign || assignBusy || doneBusy || remarkBusy}
+                          >
+                            {assignBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus2 size={14} />}
+                          </IconBtn>
+
+                          <IconBtn
+                            title={doneBusy ? "Finalizing..." : "Terminate Mission (Complete)"}
+                            onClick={() => markDone(r)}
+                            disabled={!canDone || assignBusy || doneBusy || remarkBusy}
+                          >
+                            {doneBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 size={14} />}
+                          </IconBtn>
+
+                          <IconBtn
+                            title="Append Notes"
+                            onClick={() => openRemarkEditor(r._id, safeStr(r.remark))}
+                            disabled={assignBusy || doneBusy || remarkBusy}
+                          >
+                            <Pencil size={14} />
+                          </IconBtn>
+
+                          {canDelete && (
+                            <IconBtn
+                              title={busy === "delete" ? "Purging..." : "Purge Record"}
+                              onClick={() => requestDelete(r)}
+                              disabled={assignBusy || doneBusy || remarkBusy || busy === "delete"}
+                              variant="danger"
+                            >
+                              {busy === "delete" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 size={14} />}
+                            </IconBtn>
                           )}
                         </div>
-
-                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                          <span className="inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                            From
-                          </span>
-                          <span className="truncate">{sender || "-"}</span>
-                        </div>
-                      </div>
-                    </Td>
-
-                    <Td className="whitespace-nowrap">{formatDate(r.receivedAt)}</Td>
-                    <Td className="whitespace-nowrap">{formatTime(r.receivedAt)}</Td>
-                    <Td className="whitespace-nowrap">{pic || "-"}</Td>
-
-                    <Td>
-                      <StatusPill status={status} />
-                    </Td>
-
-                    <Td className="max-w-[260px] truncate" title={safeStr(r.remark)}>
-                      {safeStr(r.remark) || "-"}
-                    </Td>
-
-                    <Td className="text-right">
-                      <div className="inline-flex items-center gap-1">
-                        {/* Detail */}
-                        <IconBtn
-                          title="View details"
-                          onClick={() => openDetail(r)}
-                          disabled={assignBusy || doneBusy || remarkBusy}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </IconBtn>
-
-                        {/* Assign */}
-                        <IconBtn
-                          title={assignBusy ? "Assigning..." : "Assign"}
-                          onClick={() => assignToMe(r)}
-                          disabled={!canAssign || assignBusy || doneBusy || remarkBusy}
-                        >
-                          {assignBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus2 className="h-4 w-4" />}
-                        </IconBtn>
-
-                        {/* Done */}
-                        <IconBtn
-                          title={doneBusy ? "Saving..." : "Mark complete"}
-                          onClick={() => markDone(r)}
-                          disabled={!canDone || assignBusy || doneBusy || remarkBusy}
-                        >
-                          {doneBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                        </IconBtn>
-
-                        {/* Remark */}
-                        <IconBtn
-                          title="Edit remark"
-                          onClick={() => openRemarkEditor(r._id, safeStr(r.remark))}
-                          disabled={assignBusy || doneBusy || remarkBusy}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </IconBtn>
-
-                        {/* Delete */}
-                        {canDelete && (
-                          <IconBtn
-                            title={busy === "delete" ? "Deleting..." : "Delete"}
-                            onClick={() => requestDelete(r)}
-                            disabled={assignBusy || doneBusy || remarkBusy || busy === "delete"}
-                            variant="danger"
-                          >
-                            {busy === "delete" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                          </IconBtn>
-                        )}
-                      </div>
-                    </Td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm text-slate-500 dark:text-slate-400">
-          Showing{" "}
-          <span className="font-medium text-slate-800 dark:text-slate-100">
-            {sortedRows.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
-          </span>{" "}
-          -{" "}
-          <span className="font-medium text-slate-800 dark:text-slate-100">
-            {Math.min(page * PAGE_SIZE, sortedRows.length)}
-          </span>{" "}
-          of{" "}
-          <span className="font-medium text-slate-800 dark:text-slate-100">
-            {sortedRows.length}
-          </span>
+                      </Td>
+                    </motion.tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => gotoPage(page - 1)}
-            disabled={page <= 1}
-            className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Prev
-          </button>
-
-          <div className="flex items-center gap-1">
-            {pageButtons[0] > 1 && (
-              <>
-                <PageBtn page={1} active={page === 1} onClick={() => gotoPage(1)} />
-                {pageButtons[0] > 2 && <span className="px-1 text-slate-400">…</span>}
-              </>
-            )}
-
-            {pageButtons.map((p) => (
-              <PageBtn key={p} page={p} active={p === page} onClick={() => gotoPage(p)} />
-            ))}
-
-            {pageButtons[pageButtons.length - 1] < totalPages && (
-              <>
-                {pageButtons[pageButtons.length - 1] < totalPages - 1 && (
-                  <span className="px-1 text-slate-400">…</span>
-                )}
-                <PageBtn
-                  page={totalPages}
-                  active={page === totalPages}
-                  onClick={() => gotoPage(totalPages)}
-                />
-              </>
-            )}
+        {/* Console Pagination */}
+        <div className="px-6 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 backdrop-blur-md">
+          <div className="text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.2em]">
+            Scan Integrity: <span className="text-slate-900 dark:text-slate-200">{sortedRows.length} Emails Recorded</span>
           </div>
 
-          <button
-            onClick={() => gotoPage(page + 1)}
-            disabled={page >= totalPages}
-            className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-          >
-            Next
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Detail Modal */}
-      {detailRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                Task Details
-              </h3>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
               <button
-                onClick={closeDetail}
-                className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={() => gotoPage(page - 1)}
+                disabled={page <= 1}
+                className="h-9 w-9 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm disabled:opacity-30 hover:border-indigo-500 transition-all text-slate-600 dark:text-slate-400"
               >
-                <X className="h-5 w-5" />
+                <ChevronLeft size={16} />
+              </button>
+
+              <div className="flex gap-2 mx-2">
+                {pageButtons.map((p) => (
+                  <PageBtn key={p} page={p} active={p === page} onClick={() => gotoPage(p)} />
+                ))}
+              </div>
+
+              <button
+                onClick={() => gotoPage(page + 1)}
+                disabled={page >= totalPages}
+                className="h-9 w-9 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm disabled:opacity-30 hover:border-indigo-500 transition-all text-slate-600 dark:text-slate-400"
+              >
+                <ChevronRight size={16} />
               </button>
             </div>
+          </div>
+        </div>
+      </motion.div>
 
-            <div className="mt-4 space-y-3 text-sm">
-              <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  PIC Upload
+      {/* Detail Modal */}
+      <AnimatePresence>
+        {detailRow && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeDetail}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg rounded-[2rem] bg-white dark:bg-slate-900 p-8 shadow-2xl border border-slate-200 dark:border-slate-800"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-500/10 text-indigo-500 rounded-xl">
+                    <Activity size={20} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Intelligence Details</h3>
                 </div>
-                <div className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
-                  {getPicName(detailRow.pic_create) || "-"}
-                </div>
-                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  {formatDateTime(detailRow.createdAt)}
-                </div>
+                <button onClick={closeDetail} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+                  <X size={20} />
+                </button>
               </div>
 
-              <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  PIC Update
-                </div>
-                <div className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
-                  {getPicName(detailRow.pic_update) || "-"}
-                </div>
-                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  {formatDateTime(detailRow.updatedAt)}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  PIC Remark
-                </div>
-                <div className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
-                  {getPicName(detailRow.pic_remark) || "-"}
-                </div>
-                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  {formatDateTime(detailRow.remarkAt)}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  Status
-                </div>
-                <div className="mt-2">
+              <div className="space-y-4">
+                <DetailItem label="Ingestion PIC" value={getPicName(detailRow.pic_create)} sub={formatDateTime(detailRow.createdAt)} />
+                <DetailItem label="Last Orchestration" value={getPicName(detailRow.pic_update)} sub={formatDateTime(detailRow.updatedAt)} />
+                <DetailItem label="Intelligence PIC" value={getPicName(detailRow.pic_remark)} sub={formatDateTime(detailRow.remarkAt)} />
+                <div className="p-4 rounded-3xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Operational Status</span>
                   <StatusPill status={normalizeStatus(detailRow.status)} />
                 </div>
               </div>
-            </div>
 
-            <div className="mt-5 flex justify-end">
-              <button
-                onClick={closeDetail}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-              >
-                Close
-              </button>
-            </div>
+              <div className="mt-8">
+                <button
+                  onClick={closeDetail}
+                  className="w-full py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black uppercase tracking-[0.2em] text-xs hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-slate-900/20"
+                >
+                  Close Console
+                </button>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Remark editor */}
-      {editRowId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Edit Remark</h3>
-              <button
-                onClick={cancelRemark}
-                className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
-                disabled={rowLoading[editRowId] === "remark"}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <textarea
-              value={editRemark}
-              onChange={(e) => setEditRemark(e.target.value)}
-              rows={5}
-              className="mt-3 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-              placeholder="Type remark..."
+      <AnimatePresence>
+        {editRowId && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 30 }}
+              className="relative w-full max-w-xl rounded-[2.5rem] bg-white dark:bg-slate-900 p-8 shadow-2xl border border-slate-200 dark:border-slate-800"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-500/10 text-indigo-500 rounded-xl">
+                    <Pencil size={20} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Intelligence Log</h3>
+                </div>
+                <button onClick={cancelRemark} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
 
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={cancelRemark}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-                disabled={rowLoading[editRowId] === "remark"}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveRemark}
-                disabled={rowLoading[editRowId] === "remark"}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-              >
-                {rowLoading[editRowId] === "remark" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save
-              </button>
-            </div>
+              <textarea
+                value={editRemark}
+                onChange={(e) => setEditRemark(e.target.value)}
+                rows={6}
+                className="w-full rounded-[2rem] border border-slate-200 bg-slate-50/50 dark:bg-slate-800/50 p-6 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:border-slate-800 dark:text-white transition-all font-medium resize-none"
+                placeholder="Synchronize operational remarks here..."
+              />
+
+              <div className="mt-8 flex gap-3">
+                <button
+                  onClick={cancelRemark}
+                  className="flex-1 py-4 rounded-2xl border border-slate-200 dark:border-slate-800 font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all uppercase tracking-widest text-xs"
+                  disabled={rowLoading[editRowId] === "remark"}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveRemark}
+                  disabled={rowLoading[editRowId] === "remark"}
+                  className="flex-[2] py-4 rounded-2xl bg-indigo-600 text-white font-black uppercase tracking-[0.2em] text-xs hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-50"
+                >
+                  {rowLoading[editRowId] === "remark" ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Syncing...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center gap-2">
+                      <Save size={16} />
+                      <span>Log Notes</span>
+                    </div>
+                  )}
+                </button>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Delete Modal */}
-      {deleteRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                Delete Task?
-              </h3>
-              <button
-                onClick={cancelDelete}
-                className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
-                disabled={rowLoading[deleteRow._id] === "delete"}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-              This will permanently delete:
-              <div className="mt-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <div className="text-xs text-slate-500 dark:text-slate-400">Title</div>
-                <div className="font-semibold text-slate-900 dark:text-slate-100">
-                  {safeStr(deleteRow.title) || "-"}
+      <AnimatePresence>
+        {deleteRow && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-rose-950/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 50 }}
+              className="relative w-full max-w-md rounded-[2rem] bg-white dark:bg-slate-900 p-8 shadow-2xl border border-rose-200 dark:border-rose-900/30"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mb-6">
+                  <Trash2 size={32} />
                 </div>
-                <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">From</div>
-                <div className="text-slate-700 dark:text-slate-200">
-                  {safeStr(deleteRow.senderEmail) || "-"}
+                <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight mb-2">Purge Intelligence Record?</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 font-medium">
+                  Warning: This operation will permanently erase this mission record from the intelligence collective.
+                </p>
+
+                <div className="w-full rounded-2xl bg-rose-50/50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/30 p-4 mb-8 text-left">
+                  <span className="text-[10px] font-black uppercase text-rose-500 tracking-widest mb-1 block">Record Target</span>
+                  <div className="font-bold text-slate-900 dark:text-white truncate">{safeStr(deleteRow.title)}</div>
+                </div>
+
+                <div className="w-full flex gap-3">
+                  <button
+                    onClick={cancelDelete}
+                    className="flex-1 py-4 rounded-2xl border border-slate-200 dark:border-slate-800 font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 transition-all uppercase tracking-widest text-xs"
+                    disabled={rowLoading[deleteRow._id] === "delete"}
+                  >
+                    Abort
+                  </button>
+                  <button
+                    onClick={confirmDelete}
+                    disabled={rowLoading[deleteRow._id] === "delete"}
+                    className="flex-1 py-4 rounded-2xl bg-rose-600 text-white font-black uppercase tracking-widest text-xs hover:bg-rose-700 transition-all shadow-xl shadow-rose-900/20 disabled:opacity-50"
+                  >
+                    {rowLoading[deleteRow._id] === "delete" ? <Loader2 size={16} className="mx-auto animate-spin" /> : "Confirm Purge"}
+                  </button>
                 </div>
               </div>
-            </div>
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                onClick={cancelDelete}
-                disabled={rowLoading[deleteRow._id] === "delete"}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={confirmDelete}
-                disabled={rowLoading[deleteRow._id] === "delete"}
-                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
-              >
-                {rowLoading[deleteRow._id] === "delete" ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                Delete
-              </button>
-            </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Email Task Upload Modal */}
-      {emailModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-3xl rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                  Add Email Task(s)
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Drop multiple <span className="font-medium">.eml</span> files, preview, then confirm
-                  to write into Firestore.
-                </p>
-              </div>
-
-              <button
-                onClick={closeEmailModal}
-                className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
-                disabled={emlBusy}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Drop zone */}
-            <div
-              onDrop={onDropFiles}
-              onDragOver={onDragOver}
-              className="mt-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 text-center dark:border-slate-700 dark:bg-slate-950"
+      <AnimatePresence>
+        {emailModalOpen && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 100 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 100 }}
+              className="relative w-full max-w-4xl my-auto rounded-[3rem] bg-white dark:bg-slate-900 p-8 shadow-2xl border border-slate-200 dark:border-slate-800"
             >
-              <div className="mx-auto flex max-w-xl flex-col items-center gap-2">
-                <UploadCloud className="h-7 w-7 text-slate-500" />
-                <div className="text-sm text-slate-700 dark:text-slate-200">
-                  Drag & drop .eml files here
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  Or choose from your folder (multiple supported)
-                </div>
-
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={emlBusy}
-                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Choose Files
-                  </button>
-
-                  <button
-                    onClick={clearEmlItems}
-                    disabled={emlBusy || emlItems.length === 0}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Clear
-                  </button>
-                </div>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".eml,message/rfc822"
-                  multiple
-                  className="hidden"
-                  onChange={onPickFiles}
-                />
-              </div>
-            </div>
-
-            {/* Preview list */}
-            <div className="mt-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  Preview ({validCount}/{totalCount} parsed)
-                </div>
-                {emlBusy && (
-                  <div className="text-xs text-slate-500 dark:text-slate-400">Processing...</div>
-                )}
-              </div>
-
-              <div className="mt-2 max-h-[260px] overflow-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-                {emlItems.length === 0 ? (
-                  <div className="p-4 text-sm text-slate-500 dark:text-slate-400">
-                    No files added yet.
+              <div className="flex items-center justify-between gap-4 mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-600/20">
+                    <UploadCloud size={24} />
                   </div>
-                ) : (
-                  <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {emlItems.map((it) => {
-                      const dateTxt = it.date ? new Date(it.date).toLocaleString("en-GB") : "-";
-                      return (
-                        <li key={it.id} className="p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="truncate font-semibold text-slate-900 dark:text-slate-100">
-                                  {it.name}
-                                </span>
-                                <span className="text-xs text-slate-500">
-                                  {(it.size / 1024).toFixed(1)} KB
-                                </span>
-                                {!it.ok ? (
-                                  <span className="text-xs font-semibold text-rose-600">
-                                    {it.error || "Parse failed"}
-                                  </span>
-                                ) : (
-                                  <span className="text-xs font-semibold text-emerald-600">Parsed</span>
-                                )}
-                              </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Intelligence Ingestion</h3>
+                    <p className="text-sm text-slate-500 font-medium tracking-tight">Process .eml files to synthesize new mission units.</p>
+                  </div>
+                </div>
+                <button onClick={closeEmailModal} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors" disabled={emlBusy}>
+                  <X size={24} />
+                </button>
+              </div>
 
-                              <div className="mt-1 grid grid-cols-1 gap-1 text-xs text-slate-600 dark:text-slate-300">
-                                <div className="truncate">
-                                  <span className="font-semibold">Subject:</span>{" "}
-                                  {safeStr(it.subject) || "-"}
+              {/* Enhanced Drop Zone */}
+              <div
+                onDrop={onDropFiles}
+                onDragOver={onDragOver}
+                className="relative group rounded-[2.5rem] border-4 border-dashed border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 p-12 text-center transition-all hover:border-indigo-500/50 hover:bg-indigo-500/5"
+              >
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-16 h-16 rounded-full bg-white dark:bg-slate-900 shadow-xl flex items-center justify-center text-slate-400 group-hover:text-indigo-500 transition-colors">
+                    <Plus size={32} />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-lg font-bold text-slate-800 dark:text-white">Transmit Documentation</p>
+                    <p className="text-sm text-slate-500 font-medium">Batch synthesis of .eml files is supported.</p>
+                  </div>
+
+                  <div className="mt-4 flex gap-3">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={emlBusy}
+                      className="px-6 py-3 rounded-2xl bg-indigo-600 text-white font-black uppercase tracking-widest text-[10px] shadow-xl shadow-indigo-500/20"
+                    >
+                      Browse Repository
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={clearEmlItems}
+                      disabled={emlBusy || emlItems.length === 0}
+                      className="px-6 py-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white font-black uppercase tracking-widest text-[10px]"
+                    >
+                      Clear Batch
+                    </motion.button>
+                  </div>
+                  <input ref={fileInputRef} type="file" accept=".eml,message/rfc822" multiple className="hidden" onChange={onPickFiles} />
+                </div>
+              </div>
+
+              {/* Intelligence Preview */}
+              {emlItems.length > 0 && (
+                <div className="mt-8">
+                  <div className="flex items-center justify-between mb-4 px-2">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Analysis Preview ({validCount}/{totalCount} Validated)</h4>
+                    {emlBusy && <Loader2 size={16} className="animate-spin text-indigo-500" />}
+                  </div>
+                  <div className="max-h-[300px] overflow-auto rounded-3xl border border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm shadow-inner">
+                    <ul className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                      {emlItems.map((it) => (
+                        <li key={it.id} className="p-5 hover:bg-slate-50 dark:hover:bg-indigo-500/5 transition-colors group">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-3 mb-2">
+                                <ShieldCheck size={16} className={it.ok ? "text-emerald-500" : "text-rose-500"} />
+                                <span className="font-bold text-slate-900 dark:text-white truncate">{it.name}</span>
+                                <span className="text-[10px] font-mono text-slate-400">{(it.size / 1024).toFixed(1)}KB</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <span className="text-[9px] font-black uppercase text-slate-400 block">Intelligence Header</span>
+                                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">{it.subject || "NO HEADER"}</p>
                                 </div>
-                                <div className="truncate">
-                                  <span className="font-semibold">From:</span>{" "}
-                                  {safeStr(it.fromEmail) || "-"}
-                                </div>
-                                <div className="truncate">
-                                  <span className="font-semibold">Date:</span> {dateTxt}
+                                <div className="space-y-1">
+                                  <span className="text-[9px] font-black uppercase text-slate-400 block">Origin Point</span>
+                                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">{it.fromEmail || "ANONYMOUS SOURCE"}</p>
                                 </div>
                               </div>
                             </div>
-
-                            <button
-                              onClick={() => removeEmlItem(it.id)}
-                              disabled={emlBusy}
-                              className="rounded-xl border border-slate-200 bg-white p-2 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
-                              title="Remove"
-                            >
-                              <Trash2 className="h-4 w-4" />
+                            <button onClick={() => removeEmlItem(it.id)} disabled={emlBusy} className="p-2 text-slate-300 hover:text-rose-500 transition-colors">
+                              <Trash2 size={18} />
                             </button>
                           </div>
                         </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-
-              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  Confirm will append NEW tasks into Firestore collection{" "}
-                  <span className="font-semibold">email_tasks</span>.
+                      ))}
+                    </ul>
+                  </div>
                 </div>
+              )}
 
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={closeEmailModal}
-                    disabled={emlBusy}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-                  >
+              <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-100 dark:border-slate-800">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center sm:text-left">
+                  Ready to commit <span className="text-indigo-500">{validCount}</span> intelligence units to the cluster.
+                </p>
+                <div className="flex gap-3 w-full sm:w-auto">
+                  <button onClick={closeEmailModal} disabled={emlBusy} className="flex-1 sm:flex-none px-8 py-4 rounded-2xl font-bold text-slate-500 uppercase tracking-widest text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
                     Cancel
                   </button>
-
                   <button
                     onClick={confirmWriteToFirestore}
                     disabled={emlBusy || validCount === 0}
-                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                    className="flex-1 sm:flex-none px-8 py-4 rounded-2xl bg-indigo-600 text-white font-black uppercase tracking-[0.2em] text-xs hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-50"
                   >
-                    {emlBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    Confirm & Write
+                    {emlBusy ? <Loader2 size={16} className="mx-auto animate-spin" /> : "Initiate Commit"}
                   </button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-// ====== UI bits ======
-function SummaryCard({ label, value }) {
+function SummaryCard({ label, value, icon: Icon, color = "blue" }) {
+  const colors = {
+    blue: "from-blue-500/10 to-transparent text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/30",
+    indigo: "from-indigo-500/10 to-transparent text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/30",
+    amber: "from-amber-500/10 to-transparent text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/30",
+    emerald: "from-emerald-500/10 to-transparent text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30",
+    slate: "from-slate-500/10 to-transparent text-slate-600 dark:text-slate-400 border-slate-100 dark:border-slate-900/30",
+  };
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-      <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">{label}</div>
-      <div className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">{value}</div>
+    <motion.div
+      whileHover={{ y: -1 }}
+      className={`relative overflow-hidden rounded-xl border bg-white/50 dark:bg-slate-900/50 backdrop-blur-md p-3 transition-all ${colors[color] || colors.slate}`}
+    >
+      <div className={`absolute top-0 right-0 p-3 opacity-10`}>
+        {Icon && <Icon size={64} />}
+      </div>
+      <div className="flex items-center gap-2 mb-2">
+        <div className={`p-1.5 rounded-lg bg-current/10`}>
+          {Icon && <Icon size={16} />}
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">
+          {label}
+        </span>
+      </div>
+      <div className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+        {value}
+      </div>
+    </motion.div>
+  );
+}
+
+function DetailItem({ label, value, sub }) {
+  return (
+    <div className="p-4 rounded-3xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex flex-col gap-1">
+      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+      <div className="font-bold text-slate-900 dark:text-white">{value || "---"}</div>
+      {sub && <div className="text-[10px] font-medium text-slate-500">{sub}</div>}
     </div>
   );
 }
+
 
 function Th({ children, className = "" }) {
-  return <th className={`px-4 py-3 text-left font-semibold ${className}`}>{children}</th>;
+  return (
+    <th className={`px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 ${className}`}>
+      {children}
+    </th>
+  );
 }
 
 function Td({ children, className = "" }) {
   return (
-    <td className={`px-4 py-3 align-top text-slate-800 dark:text-slate-100 ${className}`}>
+    <td className={`px-4 py-2.5 align-middle text-slate-800 dark:text-slate-200 ${className}`}>
       {children}
     </td>
   );
@@ -1522,10 +1542,10 @@ function PageBtn({ page = 1, active = false, onClick }) {
     <button
       onClick={onClick}
       className={[
-        "h-9 min-w-9 rounded-xl border px-3 text-sm font-medium",
+        "h-9 min-w-9 rounded-xl border px-3 text-sm font-bold transition-all",
         active
-          ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-900/30 dark:text-blue-200"
-          : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800",
+          ? "border-indigo-500 bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"
+          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800",
       ].join(" ")}
     >
       {page}
@@ -1535,29 +1555,36 @@ function PageBtn({ page = 1, active = false, onClick }) {
 
 function IconBtn({ title, onClick, disabled, children, variant = "default" }) {
   const base =
-    "inline-flex h-8 w-8 items-center justify-center rounded-lg border text-slate-700 " +
-    "hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed " +
-    "dark:text-slate-200 dark:hover:bg-slate-800";
+    "inline-flex h-8 w-8 items-center justify-center rounded-xl border transition-all " +
+    "disabled:opacity-40 disabled:cursor-not-allowed";
 
   const styles =
     variant === "danger"
-      ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-900/20 dark:text-rose-200 dark:hover:bg-rose-900/30"
-      : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900";
+      ? "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-900/20 dark:text-rose-400 dark:hover:bg-rose-900/40 shadow-sm"
+      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 shadow-sm";
 
   return (
-    <button title={title} onClick={onClick} disabled={disabled} className={`${base} ${styles}`}>
+    <motion.button
+      whileHover={!disabled ? { scale: 1.1 } : {}}
+      whileTap={!disabled ? { scale: 0.95 } : {}}
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${base} ${styles}`}
+    >
       {children}
-    </button>
+    </motion.button>
   );
 }
 
 function StatusPill({ status }) {
   const s = (status || "NEW").toUpperCase();
-  const base = "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold border";
+  const base = "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide border shadow-sm";
 
   if (s === "COMPLETE") {
     return (
-      <span className={`${base} border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200`}>
+      <span className={`${base} border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-900/30 dark:text-emerald-400`}>
+        <CheckCircle2 size={12} />
         COMPLETE
       </span>
     );
@@ -1565,14 +1592,16 @@ function StatusPill({ status }) {
 
   if (s === "IN_PROGRESS") {
     return (
-      <span className={`${base} border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-900/30 dark:text-blue-200`}>
+      <span className={`${base} border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-900/30 dark:text-indigo-400`}>
+        <Clock size={12} />
         IN PROGRESS
       </span>
     );
   }
 
   return (
-    <span className={`${base} border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200`}>
+    <span className={`${base} border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400`}>
+      <Plus size={12} />
       NEW
     </span>
   );

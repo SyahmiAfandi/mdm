@@ -1,122 +1,202 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Database,
+  BarChart3,
+  Layers,
+  FileSearch,
+  FileBarChart2,
+  Settings,
+  Activity,
+} from "lucide-react";
 
 function ReconsMainPage() {
   const navigate = useNavigate();
-  const [mounted, setMounted] = useState(false);
-  const [loadingPath, setLoadingPath] = useState(null);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setMounted(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
+  const Section = ({ title, icon: Icon, children }) => (
+    <div className="flex flex-col bg-white border rounded-2xl shadow-sm p-6 h-full">
+      <div className="flex items-center gap-3 mb-6 pb-3 border-b">
+        <div className="p-2 bg-slate-100 rounded-lg">
+          <Icon className="w-5 h-5 text-slate-700" />
+        </div>
+        <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
+      </div>
 
-  const buttons = [
-    {
-      label: 'HPC',
-      path: '/recons/hpc',
-      img: '/images/hpc_bw.jpg',
-      hoverImg: '/images/hpc_color.jpg',
-    },
-    {
-      label: 'IC',
-      path: '/recons/ic',
-      img: '/images/ic_bw.jpg',
-      hoverImg: '/images/ic_color.jpg',
-    },
-  ];
+      <div className="flex flex-col gap-4 flex-1">
+        {children}
+      </div>
+    </div>
+  );
 
-  const buttonVariants = {
-    hidden: { opacity: 0, y: 30 },
-    visible: (i) => ({
-      opacity: 1,
-      y: 0,
-      transition: { delay: i * 0.15, duration: 0.5, ease: 'easeOut' }
-    })
-  };
+  const StandardButton = ({ 
+    title, 
+    desc, 
+    path, 
+    icon: Icon, 
+    img, 
+    disabled, 
+    placeholder, 
+    state }) => {
+    const navigate = useNavigate();
 
-  const handleNavigate = (path, label) => {
-    setLoadingPath(path);
-    setTimeout(() => navigate(path, { state: { businessType: label } }), 300);
-  };
+    if (placeholder) {
+      return (
+        <div
+          className="
+            flex-1 w-full
+            border border-dashed
+            rounded-xl
+            bg-slate-50
+            flex items-center justify-center
+            text-slate-300
+            text-sm
+            font-medium
+          "
+        >
+          {title}
+        </div>
+      );
+    }
 
-  // Custom Reports Button Config
-  const customReportBtn = {
-    label: 'Custom Reports',
-    path: '/recons/custom',
-    img: '/images/custom_report.jpg',
-    hoverImg: '/images/custom_report_color.jpg'
+    return (
+      <button
+        onClick={() => !disabled && path && navigate(path, { state })}
+        disabled={disabled}
+        className={`
+          flex-1 w-full
+          border rounded-xl
+          flex items-stretch overflow-hidden
+          transition-all duration-200 ease-out
+          ${
+            disabled
+              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+              : "bg-slate-50 hover:bg-white hover:shadow-lg hover:-translate-y-1 hover:border-slate-400"
+          }
+        `}
+      >
+        {img && (
+          <div
+            className="w-1/3 bg-cover bg-center opacity-90"
+            style={{ backgroundImage: `url(${img})` }}
+          />
+        )}
+
+        <div className="flex-1 px-4 py-4 flex flex-col justify-start text-left">
+          <div className="flex items-center gap-2 mb-2">
+            {Icon && <Icon className="w-4 h-4" />}
+            <span className="font-semibold">{title}</span>
+          </div>
+
+          {desc && (
+            <p className="text-xs leading-snug text-slate-500">
+              {desc}
+            </p>
+          )}
+        </div>
+      </button>
+    );
   };
 
   return (
-      <div className="min-h-[calc(100vh-75px)] flex flex-col items-center justify-start pt-10 overflow-hidden">
-        <div className="text-center mb-6 w-full">
-          <h2 className="text-3xl font-bold mb-2">Reconciliation Tools</h2>
-          <p className="text-gray-700 text-sm">Please choose Business Type:</p>
-        </div>
-
-        <div className="flex justify-center w-full">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-            {buttons.map((btn, i) => (
-              <motion.button
-                key={i}
-                custom={i}
-                initial="hidden"
-                animate={mounted ? 'visible' : 'hidden'}
-                variants={buttonVariants}
-                disabled={loadingPath !== null}
-                onClick={() => handleNavigate(btn.path, btn.label)}
-                whileHover={{ scale: 1.06 }}
-                whileTap={{ scale: 0.97 }}
-                className="relative w-[260px] h-[130px] text-lg font-bold rounded-xl shadow-md flex items-center justify-center transition-all duration-150 overflow-hidden bg-cover bg-center grayscale hover:grayscale-0 hover:shadow-xl"
-                style={{ backgroundImage: `url('${btn.img}')` }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundImage = `url('${btn.hoverImg}')`}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundImage = `url('${btn.img}')`}
-              >
-                <div className="flex items-center gap-2">
-                  {loadingPath === btn.path && (
-                    <div className="w-5 h-5 border-4 border-t-transparent border-white rounded-full animate-spin"></div>
-                  )}
-                  <span className="text-white text-2xl font-bold opacity-85 drop-shadow-md hover:opacity-100 hover:-translate-y-1 transition duration-300">
-                    {btn.label}
-                  </span>
-                </div>
-              </motion.button>
-            ))}
-          </div>
-        </div>
-
-        <p className="my-6 text-gray-500 font-semibold text-center text-sm">
-          Or, use the option below to reconcile a custom report:
+    <div className="min-h-[calc(100vh-75px)] bg-slate-50 p-8 flex flex-col">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-slate-900 mb-2">
+          Reconciliation Management
+        </h1>
+        <p className="text-slate-600 text-sm">
+          Manage reconciliation operations, tools, and reporting.
         </p>
-
-        <div className="flex justify-center w-full">
-          <motion.button
-            custom={2}
-            initial="hidden"
-            animate={mounted ? 'visible' : 'hidden'}
-            variants={buttonVariants}
-            disabled={loadingPath !== null}
-            onClick={() => handleNavigate(customReportBtn.path, customReportBtn.label)}
-            whileHover={{ scale: 1.06 }}
-            whileTap={{ scale: 0.97 }}
-            className="relative w-[260px] h-[130px] text-lg font-bold rounded-xl shadow-md flex items-center justify-center transition-all duration-300 overflow-hidden bg-cover bg-center grayscale hover:grayscale-0 hover:shadow-xl"
-            style={{ backgroundImage: `url('${customReportBtn.img}')` }}
-            onMouseEnter={customReportBtn.hoverImg ? (e) => e.currentTarget.style.backgroundImage = `url('${customReportBtn.hoverImg}')` : undefined}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundImage = `url('${customReportBtn.img}')`}
-          >
-            <div className="flex items-center gap-2">
-              {loadingPath === customReportBtn.path && (
-                <div className="w-5 h-5 border-4 border-t-transparent border-white rounded-full animate-spin"></div>
-              )}
-              <span className="text-white text-2xl font-bold opacity-85 drop-shadow-md hover:opacity-100 hover:-translate-y-1 transition duration-300">
-                {customReportBtn.label}
-              </span>
-            </div>
-          </motion.button>
-        </div>
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
+
+        {/* ================= DATA ================= */}
+        <Section title="Data" icon={Database}>
+          <StandardButton
+            title="Recons Period Setup"
+            desc="Create and manage reconciliation periods."
+            path="/recons/period"
+            icon={Database}
+          />
+          <StandardButton
+            title="Recons Data Management"
+            desc="Manage recons data for each distributor and report type."
+            path="/recons/cells"
+            icon={Database}
+          />
+          <StandardButton
+            title="Recons Config"
+            desc="Configure recons across all data in tools and reports."
+            path="/recons/config"
+            icon={Database}
+          />
+          <StandardButton
+            title="Recons Bulk Import Data"
+            desc="Bulk import data into Databases."
+            path="/recons/bulk_import"
+            icon={Database}
+          />
+        </Section>
+
+        {/* ================= TOOLS ================= */}
+        <Section title="Tools & Functions" icon={Activity}>
+          <StandardButton
+            title="HPC Reconciliation"
+            desc="Execute reconciliation process for HPC."
+            path="/recons/hpc"
+            img="/images/hpc_bw.jpg"
+            state={{ businessType: "HPC" }}
+          />
+          <StandardButton
+            title="IC Reconciliation"
+            desc="Execute reconciliation process for IC."
+            path="/recons/ic"
+            img="/images/ic_bw.jpg"
+            state={{ businessType: "IC" }}
+          />
+          <StandardButton
+            title="Custom Reconciliation"
+            desc="Run reconciliation for custom reports."
+            path="/recons/custom"
+            img="/images/custom_report.jpg"
+          />
+          <StandardButton
+            title="Coming Soon"
+            placeholder
+          />
+        </Section>
+
+        {/* ================= REPORTS ================= */}
+        <Section title="Reports" icon={BarChart3}>
+          <StandardButton
+            title="Mismatch Tracker"
+            desc="Monitor and analyze mismatch cases."
+            path="/recons/mismatch"
+            icon={BarChart3}
+          />
+          <StandardButton
+            title="Summary Dashboard"
+            desc="View reconciliation performance metrics."
+            path="/recons/summary"
+            icon={FileBarChart2}
+          />
+          <StandardButton
+            title="Export Reports"
+            desc="Download reports in Excel or PDF."
+            path="/recons/export"
+            icon={FileSearch}
+          />
+          <StandardButton
+            title="Audit History"
+            desc="Review reconciliation audit logs."
+            path="/recons/audit"
+            icon={Layers}
+          />
+        </Section>
+
+      </div>
+    </div>
   );
 }
 

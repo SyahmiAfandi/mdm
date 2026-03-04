@@ -30,6 +30,8 @@ function ReconciliationUploadPage() {
   const uploadEndpointOSDP = location.state?.uploadEndpointOSDP || '/upload_HPCRAWDATA_OSDP';
   const uploadEndpointPBI = location.state?.uploadEndpointPBI || '/upload_FCSHPC_PBI';
   const nextPath = location.state?.nextPath || '/recons/summary';
+  const reportTypeId =location.state?.reportTypeId || sessionStorage.getItem("reportTypeId") || "";
+  const reportTypeName =location.state?.reportTypeName || sessionStorage.getItem("reportTypeName") || fromButton;
   const [loadingNext, setLoadingNext] = useState(false);
 
   const osdpInputRef = useRef();
@@ -278,10 +280,12 @@ const handleUploadOSDP = async () => {
     file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
 
   useEffect(() => {
-    if (fromButton) {
-      sessionStorage.setItem('fromButton', fromButton);
-    }
-  }, [fromButton]);
+    if (fromButton) sessionStorage.setItem("fromButton", fromButton);
+    if (businessType && businessType !== "N/A") sessionStorage.setItem("businessType", businessType);
+
+    if (location.state?.reportTypeId) sessionStorage.setItem("reportTypeId", location.state.reportTypeId);
+    if (location.state?.reportTypeName) sessionStorage.setItem("reportTypeName", location.state.reportTypeName);
+  }, [fromButton, businessType, location.state?.reportTypeId, location.state?.reportTypeName]);
 
 
   return (
@@ -334,14 +338,16 @@ const handleUploadOSDP = async () => {
                   osdp_data: sortedData,
                   pbi_data: sortedDataPBI,
                   businessType,
-                  reportType: fromButton
+                  reportTypeId,        // ✅ master id
+                  reportTypeName,      // ✅ display name
+                  reportType: fromButton // (optional fallback)
                 })
               });
               const { result_id, key_columns } = await res.json();
               sessionStorage.setItem('reconcileResultId', result_id);
               sessionStorage.setItem('keyColumns', JSON.stringify(key_columns));
               navigate('/recons/summary', {
-                state: { result_id, key_columns, fromButton, businessType }
+                state: { result_id, key_columns, fromButton, businessType, reportTypeId, reportTypeName }
               });
             } catch (e) {
               toast.error('Failed to process reconciliation. Please try again.');
