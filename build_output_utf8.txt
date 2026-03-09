@@ -1,0 +1,85 @@
+﻿
+> frontend@0.0.0 build
+> vite build
+
+[36mvite v6.3.5 [32mbuilding for production...[36m[39m
+transforming...
+node.exe : 
+Browserslist: 
+browsers data 
+(caniuse-lite) is 10 
+months old. Please 
+run:
+At C:\Program Files\no
+dejs\npm.ps1:29 char:3
++   & $NODE_EXE 
+$NPM_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (Browsersli   
+ st: b...ld. Pleas    
+e run::String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+  npx update-browsersl
+ist-db@latest
+  Why you should do 
+it regularly: https://
+github.com/browserslis
+t/update-db#readme
+[32mΓ£ô[39m 19 modules transformed.
+[31mΓ£ù[39m Build 
+failed in 4.12s
+[31merror during 
+build:
+[31mCould not 
+resolve "./pages/Utili
+ties/EmailTracker" 
+from 
+"src/App.jsx"[31m
+file: [36mC:/Users/Sy
+ahmi/Desktop/React Tut
+orial/mdmTools/fronten
+d/src/App.jsx[31m
+    at getRollupError 
+(file:///C:/Users/Syah
+mi/Desktop/React%20Tut
+orial/mdmTools/fronten
+d/node_modules/rollup/
+dist/es/shared/parseAs
+t.js:400:41)
+    at error (file:///
+C:/Users/Syahmi/Deskto
+p/React%20Tutorial/mdm
+Tools/frontend/node_mo
+dules/rollup/dist/es/s
+hared/parseAst.js:396:
+42)
+    at ModuleLoader.ha
+ndleInvalidResolvedId 
+(file:///C:/Users/Syah
+mi/Desktop/React%20Tut
+orial/mdmTools/fronten
+d/node_modules/rollup/
+dist/es/shared/node-en
+try.js:21379:24)
+    at ModuleLoader.re
+solveDynamicImport (fi
+le:///C:/Users/Syahmi/
+Desktop/React%20Tutori
+al/mdmTools/frontend/n
+ode_modules/rollup/dis
+t/es/shared/node-entry
+.js:21439:58)
+    at async file:///C
+:/Users/Syahmi/Desktop
+/React%20Tutorial/mdmT
+ools/frontend/node_mod
+ules/rollup/dist/es/sh
+ared/node-entry.js:213
+27:32[39m
