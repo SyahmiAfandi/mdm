@@ -72,7 +72,7 @@ const RegisterPICPage = lazy(() => import("./pages/Admin-RegisterPICPage.jsx"));
 
 // Utilities
 const UtilitiesSelection = lazy(() => import("./pages/Utilities/UtilitiesHomePage"));
-const EmailTracker = lazy(() => import("./pages/utilities/EmailTracker.jsx"));
+const EmailTracker = lazy(() => import("./pages/Utilities/EmailTracker.jsx"));
 const EmailBulkUpload = lazy(() => import("./pages/Utilities/EmailTrackerBulkImport.jsx"));
 const ManualReconsEntry = lazy(() => import("./pages/Utilities/ManualReconsEntry.jsx"));
 
