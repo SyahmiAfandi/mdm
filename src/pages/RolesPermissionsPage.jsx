@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { APP_FULL_NAME } from "../config";
 import { auth, db } from "../firebaseClient";
 import toast from "react-hot-toast";
 import {
@@ -12,11 +11,16 @@ import {
 } from "firebase/firestore";
 import {
   ChevronDown,
-  ChevronRight,
   Save,
   Shield,
   Search,
   Lock,
+  Check,
+  X,
+  Users,
+  Layers,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
 // 🔑 Must match your owner UID in Firestore Rules
@@ -25,23 +29,21 @@ const OWNER_UID = import.meta.env.VITE_FIREBASE_OWNER_UID;
 // Roles you support today
 const ROLES = ["admin", "user", "viewer"];
 
-/**
- * ✅ Define your permission structure here (Main -> Sub -> SubSub -> permissions)
- * Each permission item: { key, label, desc? }
- *
- * Tip:
- * - key should match what you check in <RequirePermission perm="..." />
- * - group labels can match your sidebar / modules
- */
+const ROLE_META = {
+  admin: { label: "Admin", color: "from-violet-500 to-purple-600", badge: "bg-violet-100 text-violet-700 border-violet-200" },
+  user: { label: "User", color: "from-blue-500 to-cyan-500", badge: "bg-blue-100 text-blue-700 border-blue-200" },
+  viewer: { label: "Viewer", color: "from-slate-400 to-slate-500", badge: "bg-slate-100 text-slate-600 border-slate-200" },
+};
+
 const PERMISSION_TREE = [
   {
     id: "dashboard",
-    label: "Main Dashboard",
+    label: "Dashboard",
     icon: "🏠",
     children: [
       {
         id: "dashboard-core",
-        label: "Dashboard Core",
+        label: "Core",
         permissions: [
           { key: "dashboard.view", label: "View Dashboard" },
         ],
@@ -55,7 +57,7 @@ const PERMISSION_TREE = [
     children: [
       {
         id: "tools-core",
-        label: "Tools Access",
+        label: "Core",
         permissions: [
           { key: "tools.view", label: "View Tools Section" },
         ],
@@ -69,7 +71,7 @@ const PERMISSION_TREE = [
     children: [
       {
         id: "utilities-core",
-        label: "Utilities Access",
+        label: "Core",
         permissions: [{ key: "utilities.view", label: "View Utilities Section" }],
       },
       {
@@ -78,28 +80,16 @@ const PERMISSION_TREE = [
         children: [
           {
             id: "mdm-email-tracker-core",
-            label: "Tracker Permissions",
+            label: "Tracker",
             permissions: [
               { key: "mdmEmailTracker.view", label: "View Tracker" },
-              { key: "mdmEmailTracker.assign", label: "Assign Email to Self / PIC" },
+              { key: "mdmEmailTracker.assign", label: "Assign Email to PIC" },
               { key: "mdmEmailTracker.edit", label: "Edit Status / Remark" },
               { key: "mdmEmailTracker.delete", label: "Delete Email" },
-              { key: "mdmEmailTracker.bulkImport", label: "Import Bulk Email" },
+              { key: "mdmEmailTracker.bulkImport", label: "Bulk Import Email" },
             ],
           },
         ],
-      },
-    ],
-  },
-  {
-    id: "uploads",
-    label: "Uploads",
-    icon: "📤",
-    children: [
-      {
-        id: "uploads-core",
-        label: "Uploads Access",
-        permissions: [{ key: "uploads.use", label: "Use Uploads" }],
       },
     ],
   },
@@ -110,7 +100,7 @@ const PERMISSION_TREE = [
     children: [
       {
         id: "reports-core",
-        label: "Reports Access",
+        label: "Core",
         permissions: [
           { key: "reports.view", label: "View Reports" },
           { key: "reports.edit", label: "Edit Reports" },
@@ -134,7 +124,7 @@ const PERMISSION_TREE = [
     children: [
       {
         id: "admin-core",
-        label: "Admin Actions",
+        label: "Core",
         permissions: [
           { key: "admin.manageUsers", label: "Manage Users" },
           { key: "admin.license", label: "Manage Licenses" },
@@ -149,25 +139,25 @@ const PERMISSION_TREE = [
     children: [
       {
         id: "masterData-core",
-        label: "Master Data Access",
+        label: "Core",
         permissions: [
-          { key: "masterData.view", label: "View Master Data Section" },
+          { key: "masterData.view", label: "View Master Data" },
         ],
       },
       {
         id: "masterData-distributors",
-        label: "Distributors Master",
+        label: "Distributors",
         permissions: [
           { key: "masterData.distributors.view", label: "View Distributors" },
-          { key: "masterData.distributors.edit", label: "Create / Edit / Delete Distributors" },
+          { key: "masterData.distributors.edit", label: "Edit Distributors" },
         ],
       },
       {
         id: "masterData-Countries",
-        label: "Countries Master",
+        label: "Countries",
         permissions: [
           { key: "masterData.countries.view", label: "View Countries" },
-          { key: "masterData.countries.edit", label: "Create / Edit / Delete Countries" },
+          { key: "masterData.countries.edit", label: "Edit Countries" },
         ],
       },
     ],
@@ -179,10 +169,10 @@ const PERMISSION_TREE = [
     children: [
       {
         id: "settings-core",
-        label: "Settings Access",
+        label: "Core",
         permissions: [
           { key: "settings.view", label: "View Settings" },
-          { key: "settings.configureRoles", label: "Configure Roles & Permissions" },
+          { key: "settings.configureRoles", label: "Configure Roles & Perms" },
         ],
       },
     ],
@@ -190,185 +180,199 @@ const PERMISSION_TREE = [
 ];
 
 // ---------- helpers ----------
-function bool(v) {
-  return !!v;
-}
+function bool(v) { return !!v; }
 
 function flattenTree(tree) {
   const out = [];
   const walk = (node, pathLabels = []) => {
     const nextPath = node.label ? [...pathLabels, node.label] : pathLabels;
-
     if (node.permissions?.length) {
-      node.permissions.forEach((p) => {
-        out.push({
-          ...p,
-          path: nextPath,
-        });
-      });
+      node.permissions.forEach((p) => out.push({ ...p, path: nextPath }));
     }
-
     if (node.children?.length) {
       node.children.forEach((c) => walk(c, nextPath));
     }
   };
-
   tree.forEach((n) => walk(n, []));
   return out;
 }
 
-function classNames(...xs) {
-  return xs.filter(Boolean).join(" ");
+function sectionHasMatch(node, keySet) {
+  if (node.permissions?.some((p) => keySet.has(p.key))) return true;
+  return (node.children || []).some((c) => sectionHasMatch(c, keySet));
 }
 
-// ---------- small UI components ----------
-function RoleSelect({ value, onChange }) {
+function cx(...xs) { return xs.filter(Boolean).join(" "); }
+
+function countPerms(node) {
+  let c = 0;
+  if (node.permissions) c += node.permissions.length;
+  if (node.children) node.children.forEach((ch) => { c += countPerms(ch); });
+  return c;
+}
+
+// ---------- Toggle ----------
+function Toggle({ value, onChange }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm text-gray-600">Role:</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-      >
-        {ROLES.map((r) => (
-          <option key={r} value={r}>
-            {r.toUpperCase()}
-          </option>
-        ))}
-      </select>
-    </div>
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className={cx(
+        "relative inline-flex h-5 w-9 items-center rounded-full transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 shrink-0",
+        value ? "bg-violet-500 shadow-sm shadow-violet-300" : "bg-gray-200"
+      )}
+    >
+      <span
+        className="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200"
+        style={{ transform: value ? "translateX(18px)" : "translateX(2px)" }}
+      />
+    </button>
   );
 }
 
-function AllowDenyToggle({ value, onChange }) {
-  // value: boolean
+// ---------- Permission Row (table row style) ----------
+function PermRow({ label, permKey, value, onChange }) {
   return (
-    <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
-      <button
-        type="button"
-        onClick={() => onChange(true)}
-        className={classNames(
-          "px-3 py-1.5 text-xs font-semibold rounded-md transition",
-          value
-            ? "bg-green-600 text-white shadow"
-            : "text-gray-600 hover:bg-white"
-        )}
-      >
-        Allow
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange(false)}
-        className={classNames(
-          "px-3 py-1.5 text-xs font-semibold rounded-md transition",
-          !value
-            ? "bg-red-600 text-white shadow"
-            : "text-gray-600 hover:bg-white"
-        )}
-      >
-        Deny
-      </button>
-    </div>
-  );
-}
-
-function AccordionSection({ title, subtitle, icon, open, onToggle, children }) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center text-lg">
-            {icon || "📦"}
-          </div>
-          <div className="text-left">
-            <div className="font-semibold text-gray-800">{title}</div>
-            {subtitle ? (
-              <div className="text-xs text-gray-500 mt-0.5">{subtitle}</div>
-            ) : null}
-          </div>
-        </div>
-        {open ? (
-          <ChevronDown className="w-5 h-5 text-gray-500" />
-        ) : (
-          <ChevronRight className="w-5 h-5 text-gray-500" />
-        )}
-      </button>
-
-      {open ? <div className="px-4 pb-4">{children}</div> : null}
-    </div>
-  );
-}
-
-function SubBlock({ title, children }) {
-  return (
-    <div className="mt-3">
-      <div className="text-sm font-semibold text-gray-700 mb-2">{title}</div>
-      <div className="space-y-2">{children}</div>
-    </div>
-  );
-}
-
-function PermissionRow({ label, permKey, path, value, onChange }) {
-  return (
-    <div className="flex items-start justify-between gap-4 border border-gray-100 rounded-lg px-3 py-2 hover:bg-gray-50 transition">
-      <div className="min-w-0">
-        <div className="text-sm font-medium text-gray-800">{label}</div>
-        <div className="text-xs text-gray-500 mt-0.5">
-          <span className="font-mono">{permKey}</span>
-          {path?.length ? (
-            <span className="ml-2 text-gray-400">
-              • {path.join(" / ")}
-            </span>
-          ) : null}
-        </div>
+    <div className={cx(
+      "flex items-center justify-between py-2 px-3 rounded-lg transition-all duration-150 group",
+      value
+        ? "bg-violet-50 border border-violet-100"
+        : "border border-transparent hover:bg-gray-50 hover:border-gray-100"
+    )}>
+      <div className="min-w-0 flex-1 pr-4">
+        <span className={cx(
+          "text-xs font-semibold leading-none transition-colors",
+          value ? "text-violet-800" : "text-gray-700"
+        )}>{label}</span>
+        <code className={cx(
+          "block mt-0.5 text-[10px] font-mono leading-none tracking-tight transition-colors",
+          value ? "text-violet-400" : "text-gray-400"
+        )}>{permKey}</code>
       </div>
-      <AllowDenyToggle value={value} onChange={onChange} />
+      <div className="flex items-center gap-2.5 shrink-0">
+        <span className={cx(
+          "text-[10px] font-bold tracking-wide w-5 text-right transition-colors",
+          value ? "text-violet-500" : "text-gray-300"
+        )}>
+          {value ? "ON" : "OFF"}
+        </span>
+        <Toggle value={value} onChange={onChange} />
+      </div>
     </div>
   );
 }
 
-// ---------- main page ----------
+// ---------- Tab Nav Item ----------
+function NavItem({ node, active, onClick }) {
+  const total = countPerms(node);
+  return (
+    <button
+      onClick={onClick}
+      className={cx(
+        "w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150",
+        active
+          ? "bg-violet-50 ring-1 ring-violet-200/60"
+          : "hover:bg-gray-50"
+      )}
+    >
+      <span className={cx(
+        "text-base shrink-0 leading-none transition-all duration-150",
+        active ? "scale-110" : ""
+      )}>{node.icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className={cx(
+          "text-xs font-semibold truncate leading-none transition-colors",
+          active ? "text-violet-700" : "text-gray-600"
+        )}>
+          {node.label}
+        </div>
+        <div className={cx(
+          "text-[10px] mt-0.5 leading-none font-medium",
+          active ? "text-violet-400" : "text-gray-400"
+        )}>{total} perm{total !== 1 ? "s" : ""}</div>
+      </div>
+      {active && <div className="w-1 h-5 rounded-full bg-violet-400 shrink-0" />}
+    </button>
+  );
+}
+
+// ---------- Section renderer (recursive) ----------
+function Section({ node, roleMap, onSet, role, filteredKeys }) {
+  const hasPerms = (node.permissions || []).length > 0;
+  const hasChildren = (node.children || []).length > 0;
+
+  const visiblePerms = hasPerms
+    ? node.permissions.filter((p) => (filteredKeys ? filteredKeys.has(p.key) : true))
+    : [];
+
+  const visibleChildren = hasChildren
+    ? node.children.filter((c) => (filteredKeys ? sectionHasMatch(c, filteredKeys) : true))
+    : [];
+
+  if (visiblePerms.length === 0 && visibleChildren.length === 0) return null;
+
+  return (
+    <div className="mb-3">
+      {node.label && (
+        <div className="flex items-center gap-2 mb-1.5 px-1">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{node.label}</div>
+          <div className="flex-1 h-px bg-gray-100" />
+          {visiblePerms.length > 0 && (
+            <span className="text-[10px] font-semibold text-gray-400">{visiblePerms.length}</span>
+          )}
+        </div>
+      )}
+      {visiblePerms.length > 0 && (
+        <div className="space-y-0.5">
+          {visiblePerms.map((p) => (
+            <PermRow
+              key={p.key}
+              label={p.label}
+              permKey={p.key}
+              value={bool(roleMap?.[p.key])}
+              onChange={(v) => onSet(role, p.key, v)}
+            />
+          ))}
+        </div>
+      )}
+      {visibleChildren.length > 0 && (
+        <div className={cx(visiblePerms.length > 0 ? "mt-2" : "")}>
+          {visibleChildren.map((child) => (
+            <Section
+              key={child.id}
+              node={child}
+              roleMap={roleMap}
+              onSet={onSet}
+              role={role}
+              filteredKeys={filteredKeys}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==========================================================
+// MAIN PAGE
+// ==========================================================
 export default function RolesPermissionsPage() {
   const [me, setMe] = useState(null);
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const [matrix, setMatrix] = useState({}); // { role: { key:boolean } }
-
+  const [matrix, setMatrix] = useState({});
   const [selectedRole, setSelectedRole] = useState(ROLES[0]);
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState(PERMISSION_TREE[0].id);
 
-  const [openMain, setOpenMain] = useState(() => {
-    // open a few by default
-    return {
-      dashboard: true,
-      tools: true,
-      utilities: true,
-      uploads: false,
-      reports: false,
-      admin: false,
-      settings: false,
-    };
-  });
-
-  // auth
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(setMe);
     return () => unsub();
   }, []);
 
-  // load all role docs once (owner only)
   useEffect(() => {
     if (!me) return;
-    if (me.uid !== OWNER_UID) {
-      setLoading(false);
-      return;
-    }
+    if (me.uid !== OWNER_UID) { setLoading(false); return; }
 
     (async () => {
       setLoading(true);
@@ -377,12 +381,8 @@ export default function RolesPermissionsPage() {
         const tmp = {};
         ROLES.forEach((r) => (tmp[r] = {}));
         snap.forEach((d) => {
-          const roleId = d.id;
-          const data = d.data() || {};
-          tmp[roleId] = { ...(data.permissions || {}) };
+          tmp[d.id] = { ...(d.data().permissions || {}) };
         });
-
-        // ensure all defined keys exist in state (default false)
         const all = flattenTree(PERMISSION_TREE);
         ROLES.forEach((r) => {
           tmp[r] = tmp[r] || {};
@@ -390,7 +390,6 @@ export default function RolesPermissionsPage() {
             if (typeof tmp[r][p.key] === "undefined") tmp[r][p.key] = false;
           });
         });
-
         setMatrix(tmp);
       } catch (e) {
         console.error(e);
@@ -403,242 +402,302 @@ export default function RolesPermissionsPage() {
 
   const allPermissions = useMemo(() => flattenTree(PERMISSION_TREE), []);
 
-  const matchesSearch = (text) => {
-    if (!search) return true;
+  const filteredKeys = useMemo(() => {
+    if (!search.trim()) return null;
     const q = search.toLowerCase();
-    return (text || "").toLowerCase().includes(q);
-  };
-
-  const filteredKeysSet = useMemo(() => {
-    if (!search) return null;
     const set = new Set();
     allPermissions.forEach((p) => {
-      const hay = `${p.key} ${p.label} ${(p.path || []).join(" ")}`;
-      if (matchesSearch(hay)) set.add(p.key);
+      if (`${p.key} ${p.label}`.toLowerCase().includes(q)) set.add(p.key);
     });
     return set;
   }, [search, allPermissions]);
 
   const currentRoleMap = matrix[selectedRole] || {};
 
-  const setPerm = (role, key, value) => {
-    setMatrix((prev) => ({
-      ...prev,
-      [role]: { ...(prev[role] || {}), [key]: !!value },
-    }));
+  const setPerm = (role, key, val) => {
+    setMatrix((prev) => ({ ...prev, [role]: { ...(prev[role] || {}), [key]: !!val } }));
   };
 
-  const saveSelectedRole = async () => {
+  const saveRole = async () => {
     if (!me || me.uid !== OWNER_UID) return;
     setSaving(true);
     try {
-      const role = selectedRole;
-      const docRef = doc(db, "rolePermissions", role);
-      const payload = {
-        permissions: matrix[role] || {},
-        updatedAt: serverTimestamp(),
-      };
+      const docRef = doc(db, "rolePermissions", selectedRole);
+      const payload = { permissions: matrix[selectedRole] || {}, updatedAt: serverTimestamp() };
       const existing = await getDoc(docRef);
       if (existing.exists()) await setDoc(docRef, payload, { merge: true });
       else await setDoc(docRef, payload);
-
-      toast.success(`Saved permissions for ${role.toUpperCase()}`);
+      toast.success(`Saved — ${selectedRole.toUpperCase()}`);
     } catch (e) {
       console.error(e);
-      toast.error("Failed to save (check Rules/owner UID)");
+      toast.error("Failed to save");
     } finally {
       setSaving(false);
     }
   };
 
-  // non-owner view
+  // Allowed-count summary
+  const allowedCount = useMemo(() => {
+    return allPermissions.filter((p) => bool(currentRoleMap[p.key])).length;
+  }, [currentRoleMap, allPermissions]);
+
+  const totalCount = allPermissions.length;
+
+  // non-owner
   if (!loading && me && me.uid !== OWNER_UID) {
     return (
-        <div className="max-w-3xl mx-auto p-6">
-          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-                <Lock className="w-5 h-5 text-gray-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800">
-                  Roles & Permissions
-                </h2>
-                <p className="text-sm text-gray-600">
-                  This page is restricted to the owner.
-                </p>
-              </div>
-            </div>
+      <div className="h-[calc(100vh-120px)] flex items-center justify-center px-4">
+        <div className="bg-white border border-gray-200 rounded-2xl p-10 shadow-xl max-w-sm w-full text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-red-50 mx-auto flex items-center justify-center">
+            <Lock className="w-7 h-7 text-red-400" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Access Restricted</h2>
+            <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">Only the platform owner can manage roles and permissions.</p>
           </div>
         </div>
+      </div>
     );
   }
 
-  return (
-      <div className="max-w-6xl mx-auto p-6 space-y-5">
-        {/* Header */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-blue-50 flex items-center justify-center">
-                <Shield className="w-5 h-5 text-blue-700" />
-              </div>
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold text-gray-900">
-                  Roles & Permissions
-                </h1>
-                <p className="text-sm text-gray-600">
-                  Pick a role, then allow/deny features in a structured way.
-                </p>
-              </div>
-            </div>
+  const roleMeta = ROLE_META[selectedRole] || ROLE_META.user;
 
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <RoleSelect value={selectedRole} onChange={setSelectedRole} />
-              <button
-                onClick={saveSelectedRole}
-                disabled={saving || loading}
-                className={classNames(
-                  "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition shadow-sm",
-                  saving || loading
-                    ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                    : "bg-blue-600 text-white hover:bg-blue-700"
-                )}
-              >
-                <Save className="w-4 h-4" />
-                {saving ? "Saving..." : "Save Role"}
-              </button>
-            </div>
+  // Sidebar tabs — filter by search
+  const visibleTabs = PERMISSION_TREE.filter((m) =>
+    filteredKeys ? sectionHasMatch(m, filteredKeys) : true
+  );
+
+  // Active content node
+  const activeModule = filteredKeys
+    ? null // search mode shows all
+    : PERMISSION_TREE.find((m) => m.id === activeTab);
+
+  return (
+    <div className="h-[calc(100vh-112px)] flex flex-col gap-3 p-4 overflow-hidden">
+
+      {/* ── HEADER ── */}
+      <div className="shrink-0 flex items-center justify-between gap-4 bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm">
+        {/* Left: title */}
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-md shadow-violet-200 shrink-0">
+            <Shield className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-gray-900 leading-none">Roles & Permissions</h1>
+            <p className="text-[10px] text-gray-400 mt-0.5 leading-none">Control system access by role</p>
+          </div>
+        </div>
+
+        {/* Right: role selector + stats + save */}
+        <div className="flex items-center gap-2">
+          {/* Allowed stat */}
+          <div className="hidden sm:flex flex-col items-end mr-2">
+            <div className="text-xs font-bold text-gray-700 leading-none">{allowedCount} / {totalCount}</div>
+            <div className="text-[10px] text-gray-400 mt-0.5 leading-none">permissions on</div>
           </div>
 
+          {/* Divider */}
+          <div className="w-px h-8 bg-gray-100 hidden sm:block" />
+
+          {/* Role tabs */}
+          <div className="flex items-center gap-1 bg-gray-100/70 p-0.5 rounded-lg">
+            {ROLES.map((r) => {
+              const meta = ROLE_META[r];
+              const isActive = selectedRole === r;
+              return (
+                <button
+                  key={r}
+                  onClick={() => setSelectedRole(r)}
+                  className={cx(
+                    "px-3 py-1.5 rounded-md text-xs font-bold transition-all duration-150",
+                    isActive
+                      ? "bg-white shadow-sm text-gray-900 scale-[1.02]"
+                      : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  {meta.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Divider */}
+          <div className="w-px h-8 bg-gray-100" />
+
+          {/* Save */}
+          <button
+            onClick={saveRole}
+            disabled={saving || loading}
+            className={cx(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150",
+              saving || loading
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-violet-600 text-white hover:bg-violet-700 shadow-sm shadow-violet-200 active:scale-95"
+            )}
+          >
+            <Save className="w-3 h-3" />
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+
+      {/* ── BODY ── */}
+      <div className="flex-1 flex gap-3 min-h-0">
+
+        {/* ── SIDEBAR ── */}
+        <div className="w-48 shrink-0 flex flex-col bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
           {/* Search */}
-          <div className="mt-4 flex items-center gap-2">
-            <div className="relative w-full md:w-[420px]">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <div className="px-2.5 pt-2.5 pb-2 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search permission (e.g., reports, mdm, export)"
-                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="Search…"
+                className="w-full pl-6 pr-2 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400/30 focus:border-violet-300 focus:bg-white transition-all"
               />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
+          </div>
 
-            <div className="text-xs text-gray-500 hidden md:block">
-              Managing:{" "}
-              <span className="font-semibold text-gray-700">
-                {selectedRole.toUpperCase()}
+          {/* Nav */}
+          <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
+            {visibleTabs.length === 0 && (
+              <div className="text-[10px] text-gray-400 text-center py-6 font-medium">No matches</div>
+            )}
+            {visibleTabs.map((m) => (
+              <NavItem
+                key={m.id}
+                node={m}
+                active={!filteredKeys && activeTab === m.id}
+                onClick={() => { setActiveTab(m.id); setSearch(""); }}
+                filtered={!!filteredKeys}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* ── CONTENT ── */}
+        <div className="flex-1 flex flex-col bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden min-w-0">
+
+          {/* Content header */}
+          <div className="shrink-0 px-4 py-2.5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+            <div className="flex items-center gap-2">
+              {filteredKeys ? (
+                <>
+                  <Search className="w-3.5 h-3.5 text-violet-500" />
+                  <span className="text-xs font-bold text-gray-900">Search: <em className="not-italic text-violet-600">"{search}"</em></span>
+                  <span className="text-[10px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded font-semibold">{filteredKeys.size} found</span>
+                </>
+              ) : activeModule ? (
+                <>
+                  <span className="text-base leading-none">{activeModule.icon}</span>
+                  <span className="text-xs font-bold text-gray-900">{activeModule.label}</span>
+                  <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-semibold">{countPerms(activeModule)} perms</span>
+                </>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-gray-400 font-medium">Role:</span>
+              <span className={cx(
+                "text-[10px] font-bold px-2 py-0.5 rounded-md border uppercase tracking-wide",
+                roleMeta.badge
+              )}>
+                {selectedRole}
               </span>
             </div>
           </div>
-        </div>
 
-        {/* Content */}
-        <div className="space-y-4">
-          {PERMISSION_TREE.map((main) => {
-            // If search is active, open sections with matches automatically
-            const isOpen =
-              openMain[main.id] ||
-              (filteredKeysSet
-                ? sectionHasMatch(main, filteredKeysSet)
-                : false);
+          {/* Permission list */}
+          <div className="flex-1 overflow-y-auto p-3">
+            {loading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs text-gray-500">Loading…</span>
+                </div>
+              </div>
+            ) : filteredKeys ? (
+              // Search mode: show all matching sections
+              filteredKeys.size === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-2">
+                  <Search className="w-8 h-8 text-gray-200" />
+                  <p className="text-xs text-gray-500">No permissions match "<strong>{search}</strong>"</p>
+                </div>
+              ) : (
+                <div>
+                  {PERMISSION_TREE.map((m) => {
+                    if (!sectionHasMatch(m, filteredKeys)) return null;
+                    return (
+                      <div key={m.id} className="mb-4">
+                        <div className="flex items-center gap-1.5 mb-2 px-1">
+                          <span className="text-sm leading-none">{m.icon}</span>
+                          <span className="text-[11px] font-bold text-gray-700">{m.label}</span>
+                          <div className="flex-1 h-px bg-gray-100" />
+                        </div>
+                        {m.children.map((child) => (
+                          <Section
+                            key={child.id}
+                            node={child}
+                            roleMap={currentRoleMap}
+                            onSet={setPerm}
+                            role={selectedRole}
+                            filteredKeys={filteredKeys}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : activeModule ? (
+              <div>
+                {activeModule.children.map((child) => (
+                  <Section
+                    key={child.id}
+                    node={child}
+                    roleMap={currentRoleMap}
+                    onSet={setPerm}
+                    role={selectedRole}
+                    filteredKeys={null}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-xs text-gray-400">
+                Select a module from the left
+              </div>
+            )}
+          </div>
 
-            return (
-              <AccordionSection
-                key={main.id}
-                title={main.label}
-                subtitle={`Configure ${main.label} access for ${selectedRole.toUpperCase()}`}
-                icon={main.icon}
-                open={isOpen}
-                onToggle={() =>
-                  setOpenMain((p) => ({ ...p, [main.id]: !p[main.id] }))
-                }
-              >
-                {renderChildren(main.children || [], {
-                  selectedRole,
-                  currentRoleMap,
-                  setPerm,
-                  filteredKeysSet,
-                })}
-              </AccordionSection>
-            );
-          })}
-        </div>
-
-        <div className="text-xs text-gray-500">
-          Tip: Use namespaced keys like <code className="font-mono">reports.view</code> or{" "}
-          <code className="font-mono">mdmEmailTracker.assign</code>. Then protect screens with{" "}
-          <code className="font-mono">{`<RequirePermission perm="reports.view">`}</code>.
+          {/* Footer: quick stats bar */}
+          <div className="shrink-0 px-4 py-2 border-t border-gray-100 flex items-center gap-4 bg-gray-50/50">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+              <span className="text-[10px] text-gray-500 font-medium">
+                <strong className="text-emerald-600">{allowedCount}</strong> allowed
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <XCircle className="w-3 h-3 text-red-400" />
+              <span className="text-[10px] text-gray-500 font-medium">
+                <strong className="text-red-500">{totalCount - allowedCount}</strong> denied
+              </span>
+            </div>
+            <div className="flex-1" />
+            <div className="text-[10px] text-gray-400">
+              Use <code className="font-mono bg-gray-100 px-1 rounded text-gray-600">{"<RequirePermission>"}</code> to guard components
+            </div>
+          </div>
         </div>
       </div>
-  );
-}
-
-// ---------- render helpers ----------
-function sectionHasMatch(section, keySet) {
-  if (!keySet) return true;
-  const walk = (node) => {
-    if (node.permissions?.some((p) => keySet.has(p.key))) return true;
-    if (node.children?.some(walk)) return true;
-    return false;
-  };
-  return walk(section);
-}
-
-function renderChildren(children, ctx) {
-  const { selectedRole, currentRoleMap, setPerm, filteredKeysSet } = ctx;
-
-  return (
-    <div className="space-y-3 mt-2">
-      {children.map((child) => {
-        const hasMatch = filteredKeysSet ? sectionHasMatch(child, filteredKeysSet) : true;
-        if (!hasMatch) return null;
-
-        const hasSubChildren = (child.children || []).length > 0;
-        const hasPerms = (child.permissions || []).length > 0;
-
-        // Sub block title
-        return (
-          <div key={child.id} className="border border-gray-100 rounded-xl p-3">
-            <div className="flex items-center justify-between">
-              <div className="font-semibold text-gray-800 text-sm">
-                {child.label}
-              </div>
-
-              {/* quick badges */}
-              <div className="text-[11px] text-gray-500">
-                {hasPerms ? `${child.permissions.length} permissions` : null}
-                {hasPerms && hasSubChildren ? " • " : null}
-                {hasSubChildren ? `${child.children.length} sub modules` : null}
-              </div>
-            </div>
-
-            {/* permissions in this level */}
-            {hasPerms ? (
-              <SubBlock title="Permissions">
-                {child.permissions
-                  .filter((p) => (filteredKeysSet ? filteredKeysSet.has(p.key) : true))
-                  .map((p) => (
-                    <PermissionRow
-                      key={p.key}
-                      label={p.label}
-                      permKey={p.key}
-                      path={[child.label]}
-                      value={bool(currentRoleMap?.[p.key])}
-                      onChange={(v) => setPerm(selectedRole, p.key, v)}
-                    />
-                  ))}
-              </SubBlock>
-            ) : null}
-
-            {/* nested children */}
-            {hasSubChildren ? (
-              <div className="mt-3 space-y-3">
-                {renderChildren(child.children, ctx)}
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
     </div>
   );
 }

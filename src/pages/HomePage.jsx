@@ -202,8 +202,8 @@ function HomePage() {
           ].join(" ")}
         >
           {/* FRONT */}
-          <div className="absolute inset-0 h-full [backface-visibility:hidden]">
-            <SummaryCardCompact
+          <div className={`absolute inset-0 h-full [backface-visibility:hidden] ${flipped ? "pointer-events-none z-0 hidden sm:block" : "z-10"}`} style={{ WebkitBackfaceVisibility: 'hidden' }}>
+            <ReconsDashboardCard
               className="h-full"
               title="Recons Progress"
               subtitle={
@@ -214,7 +214,6 @@ function HomePage() {
                     : "No data yet"
               }
               icon={<FileSpreadsheet size={18} />}
-              accent="emerald"
               percent={reconsProgress.percentDone}
               hint={
                 year
@@ -226,7 +225,7 @@ function HomePage() {
                   : ""
               }
               footer={
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 mt-2">
                   <TinyPill
                     icon={FileSpreadsheet}
                     label="Processed"
@@ -239,22 +238,24 @@ function HomePage() {
                   <TinyPill icon={Clock3} label="Last Run" value={reconsProgress.lastRunLabel} tone="gray" />
                 </div>
               }
-              cta={{ href: "/reports/matrix_recons", label: "Open" }}
-            />
 
-            <button
-              type="button"
-              onClick={openSettings}
-              className="absolute bottom-3 right-3 inline-flex items-center justify-center w-8 h-8 rounded-xl ring-1 ring-gray-200 dark:ring-gray-700 bg-white/90 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-900 transition text-gray-500 dark:text-gray-300"
-              title="Filter"
-            >
-              <Settings size={14} />
-            </button>
+              cta={{ href: "/reports/matrix_recons", label: "Open Report" }}
+              actionLeft={
+                <button
+                  type="button"
+                  onClick={openSettings}
+                  className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg ring-1 ring-emerald-200/50 dark:ring-emerald-800/50 bg-white dark:bg-gray-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all text-xs font-bold text-emerald-600 dark:text-emerald-400 shadow-sm active:scale-95"
+                  title="Filter"
+                >
+                  <Settings size={14} /> Filter
+                </button>
+              }
+            />
           </div>
 
           {/* BACK: Filters */}
-          <div className="absolute inset-0 h-full [backface-visibility:hidden] [transform:rotateY(180deg)]">
-            <div className="bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 rounded-2xl p-4 h-full">
+          <div className={`absolute inset-0 h-full w-full [backface-visibility:hidden] [transform:rotateY(180deg)] ${flipped ? "z-10" : "pointer-events-none z-0 hidden sm:block"}`} style={{ WebkitBackfaceVisibility: 'hidden' }}>
+            <div className="bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 rounded-2xl p-4 h-full flex flex-col">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
                   <Settings size={14} className="text-blue-500" /> Recons Filters
@@ -322,15 +323,42 @@ function HomePage() {
         </div>
 
         {/* keeps height stable during flip */}
-        <div className="invisible h-[260px] sm:h-[252px] lg:h-[240px]">
-          <SummaryCardCompact
+        <div className="invisible h-auto opacity-0 pointer-events-none">
+          <ReconsDashboardCard
             title="Recons Progress"
-            subtitle="Latest run"
+            subtitle={
+              reconsProgress.loading
+                ? "Loading..."
+                : reconsProgress.hasData
+                  ? "Latest run"
+                  : "No data yet"
+            }
             icon={<FileSpreadsheet size={18} />}
-            accent="emerald"
-            percent={86}
-            footer={<div className="h-[92px]" />}
-            cta={{ href: "#", label: "Open" }}
+            percent={reconsProgress.percentDone}
+            hint={
+              year
+                ? `Filter: ${year}${month
+                  ? ` • ${monthOptions.find((m) => m.value === String(month))?.label || ""
+                  }`
+                  : ""
+                }`
+                : ""
+            }
+            footer={
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <TinyPill
+                  icon={FileSpreadsheet}
+                  label="Processed"
+                  value={reconsProgress.processed}
+                  sub={`/ ${reconsProgress.total}`}
+                  tone="blue"
+                />
+                <TinyPill icon={AlertTriangle} label="Mismatch" value={reconsProgress.mismatches} tone="red" />
+                <TinyPill icon={CheckCircle2} label="Matched" value={reconsProgress.matched} tone="green" />
+                <TinyPill icon={Clock3} label="Last Run" value={reconsProgress.lastRunLabel} tone="gray" />
+              </div>
+            }
+            cta={{ href: "/reports/matrix_recons", label: "Open Report" }}
           />
         </div>
       </div>
@@ -647,6 +675,70 @@ function SummaryCardCompact({ title, subtitle, icon, accent = "blue", percent = 
   );
 }
 
+/* ─── ReconsDashboardCard (New Radial Style) ─── */
+function ReconsDashboardCard({ title, subtitle, icon, percent = 0, footer, hint, cta, actionLeft, className = "" }) {
+  const circleRadius = 28;
+  const circumference = 2 * Math.PI * circleRadius;
+  const strokeDashoffset = circumference - (Math.max(0, Math.min(100, percent)) / 100) * circumference;
+
+  return (
+    <div className={["bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 shadow-sm hover:shadow-md transition-all duration-300 p-4 sm:p-5 flex flex-col relative overflow-hidden group", className].join(" ")}>
+      {/* Background glow */}
+      <div className="absolute -right-6 -top-6 w-32 h-32 bg-emerald-500/10 dark:bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all duration-500 pointer-events-none" />
+
+      <div className="flex items-start justify-between mb-2 relative z-10">
+        <div className="flex flex-col min-w-0 pr-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300`}>{icon}</div>
+            <div className="min-w-0">
+              <div className="text-sm font-bold text-gray-800 dark:text-gray-100 truncate">{title}</div>
+              <div className="text-[11px] text-gray-400 dark:text-gray-500 truncate">{subtitle}</div>
+            </div>
+          </div>
+          {hint && <div className="ml-12 text-[10px] font-semibold text-emerald-700 bg-emerald-50/80 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 rounded mt-1.5 inline-block border border-emerald-100 dark:border-emerald-800/50">{hint}</div>}
+        </div>
+
+        {/* Radial Progress */}
+        <div className="relative flex items-center justify-center w-16 h-16 shrink-0 mr-1 mt-1">
+          <svg className="w-full h-full transform -rotate-90 drop-shadow-sm" viewBox="0 0 64 64">
+            <circle cx="32" cy="32" r={circleRadius} stroke="currentColor" strokeWidth="6" fill="transparent" className="text-gray-100 dark:text-gray-700" />
+            <circle
+              cx="32"
+              cy="32"
+              r={circleRadius}
+              stroke="currentColor"
+              strokeWidth="6"
+              fill="transparent"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              className="text-emerald-500 dark:text-emerald-400 transition-all duration-1000 ease-out"
+              strokeLinecap="round"
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pt-0.5">
+            <span className="text-sm font-black text-gray-800 dark:text-gray-100">{Math.round(percent)}<span className="text-[10px]">%</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 relative z-10 w-full mt-1 mb-1">
+        {footer}
+      </div>
+
+      {cta?.href && (
+        <div className="mt-auto pt-4 border-t border-gray-100 dark:border-gray-700/60 relative z-10 flex justify-between items-center">
+          <div className="shrink-0 flex items-center">
+            {actionLeft ? actionLeft : <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest hidden sm:block">Reconciliation</span>}
+          </div>
+          <Link to={cta.href} className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors bg-emerald-50 hover:bg-emerald-100/80 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 px-3 py-1.5 rounded-lg active:scale-95 ml-auto">
+            {cta.label} <ArrowRight size={14} />
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TinyPill({ icon: Icon, label, value, sub, tone = "gray" }) {
   const t = {
     blue: "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-100 dark:border-blue-900/50",
@@ -759,5 +851,4 @@ function HealthRowCompact({ label, status, hint, latency }) {
     </div>
   );
 }
-
 export default HomePage;

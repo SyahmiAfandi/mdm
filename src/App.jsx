@@ -24,7 +24,7 @@ const ToolSelection = lazy(() => import("./pages/ToolsSelectionPage"));
 
 
 // Tools - Promotions
-const PromoSelection = lazy(() => import("./pages/promoselect"));
+const PromoMainPage = lazy(() => import("./pages/PromoMainPage"));
 const PromoAutoIC = lazy(() => import("./pages/promo_auto_IC"));
 
 // Tools - Reconciliation
@@ -49,13 +49,17 @@ const MasterBusinessPage = lazy(() => import("./pages/MasterData/MasterBusinessP
 const MasterReportTypePage = lazy(() => import("./pages/MasterData/MasterReportTypePage.jsx"));
 const MasterYearPage = lazy(() => import("./pages/MasterData/MasterYearPage.jsx"));
 const MasterBusinessReportTypeMapPage = lazy(() => import("./pages/MasterData/MasterBusinessReportTypeMapPage.jsx"));
+const ReconsButtonMappingPage = lazy(() => import("./pages/MasterData/ReconsButtonMappingPage.jsx"));
+
 
 //Reports
-const ReportSelection = lazy(() => import("./pages/ReportsPage"));
+const ReportSelection = lazy(() => import("./pages/Reports/ReportMainPage"));
 const ReportSummary = lazy(() => import("./pages/ReportSummaryPage"));
 const MismatchTrackerReport = lazy(() => import("./pages/MismatchTrackerReport"));
+const MismatchListReport = lazy(() => import("./pages/Reports/MismatchListReport"));
 const MatrixReconsReport = lazy(() => import("./pages/Reports/ReconciliationMatrix"));
 const DSSreport = lazy(() => import("./pages/DailySalesSummary"));
+const ReconScheduleReport = lazy(() => import("./pages/Reports/ReconScheduleReport"));
 
 // Settings
 const Settings = lazy(() => import("./pages/Settings"));
@@ -68,7 +72,7 @@ const RegisterPICPage = lazy(() => import("./pages/Admin-RegisterPICPage.jsx"));
 
 // Utilities
 const UtilitiesSelection = lazy(() => import("./pages/Utilities/UtilitiesHomePage"));
-const EmailTracker = lazy(() => import("./pages/Utilities/EmailTracker.jsx"));
+const EmailTracker = lazy(() => import("./pages/utilities/EmailTracker.jsx"));
 const EmailBulkUpload = lazy(() => import("./pages/Utilities/EmailTrackerBulkImport.jsx"));
 const ManualReconsEntry = lazy(() => import("./pages/Utilities/ManualReconsEntry.jsx"));
 
@@ -194,7 +198,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
 
           <Route path="/tools" element={<ToolSelection />} />
-          <Route path="/promotions" element={<PromoSelection />} />
+          <Route path="/promotions" element={<PromoMainPage />} />
           <Route path="/promotions/auto-IC" element={<PromoAutoIC />} />
           <Route path="/chat" element={<ChatPage />} />
 
@@ -207,8 +211,10 @@ export default function App() {
           <Route path="/reports" element={<ReportSelection />} />
           <Route path="/reports/summary_recons" element={<ReportSummary />} />
           <Route path="/reports/mismatch-tracker" element={<MismatchTrackerReport />} />
+          <Route path="/reports/mismatch-list" element={<MismatchListReport />} />
           <Route path="/reports/matrix_recons" element={<MatrixReconsReport />} />
           <Route path="/reports/DSS" element={<DSSreport />} />
+          <Route path="/reports/recon-schedule" element={<ReconScheduleReport />} />
 
           <Route path="/recons" element={<ReconsMainPage />} />
           <Route path="/recons/hpc" element={<ReconsHPCPage />} />
@@ -233,6 +239,8 @@ export default function App() {
           <Route path="/master-data/report-types" element={<MasterReportTypePage />} />
           <Route path="/master-data/years" element={<MasterYearPage />} />
           <Route path="/master-data/map-report-business" element={<MasterBusinessReportTypeMapPage />} />
+          <Route path="/recons/button-mapping" element={<ReconsButtonMappingPage />} />
+
 
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/admin/users" element={<AdminManageControl />} />

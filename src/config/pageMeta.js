@@ -95,16 +95,16 @@ export const PAGE_META = [
     match: /^\/recons\/?$/,
     title: "Reconciliation",
     breadcrumbs: [
-      { label: "Home", to: "/" }, 
-      { label: "Tools", to: "/tools" }, 
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
       { label: "Reconciliation" }],
   },
   {
     match: /^\/recons\/period/,
     title: "Recons Period Setup",
     breadcrumbs: [
-      { label: "Home", to: "/" }, 
-      { label: "Tools", to: "/tools" }, 
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
       { label: "Reconciliation", to: "/recons" },
       { label: "Recons Period Setup" }
     ],
@@ -114,8 +114,8 @@ export const PAGE_META = [
     match: /^\/recons\/cells/,
     title: "Recons Data Management",
     breadcrumbs: [
-      { label: "Home", to: "/" }, 
-      { label: "Tools", to: "/tools" }, 
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
       { label: "Reconciliation", to: "/recons" },
       { label: "Recons Data Management" }
     ],
@@ -125,8 +125,8 @@ export const PAGE_META = [
     match: /^\/recons\/config/,
     title: "Recons Configuration",
     breadcrumbs: [
-      { label: "Home", to: "/" }, 
-      { label: "Tools", to: "/tools" }, 
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
       { label: "Reconciliation", to: "/recons" },
       { label: "Recons Configuration" }
     ],
@@ -135,8 +135,8 @@ export const PAGE_META = [
     match: /^\/recons\/bulk/,
     title: "Bulk Import Recons Data",
     breadcrumbs: [
-      { label: "Home", to: "/" }, 
-      { label: "Tools", to: "/tools" }, 
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
       { label: "Reconciliation", to: "/recons" },
       { label: "Bulk Import" }
     ],
@@ -147,7 +147,7 @@ export const PAGE_META = [
     title: "Reconciliation (HPC)",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Tools", to: "/tools" }, 
+      { label: "Tools", to: "/tools" },
       { label: "Reconciliation", to: "/recons" },
       { label: "HPC" },
     ],
@@ -158,7 +158,7 @@ export const PAGE_META = [
     title: "Reconciliation (IC)",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Tools", to: "/tools" }, 
+      { label: "Tools", to: "/tools" },
       { label: "Reconciliation", to: "/recons" },
       { label: "IC" },
     ],
@@ -169,7 +169,7 @@ export const PAGE_META = [
     title: "Reconciliation Upload",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Tools", to: "/tools" }, 
+      { label: "Tools", to: "/tools" },
       { label: "Reconciliation", to: "/recons" },
       { label: "Upload" },
     ],
@@ -180,7 +180,7 @@ export const PAGE_META = [
     title: "Reconciliation Summary",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Tools", to: "/tools" }, 
+      { label: "Tools", to: "/tools" },
       { label: "Reconciliation", to: "/recons" },
       { label: "Summary" },
     ],
@@ -191,7 +191,7 @@ export const PAGE_META = [
     title: "Reconciliation Results",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Tools", to: "/tools" }, 
+      { label: "Tools", to: "/tools" },
       { label: "Reconciliation", to: "/recons" },
       { label: "Results" },
     ],
@@ -202,9 +202,20 @@ export const PAGE_META = [
     title: "Custom Reconciliation",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Tools", to: "/tools" }, 
+      { label: "Tools", to: "/tools" },
       { label: "Reconciliation", to: "/recons" },
       { label: "Custom" },
+    ],
+  },
+
+  {
+    match: /^\/recons\/button-mapping/,
+    title: "Button Mapping",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
+      { label: "Reconciliation", to: "/recons" },
+      { label: "Button Mapping" },
     ],
   },
 
@@ -213,8 +224,8 @@ export const PAGE_META = [
     title: "Promotions",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Tools", to: "/tools" }, 
-      { label: "Promotions"},
+      { label: "Tools", to: "/tools" },
+      { label: "Promotions" },
     ],
   },
 
@@ -223,7 +234,7 @@ export const PAGE_META = [
     title: "Auto Generate (IC Promotions)",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Tools", to: "/tools" }, 
+      { label: "Tools", to: "/tools" },
       { label: "Promotions", to: "/promotions" },
       { label: "Auto-IC Promo" },
     ],
@@ -243,7 +254,7 @@ export const PAGE_META = [
     title: "Master Data",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Master Data"}, 
+      { label: "Master Data" },
     ],
   },
   {
@@ -251,8 +262,8 @@ export const PAGE_META = [
     title: "Master Data - Countries",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Master Data", to: "/master-data"}, 
-      { label: "Countries"}, 
+      { label: "Master Data", to: "/master-data" },
+      { label: "Countries" },
     ],
   },
   {
@@ -260,8 +271,8 @@ export const PAGE_META = [
     title: "Master Data - Business",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Master Data", to: "/master-data"}, 
-      { label: "Business"}, 
+      { label: "Master Data", to: "/master-data" },
+      { label: "Business" },
     ],
   },
   {
@@ -269,8 +280,8 @@ export const PAGE_META = [
     title: "Master Data - Distributors",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Master Data", to: "/master-data"}, 
-      { label: "Distributors"}, 
+      { label: "Master Data", to: "/master-data" },
+      { label: "Distributors" },
     ],
   },
   {
@@ -278,8 +289,8 @@ export const PAGE_META = [
     title: "Master Data - Report Types",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Master Data", to: "/master-data"}, 
-      { label: "Report Types"}, 
+      { label: "Master Data", to: "/master-data" },
+      { label: "Report Types" },
     ],
   },
   {
@@ -287,8 +298,8 @@ export const PAGE_META = [
     title: "Master Mapping — Business ↔ Report Type",
     breadcrumbs: [
       { label: "Home", to: "/" },
-      { label: "Master Data", to: "/master-data"}, 
-      { label: "Business ↔ Report Type"}, 
+      { label: "Master Data", to: "/master-data" },
+      { label: "Business ↔ Report Type" },
     ],
   },
   {

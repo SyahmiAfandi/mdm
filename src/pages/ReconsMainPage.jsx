@@ -1,203 +1,281 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Database,
-  BarChart3,
-  Layers,
-  FileSearch,
-  FileBarChart2,
   Settings,
+  UploadCloud,
+  BarChart3,
+  DatabaseZap,
+  FileBox,
   Activity,
-} from "lucide-react";
+  ChevronRight,
+  MonitorPlay,
+  ClipboardList,
+  FileSearch,
+  LayoutGrid,
+  ListFilter,
+  CalendarDays,
+} from 'lucide-react';
 
-function ReconsMainPage() {
+const ReconsMainPage = () => {
   const navigate = useNavigate();
+  const [mounted, setMounted] = useState(false);
 
-  const Section = ({ title, icon: Icon, children }) => (
-    <div className="flex flex-col bg-white border rounded-2xl shadow-sm p-6 h-full">
-      <div className="flex items-center gap-3 mb-6 pb-3 border-b">
-        <div className="p-2 bg-slate-100 rounded-lg">
-          <Icon className="w-5 h-5 text-slate-700" />
+  useEffect(() => {
+    const timer = setTimeout(() => setMounted(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleNavigate = (path, label) => {
+    navigate(path, { state: { businessType: label } });
+  };
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: {
+        duration: 0.5,
+        ease: "easeOut"
+      }
+    }
+  };
+
+  const Section = ({ title, description, children, icon: Icon }) => (
+    <motion.div
+      variants={itemVariants}
+      className="flex flex-col flex-1 min-w-0 bg-white dark:bg-slate-900/40 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden"
+    >
+      <div className="p-5 bg-violet-600 dark:bg-violet-700 flex items-start gap-4">
+        <div className="p-2.5 rounded-xl bg-white/20 text-white shadow-sm ring-1 ring-white/30 shrink-0 mt-0.5">
+          <Icon size={20} />
         </div>
-        <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
+        <div className="flex flex-col min-w-0">
+          <h2 className="text-[17px] font-bold text-white uppercase tracking-tight leading-tight mb-0.5">
+            {title}
+          </h2>
+          <p className="text-[11px] text-violet-100 dark:text-violet-200 font-medium opacity-90 leading-snug">
+            {description}
+          </p>
+        </div>
       </div>
-
-      <div className="flex flex-col gap-4 flex-1">
+      <div className="flex-1 p-4 flex flex-col gap-3 overflow-y-auto custom-scrollbar bg-white dark:bg-slate-900">
         {children}
       </div>
-    </div>
+    </motion.div>
   );
 
-  const StandardButton = ({ 
-    title, 
-    desc, 
-    path, 
-    icon: Icon, 
-    img, 
-    disabled, 
-    placeholder, 
-    state }) => {
-    const navigate = useNavigate();
-
-    if (placeholder) {
-      return (
-        <div
-          className="
-            flex-1 w-full
-            border border-dashed
-            rounded-xl
-            bg-slate-50
-            flex items-center justify-center
-            text-slate-300
-            text-sm
-            font-medium
-          "
-        >
-          {title}
-        </div>
-      );
-    }
+  const ReconsCard = ({ label, description, path, icon: Icon, image, hoverImage, disabled = false }) => {
+    const [isHovered, setIsHovered] = useState(false);
 
     return (
-      <button
-        onClick={() => !disabled && path && navigate(path, { state })}
+      <motion.button
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        whileHover={{ scale: 1.01, x: 4 }}
+        whileTap={{ scale: 0.99 }}
         disabled={disabled}
-        className={`
-          flex-1 w-full
-          border rounded-xl
-          flex items-stretch overflow-hidden
-          transition-all duration-200 ease-out
-          ${
-            disabled
-              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-              : "bg-slate-50 hover:bg-white hover:shadow-lg hover:-translate-y-1 hover:border-slate-400"
-          }
-        `}
+        onClick={() => !disabled && handleNavigate(path, label)}
+        className={`group relative flex items-center gap-4 p-3.5 w-full bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-violet-200 dark:hover:border-violet-500/30 shadow-sm hover:shadow-md transition-all duration-200 text-left overflow-hidden ${disabled ? 'opacity-50 grayscale' : ''}`}
       >
-        {img && (
-          <div
-            className="w-1/3 bg-cover bg-center opacity-90"
-            style={{ backgroundImage: `url(${img})` }}
-          />
+        {image ? (
+          <div className="shrink-0 relative w-12 h-12 rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700">
+            <AnimatePresence mode="wait">
+              <motion.img
+                key={isHovered && hoverImage ? 'hover' : 'default'}
+                src={isHovered && hoverImage ? hoverImage : image}
+                alt={label}
+                initial={{ opacity: 0.8 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0.8 }}
+                transition={{ duration: 0.3 }}
+                className="w-full h-full object-cover"
+              />
+            </AnimatePresence>
+            <div className="absolute inset-0 bg-violet-600/5 mix-blend-multiply" />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-[2px]">
+              <Icon size={16} className="drop-shadow-md" />
+            </div>
+          </div>
+        ) : (
+          <div className="shrink-0 p-2.5 rounded-xl bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 group-hover:scale-110 transition-transform duration-300 shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-700/50">
+            <Icon size={18} />
+          </div>
         )}
 
-        <div className="flex-1 px-4 py-4 flex flex-col justify-start text-left">
-          <div className="flex items-center gap-2 mb-2">
-            {Icon && <Icon className="w-4 h-4" />}
-            <span className="font-semibold">{title}</span>
-          </div>
-
-          {desc && (
-            <p className="text-xs leading-snug text-slate-500">
-              {desc}
-            </p>
-          )}
+        <div className="flex-1 min-w-0">
+          <h3 className="text-[13px] font-bold text-slate-900 dark:text-slate-100 mb-0.5 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+            {label}
+          </h3>
+          <p className="text-[10px] text-slate-500 dark:text-slate-500 leading-tight font-medium truncate">
+            {description}
+          </p>
         </div>
-      </button>
+
+        <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <ChevronRight size={14} className="text-violet-500" />
+        </div>
+      </motion.button>
     );
   };
 
   return (
-    <div className="min-h-[calc(100vh-75px)] bg-slate-50 p-8 flex flex-col">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">
-          Reconciliation Management
-        </h1>
-        <p className="text-slate-600 text-sm">
-          Manage reconciliation operations, tools, and reporting.
-        </p>
-      </div>
+    <div className="h-[calc(100vh-120px)] flex flex-col p-2 space-y-6 max-w-[1600px] mx-auto overflow-hidden">
+      {/* Header Section - Lilac Theme */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={mounted ? { opacity: 1, y: 0 } : {}}
+        className="flex items-end justify-between px-2 shrink-0"
+      >
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+            Reconciliation <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-indigo-600">Hub</span>
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+            Centralized operations for data matching and analysis.
+          </p>
+        </div>
+        <div className="hidden sm:flex items-center gap-2 text-[11px] font-bold text-violet-500/70 dark:text-violet-400/70 uppercase tracking-widest bg-violet-50 dark:bg-violet-900/10 px-3 py-1.5 rounded-full border border-violet-100 dark:border-violet-800/50 shadow-sm">
+          <Activity size={12} className="text-violet-500" /> System Active
+        </div>
+      </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate={mounted ? "visible" : "hidden"}
+        className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 min-h-0"
+      >
+        {/* Operations Section */}
+        <Section
+          title="Operations"
+          description="Primary business unit reconciliations"
+          icon={Activity}
+        >
+          <ReconsCard
+            label="HPC"
+            description="Home and Personal Care matching"
+            path="/recons/hpc"
+            icon={MonitorPlay}
+            image="/images/hpc_bw.jpg"
+            hoverImage="/images/hpc_color.jpg"
+          />
+          <ReconsCard
+            label="IC"
+            description="Ice Cream business unit tool"
+            path="/recons/ic"
+            icon={MonitorPlay}
+            image="/images/ic_bw.jpg"
+            hoverImage="/images/ic_color.jpg"
+          />
+          <ReconsCard
+            label="Custom Reports"
+            description="Unique file structure processing"
+            path="/recons/custom"
+            icon={FileBox}
+            image="/images/custom_report.jpg"
+            hoverImage="/images/custom_report_color.jpg"
+          />
+        </Section>
 
-        {/* ================= DATA ================= */}
-        <Section title="Data" icon={Database}>
-          <StandardButton
-            title="Recons Period Setup"
-            desc="Create and manage reconciliation periods."
+        {/* Configuration & Data Section */}
+        <Section
+          title="Data & Config"
+          description="Manage system parameters"
+          icon={DatabaseZap}
+        >
+          <ReconsCard
+            label="Recons Period"
+            description="Fiscal and operational periods"
             path="/recons/period"
             icon={Database}
           />
-          <StandardButton
-            title="Recons Data Management"
-            desc="Manage recons data for each distributor and report type."
+          <ReconsCard
+            label="Data Management"
+            description="Distributor cell mappings"
             path="/recons/cells"
-            icon={Database}
+            icon={LayoutGrid}
           />
-          <StandardButton
-            title="Recons Config"
-            desc="Configure recons across all data in tools and reports."
-            path="/recons/config"
-            icon={Database}
-          />
-          <StandardButton
-            title="Recons Bulk Import Data"
-            desc="Bulk import data into Databases."
+          <ReconsCard
+            label="Bulk Import"
+            description="Large dataset direct upload"
             path="/recons/bulk_import"
-            icon={Database}
+            icon={UploadCloud}
           />
+          <ReconsCard
+            label="Button Mapping"
+            description="Map buttons to report types"
+            path="/recons/button-mapping"
+            icon={LayoutGrid}
+          />
+          <ReconsCard
+            label="Config"
+            description="Universal process settings"
+            path="/recons/config"
+            icon={Settings}
+          />
+
         </Section>
 
-        {/* ================= TOOLS ================= */}
-        <Section title="Tools & Functions" icon={Activity}>
-          <StandardButton
-            title="HPC Reconciliation"
-            desc="Execute reconciliation process for HPC."
-            path="/recons/hpc"
-            img="/images/hpc_bw.jpg"
-            state={{ businessType: "HPC" }}
-          />
-          <StandardButton
-            title="IC Reconciliation"
-            desc="Execute reconciliation process for IC."
-            path="/recons/ic"
-            img="/images/ic_bw.jpg"
-            state={{ businessType: "IC" }}
-          />
-          <StandardButton
-            title="Custom Reconciliation"
-            desc="Run reconciliation for custom reports."
-            path="/recons/custom"
-            img="/images/custom_report.jpg"
-          />
-          <StandardButton
-            title="Coming Soon"
-            placeholder
-          />
-        </Section>
-
-        {/* ================= REPORTS ================= */}
-        <Section title="Reports" icon={BarChart3}>
-          <StandardButton
-            title="Mismatch Tracker"
-            desc="Monitor and analyze mismatch cases."
-            path="/recons/mismatch"
+        {/* Insights Section */}
+        <Section
+          title="Insights"
+          description="Tracking and historical analysis"
+          icon={BarChart3}
+        >
+          <ReconsCard
+            label="Summary Dashboard"
+            description="Visual analytics & results"
+            path="/recons/summary"
             icon={BarChart3}
           />
-          <StandardButton
-            title="Summary Dashboard"
-            desc="View reconciliation performance metrics."
-            path="/recons/summary"
-            icon={FileBarChart2}
+          <ReconsCard
+            label="Mismatch Tracker"
+            description="Detailed table with editable remarks"
+            path="/reports/mismatch-tracker"
+            icon={Activity}
           />
-          <StandardButton
-            title="Export Reports"
-            desc="Download reports in Excel or PDF."
+          <ReconsCard
+            label="Mismatch List Report"
+            description="Quick-copy distributor codes & names"
+            path="/reports/mismatch-list"
+            icon={ListFilter}
+          />
+          <ReconsCard
+            label="Export Reports"
+            description="Downloadable Excel & PDF files"
             path="/recons/export"
             icon={FileSearch}
+            color="orange"
           />
-          <StandardButton
-            title="Audit History"
-            desc="Review reconciliation audit logs."
+          <ReconsCard
+            label="Recon Schedule Report"
+            description="Yearly schedule with recon status per period"
+            path="/reports/recon-schedule"
+            icon={CalendarDays}
+          />
+          <ReconsCard
+            label="Audit History"
+            description="Historical logs & changes"
             path="/recons/audit"
-            icon={Layers}
+            icon={ClipboardList}
           />
         </Section>
-
-      </div>
+      </motion.div>
     </div>
   );
-}
+};
 
 export default ReconsMainPage;

@@ -2,6 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useMediaQuery } from 'react-responsive';
+import { db } from '../firebaseClient';
+
+import { collection, getDocs, query, where } from 'firebase/firestore';
+
 
 
 // Soft pastel color gradients for each button
@@ -20,7 +24,9 @@ function ReconsICPage() {
   const [loadingLabel, setLoadingLabel] = useState(null);
   const isMobile = useMediaQuery({ query: '(max-width: 768px)' });
   const location = useLocation();
+  const [btnMappings, setBtnMappings] = useState({});
   const businessType = location.state?.businessType || sessionStorage.getItem('businessType') || 'N/A';
+
 
   const buttons = [
     {
@@ -114,20 +120,48 @@ function ReconsICPage() {
     if (location.state?.businessType) {
       sessionStorage.setItem('businessType', location.state.businessType);
     }
+
+    const fetchMappings = async () => {
+      try {
+        const q = query(collection(db, 'recons_button_mapping'), where('page', '==', 'IC'));
+        const snap = await getDocs(q);
+        const map = {};
+        snap.docs.forEach(doc => {
+          const data = doc.data();
+          map[data.buttonLabel] = {
+            id: data.reportTypeId,
+            name: data.reportTypeName
+          };
+        });
+        setBtnMappings(map);
+
+      } catch (err) {
+        console.error('Error fetching button mappings:', err);
+      }
+    };
+    fetchMappings();
   }, [location.state?.businessType]);
+
 
   const handleNavigate = (button) => {
     setLoadingLabel(button.label);
+    const mappedData = btnMappings[button.label];
+    const mappedTypeId = mappedData?.id || button.state?.reportTypeId;
+    const mappedTypeName = mappedData?.name || button.state?.reportTypeName;
+
     setTimeout(() => {
       navigate(button.path, {
         state: {
           fromButton: button.label,
           businessType: businessType,
           ...(button.state || {}),
+          reportTypeId: mappedTypeId,
+          reportTypeName: mappedTypeName,
         },
       });
     }, 500);
   };
+
 
   const renderButton = (btn, i) => (
     <motion.div
@@ -185,28 +219,28 @@ function ReconsICPage() {
   );
 
   return (
-      <div className="p-5 min-h-[calc(100vh-96px)] overflow-hidden flex flex-col items-center justify-start relative">
-        {/* Back Button */}
-        <div className="absolute top-0 left-0 z-10">
-          <button
-            onClick={() => navigate('/recons')}
-            className="px-4 py-2 bg-gray-700 text-white text-sm rounded hover:bg-gray-800 transition"
-          >
-            ← Back
-          </button>
-        </div>
-        {/* Title and subtitle */}
-        <div className="text-center flex flex-col items-center pt-6 px-4 w-full">
-          <h2 className="text-2xl font-bold mb-2">Reconciliation Tools</h2>
-          <p className="mb-7 text-center max-w-md text-gray-600">
-            Please choose the type of report you want to reconcile:
-          </p>
-          {/* Centered grid for all buttons */}
-          <div className="w-full max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-3 justify-items-center">
-            {buttons.map(renderButton)}
-          </div>
+    <div className="p-5 min-h-[calc(100vh-96px)] overflow-hidden flex flex-col items-center justify-start relative">
+      {/* Back Button */}
+      <div className="absolute top-0 left-0 z-10">
+        <button
+          onClick={() => navigate('/recons')}
+          className="px-4 py-2 bg-gray-700 text-white text-sm rounded hover:bg-gray-800 transition"
+        >
+          ← Back
+        </button>
+      </div>
+      {/* Title and subtitle */}
+      <div className="text-center flex flex-col items-center pt-6 px-4 w-full">
+        <h2 className="text-2xl font-bold mb-2">Reconciliation Tools</h2>
+        <p className="mb-7 text-center max-w-md text-gray-600">
+          Please choose the type of report you want to reconcile:
+        </p>
+        {/* Centered grid for all buttons */}
+        <div className="w-full max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-3 justify-items-center">
+          {buttons.map(renderButton)}
         </div>
       </div>
+    </div>
   );
 }
 

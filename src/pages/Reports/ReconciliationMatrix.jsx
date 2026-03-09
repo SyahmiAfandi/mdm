@@ -134,6 +134,9 @@ export default function ReconciliationMatrix() {
   // ✅ Map reportTypeId -> reportTypeName (from master_reporttypes)
   const [rptNameById, setRptNameById] = useState(new Map());
 
+  // ✅ Map distributorCode -> distributorName (from master_distributors)
+  const [distNameByCode, setDistNameByCode] = useState(new Map());
+
   // ===== Load years from master_years =====
   useEffect(() => {
     let alive = true;
@@ -210,6 +213,37 @@ export default function ReconciliationMatrix() {
     };
   }, []);
 
+  // ===== Load distributors (CODE -> NAME) from master_distributors =====
+  useEffect(() => {
+    let alive = true;
+
+    async function loadDistributors() {
+      try {
+        const snap = await getDocs(collection(db, "master_distributors"));
+        const m = new Map();
+
+        snap.docs.forEach((d) => {
+          const v = d.data() || {};
+          const code = normalize(v.code ?? d.id);
+          const name = normalize(v.name ?? code);
+
+          if (!code) return;
+          m.set(code, name);
+        });
+
+        if (!alive) return;
+        setDistNameByCode(m);
+      } catch (e) {
+        console.error("loadDistributors:", e);
+      }
+    }
+
+    loadDistributors();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   // ===== Load reconCells from Firestore based on periodId + businessType =====
   useEffect(() => {
     let alive = true;
@@ -233,7 +267,9 @@ export default function ReconciliationMatrix() {
         // Normalize into the shape your matrix expects
         const normalized = data.map((x) => {
           const distributorCode = normalize(x.distributorCode);
-          const distributorName = normalize(x.distributorName);
+          // ✅ Use name from master data if available, otherwise fallback to existing
+          const masterName = distNameByCode.get(distributorCode);
+          const distributorName = masterName || normalize(x.distributorName);
           const reconsNo = Number(x.reconsNo || 0);
           const reportTypeId = normalize(x.reportTypeId);
           // ✅ Column header should be report TYPE NAME
@@ -248,12 +284,15 @@ export default function ReconciliationMatrix() {
           const time =
             x.updatedAt?.toDate?.()
               ? (() => {
-                  const d = x.updatedAt.toDate();
-                  const mm = String(d.getMonth() + 1).padStart(2, "0");
-                  const dd = String(d.getDate()).padStart(2, "0");
-                  const yyyy = d.getFullYear();
-                  return `${dd}/${mm}/${yyyy}`;
-                })()
+                const d = x.updatedAt.toDate();
+                const mm = String(d.getMonth() + 1).padStart(2, "0");
+                const dd = String(d.getDate()).padStart(2, "0");
+                const yyyy = d.getFullYear();
+                const hh = String(d.getHours()).padStart(2, "0");
+                const min = String(d.getMinutes()).padStart(2, "0");
+                const ss = String(d.getSeconds()).padStart(2, "0");
+                return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+              })()
               : (x.updatedAt ? String(x.updatedAt) : "");
 
           return {

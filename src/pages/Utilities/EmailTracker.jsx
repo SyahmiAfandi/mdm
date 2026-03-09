@@ -75,7 +75,7 @@ import {
  */
 
 // ====== CONFIG ======
-const PAGE_SIZE = 4;
+const PAGE_SIZE = 10;
 
 // Toggle showing Firestore doc id (debug)
 const SHOW_DOC_ID = false;
@@ -721,286 +721,218 @@ export default function EmailTracker() {
   const totalCount = emlItems.length;
 
   return (
-    <div className="px-4 pb-4 pt-2 md:pt-4 space-y-3 max-w-[1600px] mx-auto min-h-screen bg-slate-50 dark:bg-slate-950/20">
+    <div className="h-[calc(100vh-112px)] flex flex-col gap-3 p-4 overflow-hidden">
 
-      {/* Header Section */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 p-4"
-      >
-        <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
-          <Database size={160} />
+      {/* ── HEADER + STATS ── */}
+      <div className="shrink-0 w-full bg-white border border-slate-200 rounded-2xl shadow-sm px-4 py-3 flex items-center gap-3">
+
+        {/* ── Title Card — flex-1 stretches to fill ── */}
+        <div className="flex-1 flex items-center gap-3 bg-gradient-to-br from-indigo-600 via-purple-600 to-violet-700 rounded-2xl px-5 py-4 shadow-lg shadow-indigo-200">
+          <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            <Layers size={18} className="text-white drop-shadow" />
+          </div>
+          <div>
+            <h1 className="text-sm font-black text-white leading-none tracking-tight drop-shadow-sm">Email Tracker</h1>
+            <div className="flex items-center gap-1 mt-1">
+              <span className="text-[8px] font-black uppercase tracking-widest text-indigo-200 bg-white/15 px-1.5 py-0.5 rounded-full leading-none">MDM</span>
+              <span className="text-[8px] text-indigo-200 font-semibold leading-none">Utility</span>
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between relative z-10">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="p-2 bg-indigo-500/10 text-indigo-500 rounded-xl">
-                <Layers size={20} />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500/80">Utility Console</span>
-            </div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-              Email <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-500">Tracker</span>
-            </h1>
-            <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5 max-w-xl">
-              Smart email automation that manages your tasks and keeps your team in sync.
-            </p>
-          </div>
+        {/* ── Stats — compact single row, equal width, match title height ── */}
+        <div className="grid grid-cols-4 gap-2 shrink-0 self-stretch">
+          <StatCard label="Total" value={summary.total} color="slate" icon="📋" />
+          <StatCard label="New" value={summary.NEW} color="blue" icon="✨" />
+          <StatCard label="In Progress" value={summary.IN_PROGRESS} color="amber" icon="⚡" />
+          <StatCard label="Completed" value={summary.COMPLETE} color="emerald" icon="✅" />
+        </div>
 
-          <div className="flex gap-2 flex-wrap">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={openEmailModal}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-700 transition-all"
-            >
-              <Plus className="h-4 w-4" />
-              New Task
-            </motion.button>
+        {/* ── Actions ── */}
+        <div className="flex flex-col items-stretch gap-2 shrink-0">
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            whileHover={{ scale: 1.02 }}
+            onClick={openEmailModal}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-indigo-200 hover:shadow-lg hover:shadow-indigo-300 transition-all"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New Task
+          </motion.button>
 
+          <div className="flex items-center gap-2">
             {canBulkImport && (
               <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => navigate("/utilities/emailtracker/bulk-import")}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 shadow-sm transition-all"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 shadow-sm transition-all"
               >
-                <Database className="h-4 w-4" />
+                <Database className="h-3.5 w-3.5" />
                 Bulk Import
               </motion.button>
             )}
 
             <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileTap={{ scale: 0.97 }}
               onClick={fetchTasks}
               disabled={loading}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 shadow-sm transition-all"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-60 shadow-sm transition-all"
             >
-              <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
               Sync
             </motion.button>
           </div>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Summary Stats Grid */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
-      >
-        <SummaryCard label="Total Emails" value={summary.total} icon={Layers} color="slate" />
-        <SummaryCard label="New Requests" value={summary.NEW} icon={PlusCircle} color="blue" />
-        <SummaryCard label="Processing" value={summary.IN_PROGRESS} icon={Clock} color="indigo" />
-        <SummaryCard label="Completed" value={summary.COMPLETE} icon={CheckCircle2} color="emerald" />
-      </motion.div>
-
-      {/* Filters & Actions Toolbar */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-      >
-        {/* Search Bar */}
-        <div className="flex flex-1 max-w-md relative group">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
-            <Search size={14} />
-          </div>
+      {/* ── TOOLBAR ── */}
+      <div className="shrink-0 flex items-center gap-2">
+        {/* Search */}
+        <div className="flex-1 relative max-w-sm">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search by title, sender, PIC or remark..."
-            className="w-full rounded-2xl border border-slate-200 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm pl-10 pr-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:border-slate-800 dark:text-slate-100 transition-all font-medium"
+            onChange={(e) => { setQ(e.target.value); setPage(1); }}
+            placeholder="Search title, sender, PIC, remark…"
+            className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
           />
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-3 justify-end">
-          {/* Enhanced Sort Trigger */}
-          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm px-3 py-2 text-sm dark:border-slate-800 shadow-sm transition-all focus-within:border-indigo-500">
-            <History size={14} className="text-slate-400" />
-            <select
-              value={sortBy}
-              onChange={(e) => {
-                setSortBy(e.target.value);
-                setPage(1);
-              }}
-              className="bg-transparent text-xs font-bold outline-none text-slate-600 dark:text-slate-300 cursor-pointer"
-            >
-              <option value="receivedAt">Received At</option>
-              <option value="createdAt">Created At</option>
-            </select>
+        {/* Sort */}
+        <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm">
+          <History size={12} className="text-slate-400" />
+          <select
+            value={sortBy}
+            onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
+            className="bg-transparent text-xs font-bold text-slate-600 outline-none cursor-pointer"
+          >
+            <option value="receivedAt">Received</option>
+            <option value="createdAt">Created</option>
+          </select>
+          <button
+            onClick={() => { setSortDir((d) => (d === "desc" ? "asc" : "desc")); setPage(1); }}
+            className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 hover:bg-indigo-500 hover:text-white transition-all"
+          >
+            {sortDir === "desc" ? "↓" : "↑"}
+          </button>
+        </div>
 
-            <button
-              onClick={() => {
-                setSortDir((d) => (d === "desc" ? "asc" : "desc"));
-                setPage(1);
-              }}
-              className="ml-1 rounded-lg bg-slate-100/50 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-black text-slate-700 dark:text-slate-300 hover:bg-indigo-500 hover:text-white transition-all uppercase"
-              title={sortDir === "desc" ? "Newest first" : "Oldest first"}
-            >
-              {sortDir === "desc" ? "Desc" : "Asc"}
-            </button>
-          </div>
+        {/* Filter popover */}
+        <div className="relative" ref={filterRef}>
+          <button
+            onClick={() => setFilterOpen((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold shadow-sm transition-all ${filterOpen || statusFilters.length > 0 || picFilter !== "All" || newOnly
+              ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+              }`}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Filter
+            {(statusFilters.length > 0 || picFilter !== "All" || newOnly) && (
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+            )}
+          </button>
 
-          {/* Advanced Filter Popover */}
-          <div className="relative" ref={filterRef}>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setFilterOpen((v) => !v)}
-              className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-bold shadow-sm transition-all ${filterOpen || statusFilters.length > 0 || picFilter !== "All" || newOnly
-                ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400"
-                : "border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/80 text-slate-700 dark:text-slate-200 hover:border-slate-400"
-                }`}
-            >
-              <Filter className={`h-4 w-4 transition-transform ${filterOpen ? "rotate-180" : ""}`} />
-              Filters
-              {(statusFilters.length > 0 || picFilter !== "All" || newOnly) && (
-                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse ml-1" />
-              )}
-            </motion.button>
+          <AnimatePresence>
+            {filterOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                className="absolute left-0 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-xl z-[100]"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-700">Filters</span>
+                  <button
+                    onClick={() => { setStatusFilters([]); setPicFilter("All"); setNewOnly(false); setPage(1); }}
+                    className="text-[10px] font-bold text-indigo-500 hover:text-indigo-700"
+                  >
+                    Clear all
+                  </button>
+                </div>
 
-            <AnimatePresence>
-              {filterOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute right-0 mt-3 w-[360px] rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900 z-[100] backdrop-blur-xl"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white">Active Filters</h4>
-                    <button
-                      onClick={() => {
-                        setStatusFilters([]);
-                        setPicFilter("All");
-                        setNewOnly(false);
-                        setPage(1);
-                      }}
-                      className="text-[10px] font-bold text-indigo-500 hover:text-indigo-600 transition-colors uppercase underline"
-                    >
-                      Clear All
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Status</div>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  <button onClick={selectAllStatuses} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border transition-all ${statusFilters.length === 0 ? "border-indigo-500 bg-indigo-500 text-white" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}>All</button>
+                  {STATUS_OPTIONS.map((s) => (
+                    <button key={s} onClick={() => toggleStatus(s)} className={`rounded-lg px-2.5 py-1 text-[11px] font-bold border transition-all ${statusFilters.includes(s) ? "border-indigo-500 bg-indigo-500 text-white" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}>
+                      {statusLabel(s)}
                     </button>
-                  </div>
+                  ))}
+                </div>
 
-                  {/* Status Options */}
-                  <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 px-1">
-                    Workflow Status
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">PIC</div>
+                    <select
+                      value={picFilter}
+                      onChange={(e) => { setPicFilter(e.target.value); setPage(1); }}
+                      className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    >
+                      {allPICs.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
                   </div>
-                  <div className="flex flex-wrap gap-2 mb-5">
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">New (24h)</div>
                     <button
-                      onClick={selectAllStatuses}
-                      className={`rounded-xl px-4 py-2 text-xs font-bold border transition-all ${statusFilters.length === 0
-                        ? "border-indigo-500 bg-indigo-500 text-white"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-800/50"
+                      onClick={() => { setNewOnly((v) => !v); setPage(1); }}
+                      className={`w-full flex items-center justify-between rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-all ${newOnly ? "border-indigo-500 bg-indigo-50 text-indigo-600" : "border-slate-200 text-slate-600"
                         }`}
                     >
-                      All
+                      <span>{newOnly ? "ON" : "OFF"}</span>
+                      <div className={`w-1.5 h-1.5 rounded-full ${newOnly ? "bg-indigo-500" : "bg-slate-300"}`} />
                     </button>
-                    {STATUS_OPTIONS.map((s) => {
-                      const active = statusFilters.includes(s);
-                      return (
-                        <button
-                          key={s}
-                          onClick={() => toggleStatus(s)}
-                          className={`rounded-xl px-4 py-2 text-xs font-bold border transition-all ${active
-                            ? "border-indigo-500 bg-indigo-500 text-white"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-800/50"
-                            }`}
-                        >
-                          {statusLabel(s)}
-                        </button>
-                      );
-                    })}
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 px-1">PIC</div>
-                      <select
-                        value={picFilter}
-                        onChange={(e) => {
-                          setPicFilter(e.target.value);
-                          setPage(1);
-                        }}
-                        className="w-full rounded-xl border border-slate-200 bg-white dark:bg-slate-800/50 px-3 py-2 text-xs font-bold dark:border-slate-700 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                      >
-                        {allPICs.map((p) => (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 px-1">Fresh Influx</div>
-                      <button
-                        onClick={() => {
-                          setNewOnly((v) => !v);
-                          setPage(1);
-                        }}
-                        className={`w-full flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-bold transition-all ${newOnly
-                          ? "border-indigo-500/50 bg-indigo-500/10 text-indigo-500"
-                          : "border-slate-200 bg-white dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 dark:border-slate-700"
-                          }`}
-                      >
-                        <span>NEW (24h)</span>
-                        <div className={`w-2 h-2 rounded-full ${newOnly ? "bg-indigo-500 animate-pulse" : "bg-slate-300 dark:bg-slate-600"}`} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setFilterOpen(false)}
-                    className="w-full mt-5 rounded-2xl bg-slate-900 dark:bg-white dark:text-slate-900 text-white py-3 text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-slate-900/20"
-                  >
-                    Apply Criteria
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                <button onClick={() => setFilterOpen(false)} className="w-full mt-3 rounded-lg bg-slate-900 text-white py-2 text-xs font-bold hover:bg-slate-800 transition-all">
+                  Apply
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-      </motion.div>
 
+        {/* Result count */}
+        <div className="text-[11px] font-semibold text-slate-400 ml-1">
+          {sortedRows.length} result{sortedRows.length !== 1 ? "s" : ""}
+        </div>
+      </div>
 
-      {/* Main Table Content */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/50 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-lg"
-      >
-        <div className="overflow-x-auto">
-          <table className="min-w-[1000px] w-full border-collapse">
-            <thead className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+      {/* ── TABLE ── */}
+      <div className="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden min-h-0">
+        <div className="flex-1 overflow-auto">
+          <table className="min-w-[900px] w-full border-collapse">
+            <thead className="bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
               <tr>
-                {SHOW_DOC_ID && <Th>System ID</Th>}
-                <Th className="pl-8">Email Title</Th>
-                <Th>Received At</Th>
+                {SHOW_DOC_ID && <Th>ID</Th>}
+                <Th className="pl-4">Email Title</Th>
+                <Th>Received</Th>
                 <Th>PIC</Th>
                 <Th>Status</Th>
                 <Th>Remark</Th>
-                <Th className="text-right pr-8">Actions</Th>
+                <Th className="text-right pr-4">Actions</Th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-              {pagedRows.length === 0 ? (
+            <tbody className="divide-y divide-slate-50">
+              {loading ? (
                 <tr>
-                  <td className="p-16 text-center text-slate-400 dark:text-slate-600 font-medium" colSpan={SHOW_DOC_ID ? 8 : 7}>
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-full opacity-50">
-                        <Activity size={32} />
+                  <td colSpan={SHOW_DOC_ID ? 8 : 7} className="py-16 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs text-slate-400">Loading…</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : pagedRows.length === 0 ? (
+                <tr>
+                  <td className="py-16 text-center text-slate-400" colSpan={SHOW_DOC_ID ? 8 : 7}>
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="p-3 bg-slate-100 rounded-full">
+                        <Activity size={24} className="opacity-40" />
                       </div>
-                      <p className="text-sm uppercase tracking-widest font-black">No intelligence records found</p>
+                      <p className="text-sm font-semibold text-slate-500">No records found</p>
+                      <p className="text-xs text-slate-400">{q ? "Try adjusting your search or filters" : "Import emails to get started"}</p>
                     </div>
                   </td>
                 </tr>
@@ -1014,118 +946,83 @@ export default function EmailTracker() {
                   const assignBusy = busy === "assign";
                   const doneBusy = busy === "done";
                   const remarkBusy = busy === "remark";
-
                   const isComplete = status === "COMPLETE";
                   const canAssign = status === "NEW" && !isComplete;
-
                   const assignedUid = getPicUid(r.pic_assign);
                   const assignedName = getPicName(r.pic_assign);
                   const meName = safeStr(CURRENT_USER).toLowerCase();
                   const okByUid = CURRENT_UID && assignedUid && CURRENT_UID === assignedUid;
                   const okByName = !assignedUid && assignedName && assignedName.toLowerCase() === meName;
-
                   const canDone = status === "IN_PROGRESS" && (okByUid || okByName);
                   const showNew = isNewWithin24h(r);
 
                   return (
                     <motion.tr
                       key={r._id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.03 }}
-                      className="group border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-indigo-500/5 transition-colors text-[13px]"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: idx * 0.02 }}
+                      className="group hover:bg-slate-50/70 transition-colors text-[12px]"
                     >
                       {SHOW_DOC_ID && <Td className="text-[10px] font-mono text-slate-400">{r._id}</Td>}
 
-                      <Td className="min-w-[420px] pl-8">
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex items-start gap-2">
-                            <span className="font-bold text-slate-900 dark:text-white leading-tight group-hover:text-indigo-500 transition-colors">
-                              {title || "(No Intelligence Title)"}
+                      <Td className="min-w-[300px] pl-4">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-900 leading-tight group-hover:text-indigo-600 transition-colors line-clamp-1">
+                              {title || "(No Subject)"}
                             </span>
                             {showNew && (
-                              <span className="shrink-0 inline-flex items-center rounded-lg bg-indigo-500 px-1.5 py-0.5 text-[9px] font-black text-white shadow-lg shadow-indigo-500/20">
-                                NEW
-                              </span>
+                              <span className="shrink-0 inline-flex items-center rounded bg-indigo-500 px-1 py-0.5 text-[8px] font-black text-white">NEW</span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700" />
-                            <span className="text-xs font-medium text-slate-400 truncate max-w-[320px]" title={sender}>
-                              {sender || "unknown_origin"}
-                            </span>
-                          </div>
+                          <span className="text-[10px] text-slate-400 truncate max-w-[280px]" title={sender}>
+                            {sender || "unknown sender"}
+                          </span>
                         </div>
                       </Td>
 
                       <Td className="whitespace-nowrap">
                         <div className="flex flex-col">
-                          <span className="font-bold text-slate-700 dark:text-slate-300">{formatDate(r.receivedAt)}</span>
-                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">{formatTime(r.receivedAt)}</span>
+                          <span className="font-semibold text-slate-700">{formatDate(r.receivedAt)}</span>
+                          <span className="text-[10px] text-slate-400">{formatTime(r.receivedAt)}</span>
                         </div>
                       </Td>
 
                       <Td className="whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${pic ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-700"}`} />
-                          <span className={`font-bold ${pic ? "text-slate-800 dark:text-slate-200" : "text-slate-400"}`}>
-                            {pic || "UNASSIGNED"}
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${pic ? "bg-emerald-500" : "bg-slate-300"}`} />
+                          <span className={`font-medium ${pic ? "text-slate-800" : "text-slate-400"}`}>
+                            {pic || "Unassigned"}
                           </span>
                         </div>
                       </Td>
 
-                      <Td>
-                        <StatusPill status={status} />
-                      </Td>
+                      <Td><StatusPill status={status} /></Td>
 
-                      <Td className="max-w-[220px]" title={safeStr(r.remark)}>
-                        <div className="text-xs font-medium text-slate-500 dark:text-slate-400 line-clamp-2 italic">
-                          {safeStr(r.remark) || "No operational notes recorded..."}
+                      <Td className="max-w-[180px]" title={safeStr(r.remark)}>
+                        <div className="text-[11px] text-slate-500 line-clamp-2 italic">
+                          {safeStr(r.remark) || <span className="not-italic text-slate-300">—</span>}
                         </div>
                       </Td>
 
-                      <Td className="text-right pr-8">
-                        <div className="inline-flex items-center gap-2">
-                          <IconBtn
-                            title="View Intelligence Detail"
-                            onClick={() => openDetail(r)}
-                            disabled={assignBusy || doneBusy || remarkBusy}
-                          >
-                            <PlusCircle size={14} />
+                      <Td className="text-right pr-4">
+                        <div className="inline-flex items-center gap-1">
+                          <IconBtn title="View Details" onClick={() => openDetail(r)} disabled={assignBusy || doneBusy || remarkBusy}>
+                            <ArrowUpRight size={13} />
                           </IconBtn>
-
-                          <IconBtn
-                            title={assignBusy ? "Assimilating..." : "Assign to Entity"}
-                            onClick={() => assignToMe(r)}
-                            disabled={!canAssign || assignBusy || doneBusy || remarkBusy}
-                          >
-                            {assignBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus2 size={14} />}
+                          <IconBtn title={assignBusy ? "Assigning…" : "Assign to Me"} onClick={() => assignToMe(r)} disabled={!canAssign || assignBusy || doneBusy || remarkBusy}>
+                            {assignBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus2 size={13} />}
                           </IconBtn>
-
-                          <IconBtn
-                            title={doneBusy ? "Finalizing..." : "Terminate Mission (Complete)"}
-                            onClick={() => markDone(r)}
-                            disabled={!canDone || assignBusy || doneBusy || remarkBusy}
-                          >
-                            {doneBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 size={14} />}
+                          <IconBtn title={doneBusy ? "Saving…" : "Mark Complete"} onClick={() => markDone(r)} disabled={!canDone || assignBusy || doneBusy || remarkBusy}>
+                            {doneBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 size={13} />}
                           </IconBtn>
-
-                          <IconBtn
-                            title="Append Notes"
-                            onClick={() => openRemarkEditor(r._id, safeStr(r.remark))}
-                            disabled={assignBusy || doneBusy || remarkBusy}
-                          >
-                            <Pencil size={14} />
+                          <IconBtn title="Edit Remark" onClick={() => openRemarkEditor(r._id, safeStr(r.remark))} disabled={assignBusy || doneBusy || remarkBusy}>
+                            <Pencil size={13} />
                           </IconBtn>
-
                           {canDelete && (
-                            <IconBtn
-                              title={busy === "delete" ? "Purging..." : "Purge Record"}
-                              onClick={() => requestDelete(r)}
-                              disabled={assignBusy || doneBusy || remarkBusy || busy === "delete"}
-                              variant="danger"
-                            >
-                              {busy === "delete" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 size={14} />}
+                            <IconBtn title={busy === "delete" ? "Deleting…" : "Delete"} onClick={() => requestDelete(r)} disabled={assignBusy || doneBusy || remarkBusy || busy === "delete"} variant="danger">
+                              {busy === "delete" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 size={13} />}
                             </IconBtn>
                           )}
                         </div>
@@ -1138,152 +1035,74 @@ export default function EmailTracker() {
           </table>
         </div>
 
-        {/* Console Pagination */}
-        <div className="px-6 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 backdrop-blur-md">
-          <div className="text-[10px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-[0.2em]">
-            Scan Integrity: <span className="text-slate-900 dark:text-slate-200">{sortedRows.length} Emails Recorded</span>
+        {/* Pagination */}
+        <div className="shrink-0 px-4 py-2.5 flex items-center justify-between border-t border-slate-100 bg-slate-50/50">
+          <div className="text-[11px] font-medium text-slate-500">
+            {sortedRows.length > 0 ? (
+              <>Showing <strong>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sortedRows.length)}</strong> of <strong>{sortedRows.length}</strong></>
+            ) : "No records"}
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => gotoPage(page - 1)}
-                disabled={page <= 1}
-                className="h-9 w-9 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm disabled:opacity-30 hover:border-indigo-500 transition-all text-slate-600 dark:text-slate-400"
-              >
-                <ChevronLeft size={16} />
-              </button>
-
-              <div className="flex gap-2 mx-2">
-                {pageButtons.map((p) => (
-                  <PageBtn key={p} page={p} active={p === page} onClick={() => gotoPage(p)} />
-                ))}
-              </div>
-
-              <button
-                onClick={() => gotoPage(page + 1)}
-                disabled={page >= totalPages}
-                className="h-9 w-9 flex items-center justify-center rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm disabled:opacity-30 hover:border-indigo-500 transition-all text-slate-600 dark:text-slate-400"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => gotoPage(page - 1)} disabled={page <= 1} className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white disabled:opacity-30 hover:border-indigo-400 transition-all text-slate-600">
+              <ChevronLeft size={13} />
+            </button>
+            {pageButtons.map((p) => (
+              <PageBtn key={p} page={p} active={p === page} onClick={() => gotoPage(p)} />
+            ))}
+            <button onClick={() => gotoPage(page + 1)} disabled={page >= totalPages} className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white disabled:opacity-30 hover:border-indigo-400 transition-all text-slate-600">
+              <ChevronRight size={13} />
+            </button>
           </div>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Detail Modal */}
+      {/* ── Detail Modal ── */}
       <AnimatePresence>
         {detailRow && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={closeDetail}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-lg rounded-[2rem] bg-white dark:bg-slate-900 p-8 shadow-2xl border border-slate-200 dark:border-slate-800"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-indigo-500/10 text-indigo-500 rounded-xl">
-                    <Activity size={20} />
-                  </div>
-                  <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Intelligence Details</h3>
-                </div>
-                <button onClick={closeDetail} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-                  <X size={20} />
-                </button>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeDetail} className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 16 }} className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-base font-bold text-slate-900">Email Details</h3>
+                <button onClick={closeDetail} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><X size={16} /></button>
               </div>
-
-              <div className="space-y-4">
-                <DetailItem label="Ingestion PIC" value={getPicName(detailRow.pic_create)} sub={formatDateTime(detailRow.createdAt)} />
-                <DetailItem label="Last Orchestration" value={getPicName(detailRow.pic_update)} sub={formatDateTime(detailRow.updatedAt)} />
-                <DetailItem label="Intelligence PIC" value={getPicName(detailRow.pic_remark)} sub={formatDateTime(detailRow.remarkAt)} />
-                <div className="p-4 rounded-3xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Operational Status</span>
+              <div className="space-y-3">
+                <DetailItem label="Created By" value={getPicName(detailRow.pic_create)} sub={formatDateTime(detailRow.createdAt)} />
+                <DetailItem label="Last Updated By" value={getPicName(detailRow.pic_update)} sub={formatDateTime(detailRow.updatedAt)} />
+                <DetailItem label="Remark By" value={getPicName(detailRow.pic_remark)} sub={formatDateTime(detailRow.remarkAt)} />
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block">Status</span>
                   <StatusPill status={normalizeStatus(detailRow.status)} />
                 </div>
               </div>
-
-              <div className="mt-8">
-                <button
-                  onClick={closeDetail}
-                  className="w-full py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black uppercase tracking-[0.2em] text-xs hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-slate-900/20"
-                >
-                  Close Console
-                </button>
-              </div>
+              <button onClick={closeDetail} className="w-full mt-5 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all">Close</button>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* Remark editor */}
+      {/* ── Remark Editor ── */}
       <AnimatePresence>
         {editRowId && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 30 }}
-              className="relative w-full max-w-xl rounded-[2.5rem] bg-white dark:bg-slate-900 p-8 shadow-2xl border border-slate-200 dark:border-slate-800"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-indigo-500/10 text-indigo-500 rounded-xl">
-                    <Pencil size={20} />
-                  </div>
-                  <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Intelligence Log</h3>
-                </div>
-                <button onClick={cancelRemark} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-                  <X size={20} />
-                </button>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.96, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 20 }} className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-slate-900">Edit Remark</h3>
+                <button onClick={cancelRemark} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><X size={16} /></button>
               </div>
-
               <textarea
                 value={editRemark}
                 onChange={(e) => setEditRemark(e.target.value)}
-                rows={6}
-                className="w-full rounded-[2rem] border border-slate-200 bg-slate-50/50 dark:bg-slate-800/50 p-6 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:border-slate-800 dark:text-white transition-all font-medium resize-none"
-                placeholder="Synchronize operational remarks here..."
+                rows={5}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 p-4 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none"
+                placeholder="Add a remark…"
               />
-
-              <div className="mt-8 flex gap-3">
-                <button
-                  onClick={cancelRemark}
-                  className="flex-1 py-4 rounded-2xl border border-slate-200 dark:border-slate-800 font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all uppercase tracking-widest text-xs"
-                  disabled={rowLoading[editRowId] === "remark"}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={saveRemark}
-                  disabled={rowLoading[editRowId] === "remark"}
-                  className="flex-[2] py-4 rounded-2xl bg-indigo-600 text-white font-black uppercase tracking-[0.2em] text-xs hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-50"
-                >
-                  {rowLoading[editRowId] === "remark" ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>Syncing...</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center gap-2">
-                      <Save size={16} />
-                      <span>Log Notes</span>
-                    </div>
-                  )}
+              <div className="mt-4 flex gap-2">
+                <button onClick={cancelRemark} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all" disabled={rowLoading[editRowId] === "remark"}>Cancel</button>
+                <button onClick={saveRemark} disabled={rowLoading[editRowId] === "remark"} className="flex-[2] py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-all disabled:opacity-50">
+                  {rowLoading[editRowId] === "remark" ? <div className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /><span>Saving…</span></div> : <div className="flex items-center justify-center gap-1.5"><Save size={14} /><span>Save Remark</span></div>}
                 </button>
               </div>
             </motion.div>
@@ -1291,50 +1110,26 @@ export default function EmailTracker() {
         )}
       </AnimatePresence>
 
-      {/* Delete Modal */}
+      {/* ── Delete Modal ── */}
       <AnimatePresence>
         {deleteRow && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-rose-950/40 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 50 }}
-              className="relative w-full max-w-md rounded-[2rem] bg-white dark:bg-slate-900 p-8 shadow-2xl border border-rose-200 dark:border-rose-900/30"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-rose-950/30 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 30 }} className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-rose-200">
               <div className="flex flex-col items-center text-center">
-                <div className="w-16 h-16 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mb-6">
-                  <Trash2 size={32} />
+                <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center mb-4">
+                  <Trash2 size={22} />
                 </div>
-                <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight mb-2">Purge Intelligence Record?</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 font-medium">
-                  Warning: This operation will permanently erase this mission record from the intelligence collective.
-                </p>
-
-                <div className="w-full rounded-2xl bg-rose-50/50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-900/30 p-4 mb-8 text-left">
-                  <span className="text-[10px] font-black uppercase text-rose-500 tracking-widest mb-1 block">Record Target</span>
-                  <div className="font-bold text-slate-900 dark:text-white truncate">{safeStr(deleteRow.title)}</div>
+                <h3 className="text-base font-bold text-slate-900 mb-1">Delete Record?</h3>
+                <p className="text-xs text-slate-500 mb-4">This action cannot be undone.</p>
+                <div className="w-full rounded-xl bg-rose-50 border border-rose-100 p-3 mb-5 text-left">
+                  <span className="text-[10px] font-bold uppercase text-rose-500 tracking-widest mb-0.5 block">Record</span>
+                  <div className="font-semibold text-slate-900 text-sm truncate">{safeStr(deleteRow.title)}</div>
                 </div>
-
-                <div className="w-full flex gap-3">
-                  <button
-                    onClick={cancelDelete}
-                    className="flex-1 py-4 rounded-2xl border border-slate-200 dark:border-slate-800 font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 transition-all uppercase tracking-widest text-xs"
-                    disabled={rowLoading[deleteRow._id] === "delete"}
-                  >
-                    Abort
-                  </button>
-                  <button
-                    onClick={confirmDelete}
-                    disabled={rowLoading[deleteRow._id] === "delete"}
-                    className="flex-1 py-4 rounded-2xl bg-rose-600 text-white font-black uppercase tracking-widest text-xs hover:bg-rose-700 transition-all shadow-xl shadow-rose-900/20 disabled:opacity-50"
-                  >
-                    {rowLoading[deleteRow._id] === "delete" ? <Loader2 size={16} className="mx-auto animate-spin" /> : "Confirm Purge"}
+                <div className="w-full flex gap-2">
+                  <button onClick={cancelDelete} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all" disabled={rowLoading[deleteRow._id] === "delete"}>Cancel</button>
+                  <button onClick={confirmDelete} disabled={rowLoading[deleteRow._id] === "delete"} className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition-all disabled:opacity-50">
+                    {rowLoading[deleteRow._id] === "delete" ? <Loader2 size={14} className="mx-auto animate-spin" /> : "Delete"}
                   </button>
                 </div>
               </div>
@@ -1343,107 +1138,76 @@ export default function EmailTracker() {
         )}
       </AnimatePresence>
 
-      {/* Email Task Upload Modal */}
+      {/* ── Upload Modal ── */}
       <AnimatePresence>
         {emailModalOpen && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 overflow-y-auto">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-md"
-            />
-            <motion.div
-              initial={{ opacity: 0, y: 100 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 100 }}
-              className="relative w-full max-w-4xl my-auto rounded-[3rem] bg-white dark:bg-slate-900 p-8 shadow-2xl border border-slate-200 dark:border-slate-800"
-            >
-              <div className="flex items-center justify-between gap-4 mb-8">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-600/20">
-                    <UploadCloud size={24} />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/50 backdrop-blur-md" />
+            <motion.div initial={{ opacity: 0, y: 60 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 60 }} className="relative w-full max-w-2xl my-auto rounded-2xl bg-white p-6 shadow-2xl border border-slate-200">
+              <div className="flex items-center justify-between gap-4 mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-600 rounded-xl text-white shadow shadow-indigo-200">
+                    <UploadCloud size={18} />
                   </div>
                   <div>
-                    <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Intelligence Ingestion</h3>
-                    <p className="text-sm text-slate-500 font-medium tracking-tight">Process .eml files to synthesize new mission units.</p>
+                    <h3 className="text-base font-bold text-slate-900">Import Email Tasks</h3>
+                    <p className="text-[11px] text-slate-500">Drop .eml files to create new task records</p>
                   </div>
                 </div>
-                <button onClick={closeEmailModal} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors" disabled={emlBusy}>
-                  <X size={24} />
-                </button>
+                <button onClick={closeEmailModal} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" disabled={emlBusy}><X size={18} /></button>
               </div>
 
-              {/* Enhanced Drop Zone */}
               <div
                 onDrop={onDropFiles}
                 onDragOver={onDragOver}
-                className="relative group rounded-[2.5rem] border-4 border-dashed border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 p-12 text-center transition-all hover:border-indigo-500/50 hover:bg-indigo-500/5"
+                className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-8 text-center hover:border-indigo-400 hover:bg-indigo-50/20 transition-all"
               >
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-16 h-16 rounded-full bg-white dark:bg-slate-900 shadow-xl flex items-center justify-center text-slate-400 group-hover:text-indigo-500 transition-colors">
-                    <Plus size={32} />
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-white shadow flex items-center justify-center text-slate-400">
+                    <Plus size={24} />
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-lg font-bold text-slate-800 dark:text-white">Transmit Documentation</p>
-                    <p className="text-sm text-slate-500 font-medium">Batch synthesis of .eml files is supported.</p>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">Drop .eml files here</p>
+                    <p className="text-xs text-slate-400">or click to browse your files</p>
                   </div>
-
-                  <div className="mt-4 flex gap-3">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={emlBusy}
-                      className="px-6 py-3 rounded-2xl bg-indigo-600 text-white font-black uppercase tracking-widest text-[10px] shadow-xl shadow-indigo-500/20"
-                    >
-                      Browse Repository
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={clearEmlItems}
-                      disabled={emlBusy || emlItems.length === 0}
-                      className="px-6 py-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white font-black uppercase tracking-widest text-[10px]"
-                    >
-                      Clear Batch
-                    </motion.button>
+                  <div className="flex gap-2 mt-1">
+                    <button onClick={() => fileInputRef.current?.click()} disabled={emlBusy} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-all shadow shadow-indigo-200">Browse Files</button>
+                    <button onClick={clearEmlItems} disabled={emlBusy || emlItems.length === 0} className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all disabled:opacity-40">Clear</button>
                   </div>
                   <input ref={fileInputRef} type="file" accept=".eml,message/rfc822" multiple className="hidden" onChange={onPickFiles} />
                 </div>
               </div>
 
-              {/* Intelligence Preview */}
               {emlItems.length > 0 && (
-                <div className="mt-8">
-                  <div className="flex items-center justify-between mb-4 px-2">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Analysis Preview ({validCount}/{totalCount} Validated)</h4>
-                    {emlBusy && <Loader2 size={16} className="animate-spin text-indigo-500" />}
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Preview ({validCount}/{totalCount} valid)</span>
+                    {emlBusy && <Loader2 size={14} className="animate-spin text-indigo-500" />}
                   </div>
-                  <div className="max-h-[300px] overflow-auto rounded-3xl border border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm shadow-inner">
-                    <ul className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                  <div className="max-h-52 overflow-auto rounded-xl border border-slate-100 bg-white shadow-inner">
+                    <ul className="divide-y divide-slate-50">
                       {emlItems.map((it) => (
-                        <li key={it.id} className="p-5 hover:bg-slate-50 dark:hover:bg-indigo-500/5 transition-colors group">
-                          <div className="flex items-start justify-between gap-4">
+                        <li key={it.id} className="p-3 hover:bg-slate-50 transition-colors">
+                          <div className="flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-3 mb-2">
-                                <ShieldCheck size={16} className={it.ok ? "text-emerald-500" : "text-rose-500"} />
-                                <span className="font-bold text-slate-900 dark:text-white truncate">{it.name}</span>
+                              <div className="flex items-center gap-2 mb-1">
+                                <ShieldCheck size={13} className={it.ok ? "text-emerald-500" : "text-rose-500"} />
+                                <span className="font-semibold text-slate-800 text-xs truncate">{it.name}</span>
                                 <span className="text-[10px] font-mono text-slate-400">{(it.size / 1024).toFixed(1)}KB</span>
                               </div>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                  <span className="text-[9px] font-black uppercase text-slate-400 block">Intelligence Header</span>
-                                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">{it.subject || "NO HEADER"}</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <span className="text-[9px] font-bold uppercase text-slate-400">Subject</span>
+                                  <p className="text-[11px] font-medium text-slate-600 truncate">{it.subject || "—"}</p>
                                 </div>
-                                <div className="space-y-1">
-                                  <span className="text-[9px] font-black uppercase text-slate-400 block">Origin Point</span>
-                                  <p className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">{it.fromEmail || "ANONYMOUS SOURCE"}</p>
+                                <div>
+                                  <span className="text-[9px] font-bold uppercase text-slate-400">From</span>
+                                  <p className="text-[11px] font-medium text-slate-600 truncate">{it.fromEmail || "—"}</p>
                                 </div>
                               </div>
                             </div>
-                            <button onClick={() => removeEmlItem(it.id)} disabled={emlBusy} className="p-2 text-slate-300 hover:text-rose-500 transition-colors">
-                              <Trash2 size={18} />
+                            <button onClick={() => removeEmlItem(it.id)} disabled={emlBusy} className="p-1 text-slate-300 hover:text-rose-500 transition-colors">
+                              <Trash2 size={14} />
                             </button>
                           </div>
                         </li>
@@ -1453,20 +1217,12 @@ export default function EmailTracker() {
                 </div>
               )}
 
-              <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-100 dark:border-slate-800">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center sm:text-left">
-                  Ready to commit <span className="text-indigo-500">{validCount}</span> intelligence units to the cluster.
-                </p>
-                <div className="flex gap-3 w-full sm:w-auto">
-                  <button onClick={closeEmailModal} disabled={emlBusy} className="flex-1 sm:flex-none px-8 py-4 rounded-2xl font-bold text-slate-500 uppercase tracking-widest text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
-                    Cancel
-                  </button>
-                  <button
-                    onClick={confirmWriteToFirestore}
-                    disabled={emlBusy || validCount === 0}
-                    className="flex-1 sm:flex-none px-8 py-4 rounded-2xl bg-indigo-600 text-white font-black uppercase tracking-[0.2em] text-xs hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-500/20 disabled:opacity-50"
-                  >
-                    {emlBusy ? <Loader2 size={16} className="mx-auto animate-spin" /> : "Initiate Commit"}
+              <div className="mt-5 flex items-center justify-between gap-4 pt-4 border-t border-slate-100">
+                <p className="text-[11px] font-medium text-slate-400">{validCount} task{validCount !== 1 ? "s" : ""} ready to submit</p>
+                <div className="flex gap-2">
+                  <button onClick={closeEmailModal} disabled={emlBusy} className="px-5 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 transition-all">Cancel</button>
+                  <button onClick={confirmWriteToFirestore} disabled={emlBusy || validCount === 0} className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-all shadow shadow-indigo-200 disabled:opacity-50">
+                    {emlBusy ? <Loader2 size={14} className="mx-auto animate-spin" /> : `Submit ${validCount > 0 ? validCount : ""} Task${validCount !== 1 ? "s" : ""}`}
                   </button>
                 </div>
               </div>
@@ -1478,33 +1234,48 @@ export default function EmailTracker() {
   );
 }
 
-function SummaryCard({ label, value, icon: Icon, color = "blue" }) {
-  const colors = {
-    blue: "from-blue-500/10 to-transparent text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/30",
-    indigo: "from-indigo-500/10 to-transparent text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/30",
-    amber: "from-amber-500/10 to-transparent text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/30",
-    emerald: "from-emerald-500/10 to-transparent text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30",
-    slate: "from-slate-500/10 to-transparent text-slate-600 dark:text-slate-400 border-slate-100 dark:border-slate-900/30",
+function StatCard({ label, value, color = "slate", icon }) {
+  const config = {
+    slate: {
+      bg: "bg-white",
+      border: "border-slate-200",
+      labelColor: "text-slate-400",
+      valueColor: "text-slate-800",
+      glow: "",
+    },
+    blue: {
+      bg: "bg-blue-50",
+      border: "border-blue-100",
+      labelColor: "text-blue-400",
+      valueColor: "text-blue-700",
+      glow: "shadow-blue-100",
+    },
+    amber: {
+      bg: "bg-amber-50",
+      border: "border-amber-100",
+      labelColor: "text-amber-500",
+      valueColor: "text-amber-700",
+      glow: "shadow-amber-100",
+    },
+    emerald: {
+      bg: "bg-emerald-50",
+      border: "border-emerald-100",
+      labelColor: "text-emerald-500",
+      valueColor: "text-emerald-700",
+      glow: "shadow-emerald-100",
+    },
   };
-
+  const c = config[color] || config.slate;
   return (
     <motion.div
-      whileHover={{ y: -1 }}
-      className={`relative overflow-hidden rounded-xl border bg-white/50 dark:bg-slate-900/50 backdrop-blur-md p-3 transition-all ${colors[color] || colors.slate}`}
+      whileHover={{ scale: 1.04, y: -1 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      className={`flex items-center gap-2 px-3 rounded-xl border shadow-sm cursor-default h-full w-[140px] ${c.bg} ${c.border} ${c.glow}`}
     >
-      <div className={`absolute top-0 right-0 p-3 opacity-10`}>
-        {Icon && <Icon size={64} />}
-      </div>
-      <div className="flex items-center gap-2 mb-2">
-        <div className={`p-1.5 rounded-lg bg-current/10`}>
-          {Icon && <Icon size={16} />}
-        </div>
-        <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">
-          {label}
-        </span>
-      </div>
-      <div className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-        {value}
+      <span className="text-base leading-none shrink-0">{icon}</span>
+      <div className="flex flex-col min-w-0">
+        <span className={`text-[8px] font-bold uppercase tracking-widest leading-none ${c.labelColor}`}>{label}</span>
+        <span className={`text-lg font-black leading-tight mt-0.5 ${c.valueColor}`}>{value}</span>
       </div>
     </motion.div>
   );
@@ -1512,10 +1283,10 @@ function SummaryCard({ label, value, icon: Icon, color = "blue" }) {
 
 function DetailItem({ label, value, sub }) {
   return (
-    <div className="p-4 rounded-3xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex flex-col gap-1">
-      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
-      <div className="font-bold text-slate-900 dark:text-white">{value || "---"}</div>
-      {sub && <div className="text-[10px] font-medium text-slate-500">{sub}</div>}
+    <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex flex-col gap-0.5">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+      <div className="font-semibold text-slate-900 text-sm">{value || "—"}</div>
+      {sub && <div className="text-[11px] text-slate-500">{sub}</div>}
     </div>
   );
 }
@@ -1523,7 +1294,7 @@ function DetailItem({ label, value, sub }) {
 
 function Th({ children, className = "" }) {
   return (
-    <th className={`px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 ${className}`}>
+    <th className={`px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400 ${className}`}>
       {children}
     </th>
   );
@@ -1531,7 +1302,7 @@ function Th({ children, className = "" }) {
 
 function Td({ children, className = "" }) {
   return (
-    <td className={`px-4 py-2.5 align-middle text-slate-800 dark:text-slate-200 ${className}`}>
+    <td className={`px-3 py-2.5 align-middle text-slate-800 ${className}`}>
       {children}
     </td>
   );
@@ -1542,10 +1313,10 @@ function PageBtn({ page = 1, active = false, onClick }) {
     <button
       onClick={onClick}
       className={[
-        "h-9 min-w-9 rounded-xl border px-3 text-sm font-bold transition-all",
+        "h-7 min-w-7 rounded-lg border px-2 text-xs font-bold transition-all",
         active
-          ? "border-indigo-500 bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"
-          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800",
+          ? "border-indigo-500 bg-indigo-500 text-white shadow shadow-indigo-200"
+          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300",
       ].join(" ")}
     >
       {page}
@@ -1555,17 +1326,15 @@ function PageBtn({ page = 1, active = false, onClick }) {
 
 function IconBtn({ title, onClick, disabled, children, variant = "default" }) {
   const base =
-    "inline-flex h-8 w-8 items-center justify-center rounded-xl border transition-all " +
+    "inline-flex h-7 w-7 items-center justify-center rounded-lg border transition-all " +
     "disabled:opacity-40 disabled:cursor-not-allowed";
-
   const styles =
     variant === "danger"
-      ? "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-900/20 dark:text-rose-400 dark:hover:bg-rose-900/40 shadow-sm"
-      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 shadow-sm";
-
+      ? "border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 shadow-sm"
+      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-400 shadow-sm";
   return (
     <motion.button
-      whileHover={!disabled ? { scale: 1.1 } : {}}
+      whileHover={!disabled ? { scale: 1.08 } : {}}
       whileTap={!disabled ? { scale: 0.95 } : {}}
       title={title}
       onClick={onClick}
@@ -1579,30 +1348,30 @@ function IconBtn({ title, onClick, disabled, children, variant = "default" }) {
 
 function StatusPill({ status }) {
   const s = (status || "NEW").toUpperCase();
-  const base = "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide border shadow-sm";
+  const base = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide border";
 
   if (s === "COMPLETE") {
     return (
-      <span className={`${base} border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-900/30 dark:text-emerald-400`}>
-        <CheckCircle2 size={12} />
-        COMPLETE
+      <span className={`${base} border-emerald-200 bg-emerald-50 text-emerald-700`}>
+        <CheckCircle2 size={10} />
+        Done
       </span>
     );
   }
 
   if (s === "IN_PROGRESS") {
     return (
-      <span className={`${base} border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-900/30 dark:text-indigo-400`}>
-        <Clock size={12} />
-        IN PROGRESS
+      <span className={`${base} border-indigo-200 bg-indigo-50 text-indigo-700`}>
+        <Clock size={10} />
+        In Progress
       </span>
     );
   }
 
   return (
-    <span className={`${base} border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400`}>
-      <Plus size={12} />
-      NEW
+    <span className={`${base} border-slate-200 bg-slate-50 text-slate-600`}>
+      <Plus size={10} />
+      New
     </span>
   );
 }
