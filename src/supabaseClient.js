@@ -1,15 +1,37 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() || ''
+export const supabaseBrowserKey = (
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  ''
+).trim()
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase URL or Anon Key is missing in .env')
-} else {
-  console.log('DEBUG Supabase URL:', supabaseUrl);
+export const isSupabaseSecretKey =
+  supabaseBrowserKey.startsWith('sb_secret_') ||
+  /service[-_]?role/i.test(supabaseBrowserKey)
+
+if (!supabaseUrl || !supabaseBrowserKey) {
+  console.warn('Supabase URL or browser key is missing in .env')
+} else if (isSupabaseSecretKey) {
+  console.error(
+    'Frontend Supabase config is using a secret/service key. Replace it with VITE_SUPABASE_PUBLISHABLE_KEY or the public anon key.'
+  )
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export function assertSupabaseBrowserConfig() {
+  if (!supabaseUrl || !supabaseBrowserKey) {
+    throw new Error('Missing Supabase frontend config. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY).')
+  }
+
+  if (isSupabaseSecretKey) {
+    throw new Error('Frontend Supabase key is a secret/service key. Replace it with the project publishable or anon key in frontend/.env.')
+  }
+
+  return { url: supabaseUrl, key: supabaseBrowserKey }
+}
+
+export const supabase = createClient(supabaseUrl, supabaseBrowserKey)
 
 /**
  * Helper to handle Supabase Auth session persistence

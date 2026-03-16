@@ -1,5 +1,9 @@
 // supabaseAuth.js -> Handling Supabase Auth and Permission Logic
-import { supabase, observeAuth as sbObserveAuth } from "./supabaseClient";
+import {
+  supabase,
+  observeAuth as sbObserveAuth,
+  assertSupabaseBrowserConfig,
+} from "./supabaseClient";
 
 export const auth = supabase.auth;
 export const db = supabase; 
@@ -11,6 +15,9 @@ export const toAliasEmail = (u) => `${u.trim().toLowerCase()}@yourapp.local`;
 function mapAuthError(err) {
   const msg = (err?.message || "").toLowerCase();
   if (msg.includes("invalid login credentials")) return "Invalid credentials";
+  if (msg.includes("secret api key") || msg.includes("secret/service key")) {
+    return "Frontend Supabase key is invalid for browser use. Replace it with the project's publishable or anon key."
+  }
   if (msg.includes("rate limit")) return "Too many attempts. Try again later.";
   return err?.message || "Unable to sign in";
 }
@@ -75,7 +82,9 @@ export function persistPermissionSnapshot(role, permissions) {
   try {
     localStorage.setItem("ff.role", role || "viewer");
     localStorage.setItem("ff.permissions", JSON.stringify(snap));
-  } catch {}
+  } catch {
+    // Ignore storage write failures in private browsing or locked-down environments.
+  }
   return snap;
 }
 
@@ -92,13 +101,16 @@ async function clearStaleSession() {
     Object.keys(localStorage)
       .filter(k => k.startsWith('sb-'))
       .forEach(k => localStorage.removeItem(k));
-  } catch {}
+  } catch {
+    // Ignore storage cleanup failures and continue with auth flow.
+  }
 }
 
 export async function loginWithUsername(username, password) {
   try {
     const t0 = performance.now();
     await clearStaleSession();
+    const { url, key } = assertSupabaseBrowserConfig();
 
     let email = username.trim();
 
@@ -106,9 +118,6 @@ export async function loginWithUsername(username, password) {
     if (!email.includes("@")) {
       console.log(`[Login] Resolving username '${email}' via raw fetch...`);
       try {
-        const url = import.meta.env.VITE_SUPABASE_URL;
-        const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-        
         // Direct fetch is faster and won't hang the SDK connection pool
         const res = await fetch(`${url}/rest/v1/profiles?username=eq.${email}&select=email`, {
           headers: { apikey: key, Authorization: `Bearer ${key}` },
@@ -129,8 +138,7 @@ export async function loginWithUsername(username, password) {
 
     // Step 2: Authenticate via raw FETCH (Bypasses SDK HANG)
     console.log(`[Login] B1: Authenticating via raw API...`);
-    const authUrl = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/token?grant_type=password`;
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const authUrl = `${url}/auth/v1/token?grant_type=password`;
     
     // Explicit timeout helper to ensure B2 ALWAYS prints
     const authStart = Date.now();
@@ -139,10 +147,10 @@ export async function loginWithUsername(username, password) {
     
     let authRes;
     try {
-      authRes = await fetch(authUrl, {
+        authRes = await fetch(authUrl, {
         method: "POST",
         headers: {
-          "apikey": anonKey,
+          "apikey": key,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ email, password }),
@@ -184,9 +192,10 @@ export async function loginWithUsername(username, password) {
     
     try {
       console.log(`[Login] B5: Fetching metadata via high-speed raw API...`);
-      const url = import.meta.env.VITE_SUPABASE_URL;
-      const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      const headers = { apikey: key, Authorization: `Bearer ${key}` };
+      const headers = {
+        apikey: key,
+        Authorization: `Bearer ${authData.access_token}`
+      };
 
       const [profRes, roleRes, licRes] = await Promise.all([
         fetch(`${url}/rest/v1/profiles?id=eq.${uid}&select=*`, { headers, signal: AbortSignal.timeout(3000) }).then(r => r.json()),
@@ -231,5 +240,7 @@ export const logout = async () => {
     localStorage.removeItem("ff.permissions");
     localStorage.removeItem("perm_cache_v1");
     localStorage.removeItem("username");
-  } catch {}
+  } catch {
+    // Ignore storage cleanup failures during logout.
+  }
 };

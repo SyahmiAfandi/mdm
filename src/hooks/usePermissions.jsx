@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { supabase } from "../supabaseClient";
+import { supabase, assertSupabaseBrowserConfig } from "../supabaseClient";
 
 /**
  * usePermissions()
@@ -151,10 +151,11 @@ export function PermissionsProvider({ children, options = {} }) {
       const refreshStart = Date.now();
       try {
         console.log(`[usePermissions] Background refresh starting for ${u.email}...`);
-        
-        const url = import.meta.env.VITE_SUPABASE_URL;
-        const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-        const headers = { apikey: key, Authorization: `Bearer ${key}` };
+        const { url, key } = assertSupabaseBrowserConfig();
+        const headers = {
+          apikey: key,
+          Authorization: `Bearer ${session?.access_token || key}`
+        };
 
         // 1. Fetch Role via RAW API
         const roleRes = await fetch(`${url}/rest/v1/${opts.roleCollection}?id=eq.${u.id}&select=${opts.roleField}`, { 
