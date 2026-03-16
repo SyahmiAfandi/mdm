@@ -90,6 +90,15 @@ export const PAGE_META = [
       { label: "Daily Sales Summary" },
     ],
   },
+  {
+    match: /^\/reports\/recon-schedule/,
+    title: "Recons Tracker Report",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Reports", to: "/reports" },
+      { label: "Recons Tracker Report" },
+    ],
+  },
 
   {
     match: /^\/recons\/?$/,
@@ -230,6 +239,48 @@ export const PAGE_META = [
   },
 
   {
+    match: /^\/promotions\/config/,
+    title: "Promotions Configuration",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
+      { label: "Promotions", to: "/promotions" },
+      { label: "Configuration" },
+    ],
+  },
+  {
+    match: /^\/promotions\/auto-ufs\/controls/,
+    title: "UFS Promotion Controls",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
+      { label: "Promotions", to: "/promotions" },
+      { label: "Auto-UFS Promo", to: "/promotions/auto-ufs" },
+      { label: "Control Defaults" },
+    ],
+  },
+  {
+    match: /^\/promotions\/auto-ufs\/add/,
+    title: "Add UFS Promotion",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
+      { label: "Promotions", to: "/promotions" },
+      { label: "Auto-UFS Promo", to: "/promotions/auto-ufs" },
+      { label: "Add Promo" },
+    ],
+  },
+  {
+    match: /^\/promotions\/auto-ufs/,
+    title: "UFS Promotion Blueprints",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
+      { label: "Promotions", to: "/promotions" },
+      { label: "Auto-UFS Promo" },
+    ],
+  },
+  {
     match: /^\/promotions\/auto-IC/,
     title: "Auto Generate (IC Promotions)",
     breadcrumbs: [
@@ -239,14 +290,54 @@ export const PAGE_META = [
       { label: "Auto-IC Promo" },
     ],
   },
-
   {
-    match: /^\/promotions\/auto-IC/,
-    title: "Auto Generate (IC Promotions)",
+    match: /^\/promotions\/region-distributor/,
+    title: "Promo Region & Distributor",
     breadcrumbs: [
       { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
       { label: "Promotions", to: "/promotions" },
-      { label: "Auto-IC Promo" },
+      { label: "Region & Distributor" },
+    ],
+  },
+  {
+    match: /^\/promotions\/promo-item/,
+    title: "Promo Item Configuration",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
+      { label: "Promotions", to: "/promotions" },
+      { label: "Promo Item" },
+    ],
+  },
+  {
+    match: /^\/promotions\/promo-period/,
+    title: "Promo Period Configuration",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
+      { label: "Promotions", to: "/promotions" },
+      { label: "Promo Period" },
+    ],
+  },
+  {
+    match: /^\/promotions\/promo-criteria/,
+    title: "Promo Criteria Configuration",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
+      { label: "Promotions", to: "/promotions" },
+      { label: "Promo Criteria" },
+    ],
+  },
+  {
+    match: /^\/promotions\/region-criteria-mapping/,
+    title: "Region & Criteria Mapping",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/" },
+      { label: "Promotions", to: "/promotions" },
+      { label: "Region & Criteria Mapping" },
     ],
   },
   {
@@ -255,6 +346,33 @@ export const PAGE_META = [
     breadcrumbs: [
       { label: "Home", to: "/" },
       { label: "Master Data" },
+    ],
+  },
+  {
+    match: /^\/master-data\/sku/,
+    title: "Master Data - SKU Master",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Master Data", to: "/master-data" },
+      { label: "SKU Master" },
+    ],
+  },
+  {
+    match: /^\/master-data\/promo-items/,
+    title: "Master Data - Promotion Item Master",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Master Data", to: "/master-data" },
+      { label: "Promotion Item Master" },
+    ],
+  },
+  {
+    match: /^\/master-data\/map-promo-sku/,
+    title: "Master Mapping — Promo Item ↔ SKU",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Master Data", to: "/master-data" },
+      { label: "Promo Item ↔ SKU" },
     ],
   },
   {

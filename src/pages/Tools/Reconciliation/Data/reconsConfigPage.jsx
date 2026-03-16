@@ -1,17 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
-import { db } from "../../../../firebaseClient";
+import { supabase } from "../../../../supabaseClient";
 import { useUser } from "../../../../context/UserContext";
-import { Save, Plus, Trash2, RefreshCcw } from "lucide-react";
+import { Save, Plus, Trash2, RefreshCcw, Shield } from "lucide-react";
+import { usePermissions } from "../../../../hooks/usePermissions";
 
 const COL_CFG = "reconConfig";
 const DOC_ID = "default";
@@ -37,7 +29,10 @@ function pickCountryName(v, code) {
 export default function ReconsConfigPage() {
   const { user } = useUser();
 
-  const canManage = !!user; // tighten later with role/permission
+  const { can, role } = usePermissions();
+
+  const canEdit = can("tools.reconciliation.edit") || can("tools.*") || role === "admin";
+  const canManage = !!user && canEdit;
   const actor = user?.email || user?.name || "unknown";
   const actorUid = user?.uid || "";
 
@@ -70,36 +65,33 @@ export default function ReconsConfigPage() {
   }, [countries, search]);
 
   async function loadConfig() {
-    const ref = doc(db, COL_CFG, DOC_ID);
-    const snap = await getDoc(ref);
+    const { data: snap, error } = await supabase.from(COL_CFG).select('*').eq('id', DOC_ID).maybeSingle();
 
-    if (!snap.exists()) {
+    if (error || !snap) {
       // create initial config
-      await setDoc(
-        ref,
-        {
+      await supabase.from(COL_CFG).insert({
+          id: DOC_ID,
           allowedCountries: DEFAULT_ALLOWED,
-          createdAt: serverTimestamp(),
+          createdAt: new Date().toISOString(),
           createdBy: actor,
           createdByUid: actorUid,
-          updatedAt: serverTimestamp(),
+          updatedAt: new Date().toISOString(),
           updatedBy: actor,
           updatedByUid: actorUid,
-        },
-        { merge: true }
+        }
       );
       return DEFAULT_ALLOWED;
     }
 
-    const d = snap.data() || {};
+    const d = snap || {};
     const arr = Array.isArray(d.allowedCountries) ? d.allowedCountries : DEFAULT_ALLOWED;
     return arr.map(norm).filter(Boolean);
   }
 
   async function loadMasterCountries() {
-    const snap = await getDocs(query(collection(db, COL_COUNTRIES)));
-    const list = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
+    const { data: snap, error } = await supabase.from(COL_COUNTRIES).select('*');
+    if (error) throw error;
+    const list = (snap || [])
       .map((v) => {
         const code = pickCountryCode(v, v.id);
         const name = pickCountryName(v, code);
@@ -160,16 +152,16 @@ export default function ReconsConfigPage() {
 
     setLoading(true);
     try {
-      await setDoc(
-        doc(db, COL_CFG, DOC_ID),
-        {
+      const { error } = await supabase.from(COL_CFG).upsert({
+          id: DOC_ID,
           allowedCountries: cleaned,
-          updatedAt: serverTimestamp(),
+          updatedAt: new Date().toISOString(),
           updatedBy: actor,
           updatedByUid: actorUid,
         },
-        { merge: true }
+        { onConflict: 'id' }
       );
+      if (error) throw error;
       setAllowedCountries(cleaned);
       toast.success("Saved config");
     } catch (e) {

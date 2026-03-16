@@ -7,7 +7,7 @@ export default function InProgressPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="absolute inset-0 pt-[104px] pb-6 px-5 sm:px-6 bg-slate-50 flex items-center justify-center overflow-hidden">
+    <div className="w-full min-w-0 px-3 sm:px-5 pb-3 py-16 flex flex-col items-center justify-center">
 
       {/* Decorative background elements */}
       <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-amber-200/20 rounded-full blur-3xl pointer-events-none" />

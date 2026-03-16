@@ -1,16 +1,7 @@
 // BulkReconCellsImportPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  runTransaction,
-  serverTimestamp,
-  Timestamp,
-} from "firebase/firestore";
-import { db } from "../../../../firebaseClient";
+import { supabase } from "../../../../supabaseClient";
 import { useUser } from "../../../../context/UserContext";
 import {
   UploadCloud,
@@ -21,7 +12,9 @@ import {
   X,
   AlertTriangle,
   CheckCircle2,
+  Shield,
 } from "lucide-react";
+import { usePermissions } from "../../../../hooks/usePermissions";
 
 // =====================
 // Firestore Collections
@@ -71,32 +64,31 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// Parse date/time from sheet into Firestore Timestamp
 function parseToTimestamp(val) {
   const raw = normalize(val);
   if (!raw) return null;
 
   if (val instanceof Date && !Number.isNaN(val.getTime())) {
-    return Timestamp.fromDate(val);
+    return val.toISOString();
   }
 
   const n = Number(raw);
   if (Number.isFinite(n) && n > 0) {
     if (n > 10_000_000_000) {
       const d = new Date(n);
-      return Number.isNaN(d.getTime()) ? null : Timestamp.fromDate(d);
+      return Number.isNaN(d.getTime()) ? null : d.toISOString();
     }
     if (n > 20_000 && n < 100_000) {
       const excelEpoch = new Date(Date.UTC(1899, 11, 30));
       const d = new Date(excelEpoch.getTime() + n * 24 * 60 * 60 * 1000);
-      return Number.isNaN(d.getTime()) ? null : Timestamp.fromDate(d);
+      return Number.isNaN(d.getTime()) ? null : d.toISOString();
     }
   }
 
   const ms = Date.parse(raw);
   if (Number.isFinite(ms)) {
     const d = new Date(ms);
-    return Number.isNaN(d.getTime()) ? null : Timestamp.fromDate(d);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
   }
 
   return null;
@@ -244,7 +236,11 @@ function Modal({ open, title, onClose, children, footer }) {
 // =====================
 export default function BulkReconCellsImportPage() {
   const { user } = useUser();
-  const canManage = !!user;
+
+  const { can, role } = usePermissions();
+
+  const canEdit = can("tools.reconciliation.edit") || can("tools.*") || role === "admin";
+  const canManage = !!user && canEdit;
 
   // "Importer" (who clicked import)
   const importerName =
@@ -290,32 +286,32 @@ export default function BulkReconCellsImportPage() {
   // Fetch masters
   // ==============
   async function fetchReconConfig() {
-    const snap = await getDoc(doc(db, COL_RECON_CFG, "default"));
-    if (!snap.exists()) {
+    const { data: snap, error } = await supabase.from(COL_RECON_CFG).select('*').eq('id', 'default').maybeSingle();
+    if (error || !snap) {
       setAllowedCountries(null);
       return;
     }
-    const cfg = snap.data() || {};
-    setAllowedCountries(parseAllowedCountries(cfg.allowedCountries));
+    const cfg = snap || {};
+    setAllowedCountries(parseAllowedCountries(cfg.allowedCountries ?? cfg.allowed_countries));
   }
 
   async function fetchPeriods() {
-    const snap = await getDocs(collection(db, COL_PERIODS));
+    const { data: snap, error } = await supabase.from(COL_PERIODS).select('*');
+    if (error) throw error;
     const s = new Set();
-    snap.docs.forEach((d) => {
-      const v = d.data() || {};
-      const pid = normalize(v.periodId ?? d.id);
+    (snap || []).forEach((v) => {
+      const pid = normalize(v.periodId ?? v.id);
       if (pid) s.add(pid);
     });
     setPeriodSet(s);
   }
 
   async function fetchBusinesses() {
-    const snap = await getDocs(collection(db, COL_BUS));
+    const { data: snap, error } = await supabase.from(COL_BUS).select('*');
+    if (error) throw error;
     const s = new Set();
-    snap.docs.forEach((d) => {
-      const v = d.data() || {};
-      const code = normalize(v.code ?? v.businessType ?? v.businessCode ?? d.id);
+    (snap || []).forEach((v) => {
+      const code = normalize(v.code ?? v.businessType ?? v.businessCode ?? v.business_code ?? v.id);
       const st = normalize(v.status ?? (v.active === false ? "Inactive" : "Active"));
       if (code && (!st || st.toLowerCase() === "active")) s.add(code);
     });
@@ -323,21 +319,21 @@ export default function BulkReconCellsImportPage() {
   }
 
   async function fetchDistributors() {
-    const snap = await getDocs(collection(db, COL_DIST));
+    const { data: snap, error } = await supabase.from(COL_DIST).select('*');
+    if (error) throw error;
     const m = new Map();
 
-    snap.docs.forEach((d) => {
-      const x = d.data() || {};
-      const code = normalize(x.code ?? x.distributorCode ?? d.id);
+    (snap || []).forEach((x) => {
+      const code = normalize(x.code ?? x.distributorCode ?? x.distributor_code ?? x.id);
       if (!code) return;
 
-      const name = normalize(x.name ?? x.distributorName ?? "");
-      const btRaw = normalize(x.businessType ?? x.bizType ?? "");
+      const name = normalize(x.name ?? x.distributorName ?? x.distributor_name ?? "");
+      const btRaw = normalize(x.businessType ?? x.business_type ?? x.bizType ?? "");
       const businessTypes = btRaw
         ? btRaw.split(",").map((s) => normalize(s)).filter(Boolean)
         : [];
 
-      const country = upper(x.country ?? x.countryCode ?? "");
+      const country = upper(x.country ?? x.countryCode ?? x.country_code ?? "");
       const countries = Array.isArray(x.countries)
         ? x.countries.map((c) => upper(c)).filter(Boolean)
         : [];
@@ -349,15 +345,15 @@ export default function BulkReconCellsImportPage() {
   }
 
   async function fetchReportTypes() {
-    const snap = await getDocs(collection(db, COL_RPT));
+    const { data: snap, error } = await supabase.from(COL_RPT).select('*');
+    if (error) throw error;
     const m = new Map();
 
-    snap.docs.forEach((d) => {
-      const v = d.data() || {};
-      const id = normalize(v.code ?? v.reportTypeId ?? d.id);
+    (snap || []).forEach((v) => {
+      const id = normalize(v.code ?? v.reportTypeId ?? v.report_type_code ?? v.id);
       if (!id) return;
 
-      const name = normalize(v.name ?? v.reportTypeName ?? id);
+      const name = normalize(v.name ?? v.reportTypeName ?? v.report_type_name ?? id);
       const st = normalize(v.status ?? (v.active === false ? "Inactive" : "Active"));
       if (st && st.toLowerCase() !== "active") return;
 
@@ -368,12 +364,12 @@ export default function BulkReconCellsImportPage() {
   }
 
   async function fetchBizReportTypeMapping() {
-    const snap = await getDocs(collection(db, COL_MAP));
+    const { data: snap, error } = await supabase.from(COL_MAP).select('*');
+    if (error) throw error;
     const m = new Map();
 
-    for (const d of snap.docs) {
-      const v = d.data() || {};
-      const b = normalize(v.businessType ?? v.businessCode ?? v.code);
+    for (const v of (snap || [])) {
+      const b = normalize(v.businessType ?? v.businessCode ?? v.business_code ?? v.code);
       if (!b) continue;
 
       const arr = Array.isArray(v.reportTypeIds) ? v.reportTypeIds : null;
@@ -387,7 +383,7 @@ export default function BulkReconCellsImportPage() {
         continue;
       }
 
-      const rt = normalize(v.reportTypeId ?? v.reportTypeCode ?? v.reportType);
+      const rt = normalize(v.reportTypeId ?? v.reportTypeCode ?? v.report_type_code ?? v.reportType);
       const active = v.active === undefined ? true : Boolean(v.active);
       if (rt && active) {
         const set = m.get(b) || new Set();
@@ -624,11 +620,8 @@ export default function BulkReconCellsImportPage() {
         valid,
         Math.max(1, Math.min(15, Number(concurrency) || 5)),
         async (r, idx) => {
-          const cellRef = doc(db, COL_CELLS, r.cellId);
-
-          await runTransaction(db, async (tx) => {
-            const snap = await tx.get(cellRef);
-            const prev = snap.exists() ? snap.data() : null;
+            const { data: prev, error: readErr } = await supabase.from(COL_CELLS).select('*').eq('id', r.cellId).maybeSingle();
+            if (readErr) throw readErr;
 
             if (prev?.status === "match") {
               const err = new Error("LOCKED_MATCH");
@@ -639,11 +632,11 @@ export default function BulkReconCellsImportPage() {
             const prevReconsNo = Number(prev?.reconsNo || 0) || 0;
             const nextReconsNo = autoReconsNo ? prevReconsNo + 1 : (Number(r.reconsNo) || 1);
 
-            const createdAt = prev?.createdAt || serverTimestamp();
-            const createdBy = prev?.createdBy || importerName;
+            const createdAt = prev?.createdAt || prev?.created_at || new Date().toISOString();
+            const createdBy = prev?.createdBy || prev?.created_by || importerName;
 
             const finalUpdatedBy = r.updatedByFromFile || importerName;
-            const finalUpdatedAt = r.updatedAtFromFile || serverTimestamp();
+            const finalUpdatedAt = r.updatedAtFromFile || new Date().toISOString();
 
             const payload = {
               periodId: r.periodId,
@@ -665,19 +658,18 @@ export default function BulkReconCellsImportPage() {
               importedBy: importerName,
               importedByUid: importerUid,
               importedByEmail: importerEmail,
-              importedAt: serverTimestamp(),
+              importedAt: new Date().toISOString(),
             };
 
-            tx.set(
-              cellRef,
-              {
-                ...payload,
-                reconsNo: nextReconsNo,
-                createdAt,
-                createdBy,
-              },
-              { merge: true }
-            );
+            const { error: upsertErr } = await supabase.from(COL_CELLS).upsert({
+              id: r.cellId,
+              ...payload,
+              reconsNo: nextReconsNo,
+              createdAt,
+              createdBy,
+            }, { onConflict: 'id' });
+            
+            if (upsertErr) throw upsertErr;
 
             if (importAttempts) {
               const attemptSnapshot = {
@@ -706,15 +698,17 @@ export default function BulkReconCellsImportPage() {
                 importedAt: payload.importedAt,
 
                 clientImportedAt: new Date().toISOString(),
-                previousStatus: prev?.status || (snap.exists() ? "no_data" : "new"),
+                previousStatus: prev?.status || (prev ? "no_data" : "new"),
                 previousReconsNo: prevReconsNo,
                 source: "bulk_import",
               };
 
-              const attemptRef = doc(db, COL_CELLS, r.cellId, "attempts", String(nextReconsNo));
-              tx.set(attemptRef, attemptSnapshot);
+              try {
+                await supabase.from('reconCells_attempts').upsert(attemptSnapshot, { onConflict: 'cellId,reconsNo' });
+              } catch (e) {
+                console.warn("Attempts insert failed", e);
+              }
             }
-          });
 
           if (idx % 25 === 0) await sleep(50);
           return true;
@@ -986,7 +980,7 @@ export default function BulkReconCellsImportPage() {
 
                   <td className="px-4 py-3">{r.updatedByFromFile || ""}</td>
                   <td className="px-4 py-3 text-xs text-slate-600">
-                    {r.updatedAtFromFile?.toDate ? r.updatedAtFromFile.toDate().toLocaleString() : ""}
+                    {r.updatedAtFromFile ? new Date(r.updatedAtFromFile).toLocaleString() : ""}
                   </td>
 
                   <td className="px-4 py-3">{r.remark}</td>

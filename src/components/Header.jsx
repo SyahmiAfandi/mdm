@@ -1,8 +1,7 @@
 // src/components/Header.jsx
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { db } from "../firebaseClient";
-import { doc, getDoc } from "firebase/firestore";
+import { supabase } from "../supabaseClient";
 import {
   CalendarDays,
   Bell,
@@ -18,6 +17,7 @@ import {
 
 import { useUser } from "../context/UserContext";
 import { useTooltip } from "../context/TooltipContext";
+import { normalizePermissionRows } from "../hooks/usePermissions";
 import { APP_FULL_NAME, ORG_COMP } from "../config";
 
 import {
@@ -136,9 +136,11 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
       setPermLoading(true);
       try {
         const r = String(role || "viewer").toLowerCase();
-        const ref = doc(db, "rolePermissions", r);
-        const snap = await getDoc(ref);
-        const permissions = snap.exists() ? (snap.data()?.permissions || {}) : {};
+        const { data: snap } = await supabase
+          .from("role_permissions")
+          .select("permission,allow")
+          .eq('role', r);
+        const permissions = normalizePermissionRows(snap);
         if (!cancelled) setPermMap(permissions);
       } catch (e) {
         console.error("Failed to load permissions", e);
@@ -562,7 +564,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
               </div>
 
               <div className="text-[16px] font-bold text-gray-800 dark:text-white leading-tight">
-                {user?.name || "User Name"}
+                {user?.display_name || "User Name"}
               </div>
 
               <div className="text-[11px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full mb-1 mt-1 truncate w-full text-center select-text dark:bg-blue-900 dark:text-blue-200">

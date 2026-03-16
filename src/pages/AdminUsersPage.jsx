@@ -1,29 +1,15 @@
-// AdminUsersPage (Firebase, frontend-only)
-// - Lists users from Firestore /profiles
-// - Joins /roles and /licenses by UID
-// - Owner (YOUR_UID_HERE) can edit: name, role, license expiry (inclusive date)
-// - Remove deletes Firestore docs (profiles/roles/licenses) ONLY (not Auth account)
-//
-// Prereqs:
-// 1) Configure firebaseClient.js that exports { auth, db }
-// 2) Publish Firestore Rules as provided earlier (owner-only writes for roles/licenses)
-// 3) Replace OWNER_UID with your actual UID from Firebase Auth
+// AdminUsersPage (Supabase)
+// - Lists users from profiles table
+// - Joins user_roles and licenses by ID
+// - Remove deletes records from profiles/user_roles/licenses ONLY (not Auth account)
 
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { APP_FULL_NAME } from "../config";
-import { auth, db } from "../firebaseClient";
-import {
-  collection,
-  getDocs,
-  doc,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  Timestamp,
-} from "firebase/firestore";
+import { supabase } from "../supabaseClient";
+import { Key, RefreshCw, Search } from "lucide-react";
+import { usePermissions } from "../hooks/usePermissions";
 
-const OWNER_UID = import.meta.env.VITE_FIREBASE_OWNER_UID; // <-- replace with your owner UID
+const OWNER_UID = import.meta.env.VITE_FIREBASE_OWNER_UID;
 const USERS_PER_PAGE = 10;
 
 function formatYMD(d) {
@@ -33,12 +19,10 @@ function formatYMD(d) {
   return `${yr}-${mo}-${da}`;
 }
 
-// We store validUntil as NEXT-DAY 00:00 to make the chosen date inclusive.
-// For display, we show the previous calendar day.
 function tsToLicenseDate(validUntilTs) {
   try {
     if (!validUntilTs) return "";
-    const dt = validUntilTs.toDate ? validUntilTs.toDate() : new Date(validUntilTs);
+    const dt = new Date(validUntilTs);
     const prev = new Date(dt.getTime() - 24 * 60 * 60 * 1000);
     return formatYMD(prev);
   } catch {
@@ -50,75 +34,123 @@ function licenseDateToValidUntil(ymd) {
   if (!ymd) return null;
   const base = new Date(`${ymd}T00:00:00`);
   const next = new Date(base.getTime() + 24 * 60 * 60 * 1000);
-  return Timestamp.fromDate(next);
+  return next.toISOString();
+}
+
+function getLicenseValidUntil(row) {
+  return row?.valid_until ?? row?.validUntil ?? null;
+}
+
+function StatTile({ label, value, tone = "slate" }) {
+  const tones = {
+    slate: "from-slate-950 via-slate-900 to-slate-800 text-white",
+    blue: "from-blue-600 to-indigo-600 text-white",
+    emerald: "from-emerald-500 to-teal-500 text-white",
+    amber: "from-amber-300 to-orange-400 text-slate-950",
+  };
+
+  return (
+    <div className={`flex h-[58px] w-[108px] flex-col justify-between rounded-lg bg-gradient-to-br ${tones[tone]} px-3 py-2 shadow-sm`}>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] opacity-80">{label}</div>
+      <div className="mt-1 text-lg font-bold leading-none">{value}</div>
+    </div>
+  );
+}
+
+function RolePill({ role }) {
+  const cls =
+    role === "admin"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : role === "user"
+        ? "border-blue-200 bg-blue-50 text-blue-700"
+        : "border-slate-200 bg-slate-100 text-slate-700";
+
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${cls}`}>
+      {role}
+    </span>
+  );
 }
 
 export default function AdminUsersPage() {
+  const { can, role } = usePermissions();
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [users, setUsers] = useState([]); // {uid, username, name, email, role, licenseDate}
+  const [syncing, setSyncing] = useState(false);
+  const [users, setUsers] = useState([]);
 
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState([]); // ["admin","user","viewer"]
+  const [roleFilter, setRoleFilter] = useState([]);
   const [sortField, setSortField] = useState("name");
   const [sortAsc, setSortAsc] = useState(true);
 
   const [editingUid, setEditingUid] = useState(null);
   const [editDraft, setEditDraft] = useState({});
-
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Load current user & users directory
+  const canManageUsers =
+    can("admin.manageUsers") || role === "admin" || (!!OWNER_UID && me?.id === OWNER_UID);
+
   useEffect(() => {
-    const unsub = auth.onAuthStateChanged(async (u) => {
-      setMe(u);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      setMe(session?.user || null);
     });
-    return () => unsub();
+    return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (!me) return; // wait for auth
-    if (me && me.uid !== OWNER_UID) {
+  async function loadUsers({ silent = false } = {}) {
+    if (!me) return;
+    if (!canManageUsers) {
       setLoading(false);
-      return; // unauthorized view rendered below
+      return;
     }
-    (async () => {
-      setLoading(true);
-      try {
-        // 1) Get all profiles (our directory)
-        const profSnap = await getDocs(collection(db, "profiles"));
 
-        // 2) For each profile UID, fetch role + license
-        const rows = [];
-        for (const d of profSnap.docs) {
-          const uid = d.id;
-          const p = d.data() || {};
-          // role
-          const roleSnap = await getDoc(doc(db, "roles", uid));
-          const role = roleSnap.exists() ? roleSnap.data().role : "viewer";
-          // license
-          const licSnap = await getDoc(doc(db, "licenses", uid));
-          const licenseDate = licSnap.exists()
-            ? tsToLicenseDate(licSnap.data().validUntil)
-            : "";
-          rows.push({
-            uid,
-            username: p.username || "",
-            name: p.name || "",
-            email: p.email || "",
-            role,
-            licenseDate,
-          });
-        }
-        setUsers(rows);
-      } catch (e) {
-        console.error(e);
-        toast.error("Failed to load users");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [me]);
+    if (silent) setSyncing(true);
+    else setLoading(true);
+
+    try {
+      const [profRes, roleRes, licRes] = await Promise.all([
+        supabase.from("profiles").select("*"),
+        supabase.from("user_roles").select("*"),
+        supabase.from("licenses").select("*"),
+      ]);
+
+      if (profRes.error) throw profRes.error;
+
+      const rolesMap = {};
+      (roleRes.data || []).forEach((r) => {
+        rolesMap[r.id] = r.role;
+      });
+
+      const licsMap = {};
+      (licRes.data || []).forEach((l) => {
+        licsMap[l.id] = getLicenseValidUntil(l);
+      });
+
+      const rows = (profRes.data || []).map((p) => ({
+        uid: p.id,
+        username: p.username || "",
+        name: p.display_name || p.name || "",
+        email: p.email || "",
+        role: rolesMap[p.id] || "viewer",
+        licenseDate: tsToLicenseDate(licsMap[p.id]),
+      }));
+
+      setUsers(rows);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to load users");
+    } finally {
+      setLoading(false);
+      setSyncing(false);
+    }
+  }
+
+  useEffect(() => {
+    loadUsers();
+  }, [me, canManageUsers]);
 
   const filteredUsers = useMemo(() => {
     let arr = [...users];
@@ -146,10 +178,18 @@ export default function AdminUsersPage() {
   const pageStart = (currentPage - 1) * USERS_PER_PAGE;
   const pageUsers = filteredUsers.slice(pageStart, pageStart + USERS_PER_PAGE);
 
-  const toggleRoleFilter = (role) => {
-    setRoleFilter((prev) =>
-      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
-    );
+  const summary = useMemo(() => {
+    const stats = { total: users.length, admin: 0, user: 0, viewer: 0 };
+    users.forEach((u) => {
+      if (u.role === "admin") stats.admin += 1;
+      else if (u.role === "user") stats.user += 1;
+      else stats.viewer += 1;
+    });
+    return stats;
+  }, [users]);
+
+  const toggleRoleFilter = (value) => {
+    setRoleFilter((prev) => (prev.includes(value) ? prev.filter((r) => r !== value) : [...prev, value]));
     setCurrentPage(1);
   };
 
@@ -167,266 +207,368 @@ export default function AdminUsersPage() {
     const d = editDraft;
     if (!d || !editingUid) return;
 
-    // Basic validation
     if (!d.username) return toast.error("Username is required");
     if (!d.name) return toast.error("Name is required");
 
     try {
-      // Update profile
-      await setDoc(
-        doc(db, "profiles", editingUid),
-        { username: d.username, name: d.name, email: d.email || "" },
-        { merge: true }
-      );
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .update({
+            username: d.username,
+            display_name: d.name,
+            name: d.name,
+            email: d.email || "",
+          })
+          .eq("id", editingUid),
+        supabase.from("user_roles").upsert({
+          id: editingUid,
+          role: d.role,
+        }),
+      ]);
 
-      // Update role (owner-only by Rules)
-      await setDoc(doc(db, "roles", editingUid), { role: d.role }, { merge: true });
-
-      // Update license (owner-only by Rules)
       const validUntil = licenseDateToValidUntil(d.licenseDate);
-      if (validUntil) {
-        await setDoc(
-          doc(db, "licenses", editingUid),
-          { validUntil },
-          { merge: true }
-        );
-      }
+      await supabase.from("licenses").upsert({
+        id: editingUid,
+        valid_until: validUntil,
+      });
 
-      // Reflect in UI
       setUsers((prev) => prev.map((u) => (u.uid === editingUid ? { ...d } : u)));
       toast.success("User updated");
       cancelEdit();
     } catch (e) {
       console.error(e);
-      toast.error("Failed to save changes (check Rules & auth)");
+      toast.error("Failed to save changes");
     }
   };
 
   const removeUser = async (u) => {
-    if (!window.confirm(`Remove Firestore docs for ${u.username}?`)) return;
+    if (!window.confirm(`Remove user docs for ${u.username}?`)) return;
     try {
       await Promise.all([
-        deleteDoc(doc(db, "profiles", u.uid)),
-        deleteDoc(doc(db, "roles", u.uid)),
-        deleteDoc(doc(db, "licenses", u.uid)),
+        supabase.from("profiles").delete().eq("id", u.uid),
+        supabase.from("user_roles").delete().eq("id", u.uid),
+        supabase.from("licenses").delete().eq("id", u.uid),
       ]);
       setUsers((prev) => prev.filter((x) => x.uid !== u.uid));
-      toast.success("Removed Firestore docs. (Auth account NOT deleted)");
+      toast.success("Removed user docs. (Auth account NOT deleted)");
     } catch (e) {
       console.error(e);
       toast.error("Failed to remove");
     }
   };
 
-  // Unauthorized view for non-owner accounts
-  if (!loading && me && me.uid !== OWNER_UID) {
+  const handleResetPassword = async (u) => {
+    if (!u.email) {
+      toast.error("User does not have an email address");
+      return;
+    }
+
+    const ok = window.confirm(`Send password reset email to ${u.email}?`);
+    if (!ok) return;
+
+    try {
+      const redirectTo = `${window.location.origin}/login`;
+      const { error } = await supabase.auth.resetPasswordForEmail(u.email, {
+        redirectTo,
+      });
+
+      if (error) throw error;
+      toast.success(`Password reset email sent to ${u.email}`);
+    } catch (e) {
+      console.error(e);
+      toast.error(e?.message || "Failed to send reset email");
+    }
+  };
+
+  if (!loading && me && !canManageUsers) {
     return (
-      <div className="max-w-3xl mx-auto p-6">
-        <h2 className="text-xl font-semibold">Manage Users</h2>
-        <p className="mt-2 text-sm text-gray-600">
-          You are signed in as <span className="font-medium">{me.email || me.uid}</span>.
-          This page is restricted to the owner.
-        </p>
+      <div className="mx-auto max-w-5xl p-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-900">Manage Users</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            You are signed in as <span className="font-medium">{me.email || me.id}</span>. You need{" "}
+            <span className="font-medium">admin.manageUsers</span> or admin access to open this page.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-gray-800">Manage Users</h2>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-3 py-1.5 text-sm rounded bg-gray-100 hover:bg-gray-200"
-        >Reload</button>
+    <div className="mx-auto max-w-6xl p-4">
+      <div className="overflow-hidden rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 px-4 py-3.5 shadow-lg">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-200/80">Settings</div>
+            <h2 className="mt-1 text-xl font-bold tracking-tight text-white">Manage Users</h2>
+            <p className="mt-0.5 text-xs text-slate-300">
+              Update account details, roles, licenses, and password recovery access.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <StatTile label="Total" value={summary.total} tone="slate" />
+            <StatTile label="Admins" value={summary.admin} tone="blue" />
+            <StatTile label="Users" value={summary.user} tone="emerald" />
+            <StatTile label="Viewers" value={summary.viewer} tone="amber" />
+            <button
+              onClick={() => loadUsers({ silent: true })}
+              className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/15"
+              title="Sync"
+              aria-label="Sync"
+              disabled={syncing}
+            >
+              <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
+            </button>
+            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-100/85">Sync</span>
+          </div>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="py-10 text-center text-gray-500">Loading users…</div>
-      ) : (
-        <>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <input
-              type="text"
-              placeholder="Search by name, email, or username"
-              className="w-full sm:max-w-sm border border-gray-300 rounded px-3 py-2 text-sm"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-
-            <div className="flex gap-2 flex-wrap text-sm">
-              {(["admin", "user", "viewer"]).map((r) => (
-                <label key={r} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={roleFilter.includes(r)}
-                    onChange={() => toggleRoleFilter(r)}
-                  />
-                  <span className="capitalize">{r}</span>
-                </label>
-              ))}
+      <div className="mt-3 rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-slate-900">User Directory</div>
+              <div className="mt-0.5 text-xs text-slate-500">
+                Showing <span className="font-semibold text-slate-900">{pageUsers.length}</span> of{" "}
+                <span className="font-semibold text-slate-900">{filteredUsers.length}</span> matching users
+              </div>
             </div>
-          </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-[820px] w-full bg-white shadow rounded">
-              <thead className="bg-gray-100 text-gray-600 text-sm">
-                <tr>
-                  {["name", "email", "username", "role", "licenseDate"].map((field) => (
-                    <th
-                      key={field}
-                      className="px-6 py-3 text-left cursor-pointer select-none"
-                      onClick={() => {
-                        if (sortField === field) setSortAsc((s) => !s);
-                        else { setSortField(field); setSortAsc(true); }
-                      }}
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+              <div className="relative w-full lg:w-72">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search name, email, username"
+                  className="w-full rounded-xl border border-slate-300 bg-slate-50 py-2.5 pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {["admin", "user", "viewer"].map((value) => {
+                  const active = roleFilter.includes(value);
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => toggleRoleFilter(value)}
+                      className={`rounded-full border px-2.5 py-1 text-xs font-semibold capitalize tracking-[0.08em] transition ${
+                        active
+                          ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                          : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900"
+                      }`}
                     >
-                      {field.charAt(0).toUpperCase() + field.slice(1)}
-                      {sortField === field && (sortAsc ? " ↑" : " ↓")}
-                    </th>
-                  ))}
-                  <th className="px-6 py-3 text-left">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageUsers.map((u) => (
-                  <tr key={u.uid} className="border-t text-sm">
-                    <td className="px-6 py-3">
-                      {editingUid === u.uid ? (
-                        <input
-                          type="text"
-                          className="border px-2 py-1 rounded w-full"
-                          value={editDraft.name || ""}
-                          onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
-                        />
-                      ) : (
-                        u.name
-                      )}
-                    </td>
-                    <td className="px-6 py-3">
-                      {editingUid === u.uid ? (
-                        <input
-                          type="email"
-                          className="border px-2 py-1 rounded w-full"
-                          value={editDraft.email || ""}
-                          onChange={(e) => setEditDraft({ ...editDraft, email: e.target.value })}
-                        />
-                      ) : (
-                        u.email
-                      )}
-                    </td>
-                    <td className="px-6 py-3">
-                      {editingUid === u.uid ? (
-                        <input
-                          type="text"
-                          className="border px-2 py-1 rounded w-full"
-                          value={editDraft.username || ""}
-                          onChange={(e) => setEditDraft({ ...editDraft, username: e.target.value })}
-                        />
-                      ) : (
-                        u.username
-                      )}
-                    </td>
-                    <td className="px-6 py-3">
-                      {editingUid === u.uid ? (
-                        <select
-                          className="border px-2 py-1 rounded w-full"
-                          value={editDraft.role || "viewer"}
-                          onChange={(e) => setEditDraft({ ...editDraft, role: e.target.value })}
-                        >
-                          <option value="admin">Admin</option>
-                          <option value="user">User</option>
-                          <option value="viewer">Viewer</option>
-                        </select>
-                      ) : (
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            u.role === "admin"
-                              ? "bg-red-100 text-red-700"
-                              : u.role === "user"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-gray-100 text-gray-700"
-                          }`}
-                        >
-                          {u.role}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-3">
-                      {editingUid === u.uid ? (
-                        <input
-                          type="date"
-                          className="border px-2 py-1 rounded w-full"
-                          value={editDraft.licenseDate || ""}
-                          onChange={(e) => setEditDraft({ ...editDraft, licenseDate: e.target.value })}
-                        />
-                      ) : (
-                        u.licenseDate || ""
-                      )}
-                    </td>
-                    <td className="px-6 py-3 space-x-2">
-                      {editingUid === u.uid ? (
-                        <>
-                          <button
-                            onClick={saveEdit}
-                            className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="bg-gray-300 text-gray-700 px-3 py-1 rounded hover:bg-gray-400"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => startEdit(u)}
-                            className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => removeUser(u)}
-                            className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
-                          >
-                            Remove
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          <div className="flex justify-between items-center mt-4">
-            <span className="text-sm text-gray-600">
-              Page {currentPage} of {totalPages}
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
-              >
-                Next
-              </button>
+                      {value}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </>
-      )}
+        </div>
+
+        {loading ? (
+          <div className="px-4 py-12 text-center text-sm text-slate-500">Loading users...</div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-[980px] w-full">
+                <thead className="bg-slate-50 text-xs text-slate-500">
+                  <tr>
+                    {["name", "email", "username", "role", "licenseDate"].map((field) => (
+                      <th
+                        key={field}
+                        className="cursor-pointer select-none px-4 py-3 text-left font-semibold"
+                        onClick={() => {
+                          if (sortField === field) setSortAsc((s) => !s);
+                          else {
+                            setSortField(field);
+                            setSortAsc(true);
+                          }
+                        }}
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          {field === "licenseDate" ? "License" : field.charAt(0).toUpperCase() + field.slice(1)}
+                          <span className="text-xs text-slate-400">
+                            {sortField === field ? (sortAsc ? "↑" : "↓") : ""}
+                          </span>
+                        </span>
+                      </th>
+                    ))}
+                    <th className="px-4 py-3 text-left font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {pageUsers.map((u) => {
+                    const isEditing = editingUid === u.uid;
+                    return (
+                      <tr key={u.uid} className={isEditing ? "bg-indigo-50/50" : "hover:bg-slate-50/70"}>
+                        <td className="px-4 py-3 align-top">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                              value={editDraft.name || ""}
+                              onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
+                            />
+                          ) : (
+                            <div>
+                              <div className="font-semibold text-slate-900">{u.name || "-"}</div>
+                              <div className="mt-1 text-xs text-slate-500">{u.uid}</div>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          {isEditing ? (
+                            <input
+                              type="email"
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                              value={editDraft.email || ""}
+                              onChange={(e) => setEditDraft({ ...editDraft, email: e.target.value })}
+                            />
+                          ) : (
+                            <span className="text-slate-700">{u.email || "-"}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                              value={editDraft.username || ""}
+                              onChange={(e) => setEditDraft({ ...editDraft, username: e.target.value })}
+                            />
+                          ) : (
+                            <span className="font-mono text-slate-700">{u.username || "-"}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          {isEditing ? (
+                            <select
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                              value={editDraft.role || "viewer"}
+                              onChange={(e) => setEditDraft({ ...editDraft, role: e.target.value })}
+                            >
+                              <option value="admin">Admin</option>
+                              <option value="user">User</option>
+                              <option value="viewer">Viewer</option>
+                            </select>
+                          ) : (
+                            <RolePill role={u.role} />
+                          )}
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          {isEditing ? (
+                            <input
+                              type="date"
+                              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                              value={editDraft.licenseDate || ""}
+                              onChange={(e) => setEditDraft({ ...editDraft, licenseDate: e.target.value })}
+                            />
+                          ) : (
+                            <span
+                              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                u.licenseDate ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              {u.licenseDate || "No license"}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          {isEditing ? (
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={saveEdit}
+                                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                              >
+                                Save Changes
+                              </button>
+                              <button
+                                onClick={cancelEdit}
+                                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => startEdit(u)}
+                                className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleResetPassword(u)}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-100"
+                                title="Reset Password"
+                              >
+                                <Key size={14} />
+                                Reset
+                              </button>
+                              <button
+                                onClick={() => removeUser(u)}
+                                className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {!pageUsers.length && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center">
+                        <div className="mx-auto max-w-md">
+                          <div className="text-base font-semibold text-slate-900">No users found</div>
+                          <div className="mt-2 text-sm text-slate-500">
+                            Try adjusting the search text or clearing the selected role filters.
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-col gap-2 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-sm text-slate-500">
+                Page <span className="font-semibold text-slate-900">{currentPage}</span> of{" "}
+                <span className="font-semibold text-slate-900">{totalPages}</span>
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="rounded-lg border border-slate-300 px-3.5 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="rounded-lg border border-slate-300 px-3.5 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../../firebaseClient";
+import { supabase } from "../../supabaseClient";
 import {
     Loader2,
     AlertTriangle,
@@ -221,11 +220,11 @@ export default function MismatchListReport() {
     // ── Load years from master_years ──────────────────────────────────────
     useEffect(() => {
         let alive = true;
-        getDocs(collection(db, "master_years"))
-            .then((snap) => {
+        supabase.from("master_years").select("*")
+            .then(({ data, error }) => {
                 if (!alive) return;
-                const years = snap.docs
-                    .map((d) => d.data())
+                if (error) throw error;
+                const years = (data || [])
                     .filter((r) => r.active !== false)
                     .map((r) => String(r.year ?? "").trim())
                     .filter(Boolean)
@@ -247,17 +246,14 @@ export default function MismatchListReport() {
                 // Build periodId like "2026-02"
                 const periodId = `${filters.year}-${filters.month}`;
 
-                const q = query(
-                    collection(db, "reconCells"),
-                    where("periodId", "==", periodId),
-                    where("businessType", "==", filters.businessType)
-                );
-
-                const snap = await getDocs(q);
+                const { data: snapDocs, error } = await supabase.from("reconCells")
+                    .select("*")
+                    .eq("periodId", periodId)
+                    .eq("businessType", filters.businessType);
                 if (!alive) return;
+                if (error) throw error;
 
-                const mismatches = snap.docs
-                    .map((d) => ({ id: d.id, ...d.data() }))
+                const mismatches = (snapDocs || [])
                     .filter((r) => {
                         const s = String(r.status || "").trim().toLowerCase();
                         return s === "mismatch";

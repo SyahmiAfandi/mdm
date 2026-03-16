@@ -3,9 +3,7 @@ import toast from "react-hot-toast";
 import { useUser } from "../../context/UserContext";
 import { Save, RefreshCcw } from "lucide-react";
 
-// Firestore
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../../firebaseClient";
+import { supabase } from "../../supabaseClient";
 
 // Write to Google Sheet via GAS (POST)
 const GAS_URL = import.meta.env.VITE_RECONS_GAS_URL;
@@ -83,12 +81,12 @@ export default function ManualReconsEntry() {
     try {
       setLoadingMaster(true);
 
-      // 1) Businesses (your collection name)
-      const bizSnap = await getDocs(collection(db, "master_businesses"));
-      const businesses = bizSnap.docs
-        .map((doc) => {
-          const d = doc.data() || {};
-          const code = normalize(d.businessCode) || normalize(doc.id);
+      // 1) Businesses
+      const { data: bizData, error: bizErr } = await supabase.from("master_businesses").select('*');
+      if (bizErr) throw bizErr;
+      const businesses = (bizData || [])
+        .map((d) => {
+          const code = normalize(d.businessCode) || normalize(d.id);
           const activeOk = d.active === undefined ? true : truthyFlag(d.active);
           const statusOk = d.status === undefined ? true : truthyFlag(d.status);
           return activeOk && statusOk ? code : "";
@@ -96,11 +94,11 @@ export default function ManualReconsEntry() {
         .filter(Boolean);
 
       // 2) Distributors
-      const distSnap = await getDocs(collection(db, "master_distributors"));
-      const distributors = distSnap.docs
-        .map((doc) => {
-          const d = doc.data() || {};
-          const code = normalize(d.code) || normalize(d.distributorCode) || normalize(doc.id);
+      const { data: distData, error: distErr } = await supabase.from("master_distributors").select('*');
+      if (distErr) throw distErr;
+      const distributors = (distData || [])
+        .map((d) => {
+          const code = normalize(d.code) || normalize(d.distributorCode) || normalize(d.id);
           const name = normalize(d.name) || normalize(d.distributorName);
           const activeOk = d.active === undefined ? true : truthyFlag(d.active);
           const statusOk = d.status === undefined ? true : truthyFlag(d.status);
@@ -111,23 +109,23 @@ export default function ManualReconsEntry() {
         .filter(Boolean);
 
       // 3) Report type master: code -> name
-      const rtSnap = await getDocs(collection(db, "master_reporttypes"));
+      const { data: rtData, error: rtErr } = await supabase.from("master_reporttypes").select('*');
+      if (rtErr) throw rtErr;
       const rtMap = {};
-      rtSnap.docs.forEach((doc) => {
-        const d = doc.data() || {};
+      (rtData || []).forEach((d) => {
         const activeOk = d.active === undefined ? true : truthyFlag(d.active);
         const statusOk = d.status === undefined ? true : truthyFlag(d.status);
         if (!activeOk || !statusOk) return;
 
-        const code = normalize(d.code) || normalize(doc.id);
+        const code = normalize(d.code) || normalize(d.id);
         const name = normalize(d.name);
         if (code && name) rtMap[code] = name;
       });
 
-      // 0) Years (master_years) — no composite index needed
-      const yearSnap = await getDocs(collection(db, "master_years"));
-      const years = yearSnap.docs
-        .map((doc) => doc.data() || {})
+      // 0) Years (master_years)
+      const { data: yearData, error: yearErr } = await supabase.from("master_years").select('*');
+      if (yearErr) throw yearErr;
+      const years = (yearData || [])
         .filter((d) => d.active !== false) // treat missing active as Active
         .map((d) => String(d.year ?? "").trim())
         .filter(Boolean)
@@ -138,14 +136,11 @@ export default function ManualReconsEntry() {
       if (latest) setYear((y) => (years.includes(String(y)) ? String(y) : String(latest)));
 
       // 4) Mapping business -> reportTypeCode
-      // Your collection name shown as "map_business_repor..." (truncated),
-      // based on screenshot it's likely "map_business_reporttypes".
-      // If your actual name is different, change it here.
-      const mapSnap = await getDocs(collection(db, "map_business_reporttypes"));
+      const { data: mapData, error: mapErr } = await supabase.from("map_business_reporttypes").select('*');
+      if (mapErr) throw mapErr;
 
       const mapBusinessToCodes = {};
-      mapSnap.docs.forEach((doc) => {
-        const d = doc.data() || {};
+      (mapData || []).forEach((d) => {
         const activeOk = d.active === undefined ? true : truthyFlag(d.active);
         const statusOk = d.status === undefined ? true : truthyFlag(d.status);
         if (!activeOk || !statusOk) return;

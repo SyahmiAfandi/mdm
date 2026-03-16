@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../../firebaseClient";
+import { supabase } from "../../supabaseClient";
 import {
     Loader2,
     CalendarDays,
@@ -10,6 +9,10 @@ import {
     Copy,
     Check,
 } from "lucide-react";
+
+const CELLS_TABLE = "recon_cells";
+const REPORT_TYPES_TABLE = "master_reporttypes";
+const DISTRIBUTORS_TABLE = "master_distributors";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MONTH_LABELS = [
@@ -39,6 +42,40 @@ function ordinal(n) {
     const s = ["th", "st", "nd", "rd"];
     const v = n % 100;
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function normalize(value = "") {
+    return String(value ?? "").trim();
+}
+
+function mapReportType(row = {}) {
+    return {
+        id: normalize(row.code ?? row.report_type_code ?? row.reportTypeId ?? row.id),
+        name: normalize(row.name ?? row.report_type_name ?? row.reportTypeName ?? row.code ?? row.report_type_code ?? row.reportTypeId ?? row.id),
+        active: row.active === undefined ? true : !!row.active,
+        status: normalize(row.status).toLowerCase(),
+    };
+}
+
+function mapDistributor(row = {}) {
+    return {
+        code: normalize(row.code ?? row.distributor_code ?? row.distributorCode ?? row.id),
+        name: normalize(row.name ?? row.distributor_name ?? row.distributorName ?? row.code ?? row.distributor_code ?? row.distributorCode ?? row.id),
+    };
+}
+
+function mapCell(row = {}) {
+    return {
+        ...row,
+        periodId: normalize(row.period_id ?? row.periodId ?? row.id),
+        businessType: normalize(row.business_type ?? row.businessType ?? ""),
+        reportTypeId: normalize(row.report_type_id ?? row.reportTypeId ?? row.report_type_code ?? row.reportTypeCode ?? ""),
+        reportTypeName: normalize(row.report_type_name ?? row.reportTypeName ?? ""),
+        distributorCode: normalize(row.distributor_code ?? row.distributorCode ?? ""),
+        distributorName: normalize(row.distributor_name ?? row.distributorName ?? ""),
+        reconsNo: Number(row.recons_no ?? row.reconsNo ?? 1),
+        updatedAt: row.updated_at ?? row.updatedAt ?? null,
+    };
 }
 
 // ─── Copy Hook ─────────────────────────────────────────────────────────────
@@ -87,8 +124,8 @@ function CopyButton({ text, copyKey, copiedKey, onCopy }) {
             title="Copy row data"
             onClick={() => onCopy(text, copyKey)}
             className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[10px] font-semibold transition-all duration-200 ${done
-                    ? "bg-emerald-50 border-emerald-300 text-emerald-700"
-                    : "bg-white border-gray-200 text-gray-500 hover:border-violet-400 hover:text-violet-700 active:scale-95"
+                ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                : "bg-white border-gray-200 text-gray-500 hover:border-violet-400 hover:text-violet-700 active:scale-95"
                 }`}
         >
             {done ? <Check size={11} /> : <Copy size={11} />}
@@ -116,11 +153,11 @@ export default function ReconScheduleReport() {
     // ── Load years ──────────────────────────────────────────────────────────────
     useEffect(() => {
         let alive = true;
-        getDocs(collection(db, "master_years"))
-            .then((snap) => {
+        supabase.from("master_years").select("*")
+            .then(({ data, error }) => {
                 if (!alive) return;
-                const years = snap.docs
-                    .map((d) => d.data())
+                if (error) throw error;
+                const years = (data || [])
                     .filter((r) => r.active !== false)
                     .map((r) => String(r.year ?? "").trim())
                     .filter(Boolean)
@@ -137,16 +174,16 @@ export default function ReconScheduleReport() {
     // ── Load report types ───────────────────────────────────────────────────────
     useEffect(() => {
         let alive = true;
-        getDocs(collection(db, "master_reporttypes"))
-            .then((snap) => {
+        supabase.from(REPORT_TYPES_TABLE).select("*")
+            .then(({ data, error }) => {
                 if (!alive) return;
+                if (error) throw error;
                 const m = new Map();
-                snap.docs.forEach((d) => {
-                    const v = d.data() || {};
-                    const id = String(v.code ?? v.reportTypeId ?? d.id ?? "").trim();
-                    const name = String(v.name ?? v.reportTypeName ?? id ?? "").trim();
-                    const active = v.active === undefined ? true : !!v.active;
-                    const status = String(v.status ?? "").trim().toLowerCase();
+                (data || []).map(mapReportType).forEach((v) => {
+                    const id = v.id;
+                    const name = v.name;
+                    const active = v.active;
+                    const status = v.status;
                     if (!id || !active || (status && status !== "active")) return;
                     m.set(id, name);
                 });
@@ -159,14 +196,14 @@ export default function ReconScheduleReport() {
     // ── Load distributors ────────────────────────────────────────────────────────
     useEffect(() => {
         let alive = true;
-        getDocs(collection(db, "master_distributors"))
-            .then((snap) => {
+        supabase.from(DISTRIBUTORS_TABLE).select("*")
+            .then(({ data, error }) => {
                 if (!alive) return;
+                if (error) throw error;
                 const m = new Map();
-                snap.docs.forEach((d) => {
-                    const v = d.data() || {};
-                    const code = String(v.code ?? d.id ?? "").trim();
-                    const name = String(v.name ?? code ?? "").trim();
+                (data || []).map(mapDistributor).forEach((v) => {
+                    const code = v.code;
+                    const name = v.name;
                     if (code) m.set(code, name);
                 });
                 setDistNameByCode(m);
@@ -184,19 +221,17 @@ export default function ReconScheduleReport() {
             try {
                 const results = await Promise.all(
                     MONTH_LABELS.map(({ num }) =>
-                        getDocs(
-                            query(
-                                collection(db, "reconCells"),
-                                where("periodId", "==", `${selectedYear}-${num}`),
-                                where("businessType", "==", selectedBT)
-                            )
-                        ).then((snap) =>
-                            snap.docs.map((d) => ({
-                                id: d.id,
-                                ...d.data(),
-                                _periodId: `${selectedYear}-${num}`,
-                            }))
-                        )
+                        supabase.from(CELLS_TABLE)
+                            .select("*")
+                            .eq("period_id", `${selectedYear}-${num}`)
+                            .eq("business_type", selectedBT)
+                            .then(({ data, error }) => {
+                                if (error) throw error;
+                                return (data || []).map((d) => ({
+                                    ...mapCell(d),
+                                    _periodId: `${selectedYear}-${num}`,
+                                }));
+                            })
                     )
                 );
                 if (alive) setCells(results.flat());
@@ -236,8 +271,8 @@ export default function ReconScheduleReport() {
             const isMismatch = statusRaw === "mismatch";
 
             // Resolve recon date from updatedAt
-            const updatedAt = cell.updatedAt?.toDate?.() || null;
-            const reconDate = updatedAt
+            const updatedAt = cell.updatedAt ? new Date(cell.updatedAt) : null;
+            const reconDate = updatedAt && !isNaN(updatedAt.getTime())
                 ? (() => {
                     const dd = String(updatedAt.getDate()).padStart(2, "0");
                     const mm = String(updatedAt.getMonth() + 1).padStart(2, "0");
@@ -276,33 +311,35 @@ export default function ReconScheduleReport() {
             Object.entries(reportTypes)
                 .sort(([a], [b]) => a.localeCompare(b))
                 .forEach(([reportTypeName, reconAttempts]) => {
-                    Object.entries(reconAttempts)
-                        .sort(([a], [b]) => Number(a) - Number(b))
-                        .forEach(([reconNoStr, { reconDate, codes, names, hasMismatch }], attemptIdx) => {
-                            const reconNo = Number(reconNoStr);
-                            const reconLabel = `${ordinal(reconNo)} Recon`;
-                            const dtCodes = codes.join(", ");
-                            const dtNames = names.join(", ");
-                            const remarkText = hasMismatch
-                                ? `${codes.length} DT Mismatch`
-                                : "All Match";
+                    // Only get the maximum reconNo attempt for this report type
+                    const attemptsEntries = Object.entries(reconAttempts).sort(([a], [b]) => Number(b) - Number(a));
+                    if (attemptsEntries.length === 0) return;
 
-                            rows.push({
-                                key: `${periodId}-${reportTypeName}-${reconNo}`,
-                                reportTypeName,
-                                closingDate: attemptIdx === 0 ? closingDate : "",
-                                reconLabel,
-                                reconDate,
-                                remarks: remarkText,
-                                dtCodes,
-                                dtNames,
-                                isMismatch: hasMismatch,
-                                isFirstRow: rows.length === 0,
-                                // Copy text spans: Report → DT Name
-                                copyText: [reportTypeName, selectedBT, reconLabel, reconDate, remarkText, dtCodes, dtNames]
-                                    .join("\t"),
-                            });
-                        });
+                    // The most recent attempt is the first one after sorting descending
+                    const [reconNoStr, { reconDate, codes, names, hasMismatch }] = attemptsEntries[0];
+                    const reconNo = Number(reconNoStr);
+                    const reconLabel = `${ordinal(reconNo)} Recon`;
+                    const dtCodes = codes.join(", ");
+                    const dtNames = names.join(", ");
+                    const remarkText = hasMismatch
+                        ? `${codes.length} DT Mismatch`
+                        : "All Match";
+
+                    rows.push({
+                        key: `${periodId}-${reportTypeName}-${reconNo}`,
+                        reportTypeName,
+                        closingDate: rows.length === 0 ? closingDate : "",
+                        reconLabel,
+                        reconDate,
+                        remarks: remarkText,
+                        dtCodes,
+                        dtNames,
+                        isMismatch: hasMismatch,
+                        isFirstRow: rows.length === 0,
+                        // Copy text spans: Report → DT Name
+                        copyText: [reportTypeName, selectedBT, reconLabel, reconDate, remarkText, dtCodes, dtNames]
+                            .join("\t"),
+                    });
                 });
 
             return {
@@ -334,10 +371,10 @@ export default function ReconScheduleReport() {
                     </div>
                     <div>
                         <h1 className="text-[17px] font-black text-gray-900 tracking-tight leading-tight">
-                            Recon Schedule Report
+                            Recons Tracker Report
                         </h1>
                         <p className="text-[11px] text-gray-400 font-medium">
-                            Yearly reconciliation schedule by period &amp; report type
+                            Monitor and track the status of each distributor's reconciliation report by period
                         </p>
                     </div>
                 </div>
@@ -350,8 +387,8 @@ export default function ReconScheduleReport() {
                                 key={bt}
                                 onClick={() => setSelectedBT(bt)}
                                 className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 ${selectedBT === bt
-                                        ? "bg-violet-600 text-white shadow-sm"
-                                        : "text-gray-600 hover:text-violet-700"
+                                    ? "bg-violet-600 text-white shadow-sm"
+                                    : "text-gray-600 hover:text-violet-700"
                                     }`}
                             >
                                 {bt}
@@ -366,8 +403,8 @@ export default function ReconScheduleReport() {
                                 key={y}
                                 onClick={() => setSelectedYear(y)}
                                 className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 ${selectedYear === y
-                                        ? "bg-blue-600 text-white shadow-sm"
-                                        : "text-gray-600 hover:text-blue-700"
+                                    ? "bg-blue-600 text-white shadow-sm"
+                                    : "text-gray-600 hover:text-blue-700"
                                     }`}
                             >
                                 {y}

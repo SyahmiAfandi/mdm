@@ -1,6 +1,6 @@
 // src/auth/AuthContext.jsx
 import { createContext, useContext, useEffect, useState } from "react";
-import { observeAuth } from "../firebaseClient";
+import { observeAuth } from "../supabaseAuth";
 
 const AuthCtx = createContext({ user: null, loading: true });
 

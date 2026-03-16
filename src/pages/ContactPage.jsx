@@ -59,10 +59,9 @@ function ContactPage() {
       initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      // Use absolute inset with top padding for header space to perfectly fit viewport
-      className="absolute inset-0 pt-[104px] pb-6 px-6 md:px-8 max-w-7xl mx-auto flex flex-col"
+      className="w-full min-w-0 px-3 sm:px-5 pb-3 flex flex-col"
     >
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* --- LEFT COLUMN: Contact & App Info --- */}
         <div className="lg:col-span-1 flex flex-col gap-6">
@@ -128,7 +127,7 @@ function ContactPage() {
         </div>
 
         {/* --- RIGHT COLUMN: Version History --- */}
-        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col min-h-0">
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col">
           <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
@@ -141,7 +140,7 @@ function ContactPage() {
             </div>
           </div>
 
-          <div className="p-6 flex-1 relative overflow-y-auto custom-scrollbar">
+          <div className="p-6 relative">
             <div className="absolute left-8 top-6 bottom-6 w-px bg-slate-200"></div>
 
             <div className="space-y-10 relative">

@@ -40,9 +40,9 @@ const Sidebar = ({ isOpen }) => {
     user: authUser,
   } = usePermissions({
     defaultRole: "viewer",
-    roleCollection: "roles",
+    roleCollection: "user_roles",
     roleField: "role",
-    rolePermissionsCollection: "rolePermissions",
+    rolePermissionsCollection: "role_permissions",
   });
 
   // ✅ Debug toggle (URL: ?permDebug=1) OR dev mode
@@ -308,7 +308,7 @@ const Sidebar = ({ isOpen }) => {
           {isOpen && (
             <div className="overflow-hidden min-w-0">
               <p className="text-[12px] font-bold truncate text-slate-100 mb-0.5 leading-tight">
-                {user?.name || "User Name"}
+                {user?.display_name || user?.name || "User Name"}
               </p>
               <div className="flex items-center gap-1.5">
                 <span className="text-[9px] px-1.5 py-[1px] rounded bg-slate-900 border border-slate-700 text-slate-400 font-bold uppercase tracking-widest shadow-inner">
@@ -324,10 +324,7 @@ const Sidebar = ({ isOpen }) => {
       <div className={`absolute bottom-3 left-0 w-full ${isOpen ? "px-2" : "px-0 flex justify-center"}`}>
         <button
           onClick={() => {
-            setRole?.(null);
-            try {
-              localStorage.removeItem(ROLE_STORAGE_KEY);
-            } catch { }
+            logout();
             navigate("/login");
           }}
           className={`

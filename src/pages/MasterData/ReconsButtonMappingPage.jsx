@@ -1,18 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '../../firebaseClient';
-import {
-    collection,
-    getDocs,
-    doc,
-    setDoc,
-    query,
-    orderBy,
-    serverTimestamp,
-} from 'firebase/firestore';
+import { supabase } from "../../supabaseClient";
+
 import { useUser } from '../../context/UserContext';
 import toast from 'react-hot-toast';
 import { Save, RefreshCcw, LayoutGrid, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const MAPPING_COL = 'recons_button_mapping';
 const REPORT_TYPE_COL = 'master_reporttypes';
@@ -40,6 +33,10 @@ export default function ReconsButtonMappingPage() {
     const { user } = useUser();
     const email = user?.email || user?.uid || 'unknown';
     const navigate = useNavigate();
+
+    const { can, role } = usePermissions();
+
+    const canEdit = can("masterData.reconsButtonMapping.edit") || can("masterData.*") || role === "admin";
 
     const [loading, setLoading] = useState(false);
     const [reportTypes, setReportTypes] = useState([]);
@@ -99,6 +96,8 @@ export default function ReconsButtonMappingPage() {
     };
 
     const handleSave = async () => {
+        if (!canEdit) return toast.error("No permission to edit master data");
+
         try {
             setLoading(true);
             const batchPromises = [];
@@ -168,8 +167,8 @@ export default function ReconsButtonMappingPage() {
                             <select
                                 value={mappings[`${page}_${btn}`] || ''}
                                 onChange={(e) => handleMappingChange(page, btn, e.target.value)}
-                                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-800 dark:text-gray-100 outline-none focus:border-violet-500 transition-colors"
-                                disabled={loading}
+                                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-800 dark:text-gray-100 outline-none focus:border-violet-500 transition-colors disabled:opacity-60"
+                                disabled={!canEdit || loading}
                             >
                                 <option value="">-- No Mapping --</option>
                                 {reportTypes.map(rt => (
@@ -206,6 +205,12 @@ export default function ReconsButtonMappingPage() {
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                             Map UI buttons to their corresponding Master Data Report Type IDs.
                         </p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Mode:{" "}
+                            <span className="font-semibold text-gray-700 dark:text-gray-200">
+                                {canEdit ? "Editable" : "Read only"}
+                            </span>
+                        </p>
                     </div>
                 </div>
 
@@ -221,7 +226,7 @@ export default function ReconsButtonMappingPage() {
 
                     <button
                         onClick={handleSave}
-                        disabled={loading}
+                        disabled={!canEdit || loading}
                         className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-md hover:bg-violet-700 dark:bg-violet-700 dark:hover:bg-violet-800 transition-all disabled:opacity-60"
                     >
                         <Save className="h-4 w-4" />

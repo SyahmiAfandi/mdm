@@ -1,5 +1,5 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 import { usePermissions } from "../hooks/usePermissions";
 
 /**
@@ -26,5 +26,5 @@ export default function RequirePermission({
   const ok = requireAll ? canAll(list) : canAny(list);
 
   if (!ok) return fallback ?? <Navigate to={redirectTo} replace />;
-  return children;
+  return children ? children : <Outlet />;
 }

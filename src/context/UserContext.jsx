@@ -1,5 +1,6 @@
 // context/UserContext.js
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { supabase } from "../supabaseClient";
 
 const UserContext = createContext(null);
 
@@ -14,6 +15,9 @@ export const UserProvider = ({ children }) => {
 
   // Restore session on first load (deep links included)
   useEffect(() => {
+    let mounted = true;
+
+    // 1. First, check local storage for immediate (optimistic) UI rendering
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -27,9 +31,32 @@ export const UserProvider = ({ children }) => {
       }
     } catch {
       localStorage.removeItem(STORAGE_KEY);
-    } finally {
-      setLoading(false);
     }
+
+    // 2. Listen to Supabase for the actual source of truth.
+    // Only clear the local user state on an explicit SIGNED_OUT.
+    // This avoids a race condition on page reload where the initial auth
+    // check fires before the session is confirmed, causing the UI to flicker
+    // and pages to remount with stale cached data.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!mounted) return;
+
+        if (event === "SIGNED_OUT") {
+          setUser(null);
+          setRole(null);
+          localStorage.removeItem(STORAGE_KEY);
+        }
+
+        // Mark loading as done once Supabase has responded for the first time.
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Persist on changes

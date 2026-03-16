@@ -27,23 +27,10 @@ const generalReports = [
         icon: TrendingUp,
     },
     {
-        title: 'Reconciliation Status Report',
-        description: 'Check reconciliation report status by year, month, and business type.',
-        path: STATUS_PATH,
-        gated: true,
-        icon: BarChart3,
-    },
-    {
         title: 'Mismatch Tracker Report',
         description: 'View a detailed list of all records with "Mismatch" status only, for follow-up action.',
         path: '/reports/mismatch-tracker',
         icon: FileSearch,
-    },
-    {
-        title: 'Mismatch List Report',
-        description: 'Quick-view mismatched distributors grouped by period — with one-click copy for codes and names.',
-        path: '/reports/mismatch-list',
-        icon: ListFilter,
     },
 ];
 
@@ -57,29 +44,33 @@ const requestReports = [
     {
         title: 'Recons Tracker Report',
         description: "Monitor and track the status of each distributor's reconciliation report.",
-        path: '/reports/mismatch-tracker',
+        path: '/reports/recon-schedule',
         icon: ClipboardList,
     },
     {
-        title: 'Recons Summary Report',
+        title: 'Reconciliation Status Report',
         description: 'Get an overview of reconciliation progress across all distributors.',
-        path: '#',
+        path: STATUS_PATH,
+        gated: true,
         icon: FileBarChart2,
     },
 ];
 
 /** ANIMATION ------------------------------------------------------------- */
 const containerVariants = {
-    hidden: {},
-    visible: { transition: { staggerChildren: 0.06 } },
+    hidden: { opacity: 0 },
+    visible: {
+        opacity: 1,
+        transition: { staggerChildren: 0.07, delayChildren: 0.15, duration: 0.3 }
+    },
 };
 
 const cardVariants = {
-    hidden: { opacity: 0, y: 18 },
+    hidden: { opacity: 0, scale: 0.97 },
     visible: {
         opacity: 1,
-        y: 0,
-        transition: { duration: 0.28, ease: 'easeOut' },
+        scale: 1,
+        transition: { duration: 0.35, ease: [0.25, 0.1, 0.25, 1] },
     },
 };
 
@@ -109,10 +100,10 @@ const sectionStyles = {
 
 function SectionHeader({ label, count, accentBar, badge }) {
     return (
-        <div className="flex items-center gap-3 mb-4">
-            <div className={`w-1 h-6 rounded-full ${accentBar}`} />
-            <h2 className="text-base font-bold text-gray-800 tracking-tight">{label}</h2>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${badge}`}>
+        <div className="flex items-center gap-3 mb-3">
+            <div className={`w-1 h-5 rounded-full ${accentBar}`} />
+            <h2 className="text-sm font-bold text-gray-800 tracking-tight">{label}</h2>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${badge}`}>
                 {count} report{count !== 1 ? 's' : ''}
             </span>
         </div>
@@ -161,16 +152,16 @@ function ReportCard({
             {/* Top accent stripe */}
             <div className={`h-0.5 w-full bg-gradient-to-r ${styles.iconBg}`} />
 
-            <div className="p-5">
-                <div className="flex items-start gap-4">
+            <div className="p-4">
+                <div className="flex items-start gap-3">
                     {/* Gradient Icon */}
-                    <div className={`shrink-0 w-11 h-11 rounded-xl bg-gradient-to-br ${styles.iconBg} flex items-center justify-center shadow-sm`}>
-                        <ReportIcon className={styles.iconText} size={20} aria-hidden="true" />
+                    <div className={`shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br ${styles.iconBg} flex items-center justify-center shadow-sm`}>
+                        <ReportIcon className={styles.iconText} size={18} aria-hidden="true" />
                     </div>
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2 mb-1">
+                        <div className="flex items-start justify-between gap-2 mb-0.5">
                             <h3 className="text-sm font-semibold text-gray-900 leading-snug">{title}</h3>
                             <div className="flex items-center gap-1.5 shrink-0">
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${styles.badge}`}>
@@ -186,12 +177,12 @@ function ReportCard({
 
                         <p className="text-xs text-gray-500 leading-relaxed">{description}</p>
 
-                        <div className="mt-4">
+                        <div className="mt-2.5">
                             <button
                                 type="button"
                                 onClick={onClick}
                                 disabled={locked}
-                                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg text-white
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg text-white
                   transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1
                   ${locked
                                         ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
@@ -273,10 +264,10 @@ export default function ReportMainPage() {
 
     return (
         <MotionConfig reducedMotion={reduceMotion ? 'user' : 'never'}>
-            <div className="absolute inset-0 pt-[104px] pb-6 px-5 sm:px-6 max-w-[1400px] mx-auto flex flex-col">
+            <div className="w-full min-w-0 px-3 sm:px-5 pb-3 flex flex-col">
 
                 {/* ── Hero Banner ── */}
-                <div className="relative overflow-hidden rounded-2xl mb-6 shrink-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 shadow-md shadow-blue-200 px-5 py-4 sm:py-5">
+                <div className="relative overflow-hidden rounded-2xl mb-4 shrink-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 shadow-md shadow-blue-200 px-5 py-3 sm:py-4">
                     {/* Decorative circles */}
                     <div className="pointer-events-none absolute -top-10 -right-10 w-44 h-44 rounded-full bg-white/10" />
                     <div className="pointer-events-none absolute -bottom-12 right-24 w-28 h-28 rounded-full bg-white/10" />
@@ -338,10 +329,10 @@ export default function ReportMainPage() {
                 </div>
 
                 {/* ── 2-Column Reports Grid ── */}
-                <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-0">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
                     {/* ── General Reports (Left Column) ── */}
-                    <div className="flex flex-col min-h-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                    <div className="flex flex-col bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
                         <SectionHeader
                             label="General Reports"
                             count={filteredGeneral.length}
@@ -353,7 +344,7 @@ export default function ReportMainPage() {
                             variants={containerVariants}
                             initial="hidden"
                             animate="visible"
-                            className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4"
+                            className="pr-2 space-y-3"
                         >
                             {filteredGeneral.length === 0 && query ? (
                                 <EmptyState query={query} />
@@ -386,7 +377,7 @@ export default function ReportMainPage() {
                     </div>
 
                     {/* ── Request Reports (Right Column) ── */}
-                    <div className="flex flex-col min-h-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                    <div className="flex flex-col bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
                         <SectionHeader
                             label="Request Reports"
                             count={filteredRequest.length}
@@ -398,7 +389,7 @@ export default function ReportMainPage() {
                             variants={containerVariants}
                             initial="hidden"
                             animate="visible"
-                            className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4"
+                            className="pr-2 space-y-3"
                         >
                             {filteredRequest.length === 0 && query ? (
                                 <EmptyState query={query} />

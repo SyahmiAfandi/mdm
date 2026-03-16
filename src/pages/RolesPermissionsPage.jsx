@@ -1,14 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { auth, db } from "../firebaseClient";
+import { supabase } from "../supabaseClient";
 import toast from "react-hot-toast";
-import {
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  getDocs,
-  serverTimestamp,
-} from "firebase/firestore";
+import { normalizePermissionRows, usePermissions } from "../hooks/usePermissions";
 import {
   ChevronDown,
   Save,
@@ -62,6 +55,39 @@ const PERMISSION_TREE = [
           { key: "tools.view", label: "View Tools Section" },
         ],
       },
+      {
+        id: "tools-promotions",
+        label: "Promotions",
+        permissions: [
+          { key: "tools.promotions.view", label: "View Promotions" },
+          { key: "tools.promotions.edit", label: "Edit Promotions" },
+          { key: "promotions.regionDistributor.view", label: "View Region & Distributor Config" },
+          { key: "promotions.regionDistributor.edit", label: "Edit Region & Distributor Config" },
+          { key: "promotions.promoItem.view", label: "View Promo Item Config" },
+          { key: "promotions.promoItem.edit", label: "Edit Promo Item Config" },
+          { key: "promotions.promoPeriod.view", label: "View Promo Period Config" },
+          { key: "promotions.promoPeriod.edit", label: "Edit Promo Period Config" },
+          { key: "promotions.promoCriteria.view", label: "View Promo Criteria Config" },
+          { key: "promotions.promoCriteria.edit", label: "Edit Promo Criteria Config" },
+          { key: "promotions.regionCriteriaMapping.view", label: "View Region & Criteria Mapping" },
+          { key: "promotions.regionCriteriaMapping.edit", label: "Edit Region & Criteria Mapping" },
+        ],
+      },
+      {
+        id: "tools-reconciliation",
+        label: "Reconciliation",
+        permissions: [
+          { key: "tools.reconciliation.view", label: "View Reconciliation" },
+          { key: "tools.reconciliation.edit", label: "Edit Reconciliation (Upload, Config, Import)" },
+        ],
+      },
+      {
+        id: "tools-detailedView",
+        label: "Detailed View",
+        permissions: [
+          { key: "tools.detailedView.view", label: "View Detailed View" },
+        ],
+      },
     ],
   },
   {
@@ -91,6 +117,21 @@ const PERMISSION_TREE = [
           },
         ],
       },
+      {
+        id: "utilities-manualRecons",
+        label: "Manual Recons Entry",
+        permissions: [
+          { key: "utilities.manualRecons.view", label: "View Manual Recons" },
+          { key: "utilities.manualRecons.edit", label: "Edit / Add Manual Recons" },
+        ],
+      },
+      {
+        id: "utilities-dateConverter",
+        label: "Date Converter",
+        permissions: [
+          { key: "utilities.dateConverter.view", label: "View Date Converter" },
+        ],
+      },
     ],
   },
   {
@@ -113,6 +154,41 @@ const PERMISSION_TREE = [
         label: "Mismatch Tracker",
         permissions: [
           { key: "mismatch.view", label: "View Mismatch Tracker" },
+        ],
+      },
+      {
+        id: "reports-summaryRecons",
+        label: "Summary Recons",
+        permissions: [
+          { key: "reports.summaryRecons.view", label: "View Summary Recons" },
+        ],
+      },
+      {
+        id: "reports-mismatchList",
+        label: "Mismatch List",
+        permissions: [
+          { key: "reports.mismatchList.view", label: "View Mismatch List" },
+        ],
+      },
+      {
+        id: "reports-matrixRecons",
+        label: "Reconciliation Matrix",
+        permissions: [
+          { key: "reports.matrixRecons.view", label: "View Reconciliation Matrix" },
+        ],
+      },
+      {
+        id: "reports-dss",
+        label: "Daily Sales Summary",
+        permissions: [
+          { key: "reports.dss.view", label: "View Daily Sales Summary" },
+        ],
+      },
+      {
+        id: "reports-reconSchedule",
+        label: "Recon Schedule",
+        permissions: [
+          { key: "reports.reconSchedule.view", label: "View Recon Schedule" },
         ],
       },
     ],
@@ -158,6 +234,70 @@ const PERMISSION_TREE = [
         permissions: [
           { key: "masterData.countries.view", label: "View Countries" },
           { key: "masterData.countries.edit", label: "Edit Countries" },
+        ],
+      },
+      {
+        id: "masterData-business",
+        label: "Businesses",
+        permissions: [
+          { key: "masterData.business.view", label: "View Businesses" },
+          { key: "masterData.business.edit", label: "Edit Businesses" },
+        ],
+      },
+      {
+        id: "masterData-sku",
+        label: "SKU Master",
+        permissions: [
+          { key: "masterData.sku.view", label: "View SKU Master" },
+          { key: "masterData.sku.edit", label: "Edit SKU Master" },
+        ],
+      },
+      {
+        id: "masterData-promoItems",
+        label: "Promotion Item Master",
+        permissions: [
+          { key: "masterData.promoItems.view", label: "View Promotion Item Master" },
+          { key: "masterData.promoItems.edit", label: "Edit Promotion Item Master" },
+        ],
+      },
+      {
+        id: "masterData-reportTypes",
+        label: "Report Types",
+        permissions: [
+          { key: "masterData.reportTypes.view", label: "View Report Types" },
+          { key: "masterData.reportTypes.edit", label: "Edit Report Types" },
+        ],
+      },
+      {
+        id: "masterData-years",
+        label: "Years",
+        permissions: [
+          { key: "masterData.years.view", label: "View Years" },
+          { key: "masterData.years.edit", label: "Edit Years" },
+        ],
+      },
+      {
+        id: "masterData-mapping",
+        label: "Business & Report Type Mapping",
+        permissions: [
+          { key: "masterData.mapping.view", label: "View Mapping" },
+          { key: "masterData.mapping.edit", label: "Edit Mapping" },
+        ],
+      },
+      {
+        id: "masterData-reconsButton",
+        label: "Recons Button Mapping",
+        permissions: [
+          { key: "masterData.reconsButtonMapping.view", label: "View Recons Button Mapping" },
+          { key: "masterData.reconsButtonMapping.edit", label: "Edit Recons Button Mapping" },
+        ],
+      },
+      {
+        id: "masterData-mapPromoSku",
+        label: "Map Promo Item to SKU",
+        permissions: [
+          { key: "masterData.mapPromoSku.view", label: "View Map Promo to SKU" },
+          { key: "masterData.mapPromoSku.edit", label: "Edit Map Promo to SKU" },
         ],
       },
     ],
@@ -357,6 +497,7 @@ function Section({ node, roleMap, onSet, role, filteredKeys }) {
 // MAIN PAGE
 // ==========================================================
 export default function RolesPermissionsPage() {
+  const { can, role } = usePermissions();
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -364,24 +505,41 @@ export default function RolesPermissionsPage() {
   const [selectedRole, setSelectedRole] = useState(ROLES[0]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState(PERMISSION_TREE[0].id);
+  const canManageRoles = can("settings.configureRoles") || role === "admin" || (!!OWNER_UID && me?.id === OWNER_UID);
 
   useEffect(() => {
-    const unsub = auth.onAuthStateChanged(setMe);
-    return () => unsub();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setMe(session?.user || null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setMe(session?.user || null);
+      }
+    );
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!me) return;
-    if (me.uid !== OWNER_UID) { setLoading(false); return; }
+    if (!canManageRoles) { setLoading(false); return; }
 
     (async () => {
       setLoading(true);
       try {
-        const snap = await getDocs(collection(db, "rolePermissions"));
+        const { data, error } = await supabase.from("role_permissions").select("*");
+        if (error) throw error;
+        
         const tmp = {};
         ROLES.forEach((r) => (tmp[r] = {}));
-        snap.forEach((d) => {
-          tmp[d.id] = { ...(d.data().permissions || {}) };
+        const grouped = {};
+        data?.forEach((d) => {
+          const roleKey = String(d.role || "").trim();
+          if (!roleKey) return;
+          if (!grouped[roleKey]) grouped[roleKey] = [];
+          grouped[roleKey].push(d);
+        });
+        Object.keys(grouped).forEach((roleKey) => {
+          tmp[roleKey] = normalizePermissionRows(grouped[roleKey]);
         });
         const all = flattenTree(PERMISSION_TREE);
         ROLES.forEach((r) => {
@@ -398,7 +556,7 @@ export default function RolesPermissionsPage() {
         setLoading(false);
       }
     })();
-  }, [me]);
+  }, [me, canManageRoles]);
 
   const allPermissions = useMemo(() => flattenTree(PERMISSION_TREE), []);
 
@@ -419,14 +577,22 @@ export default function RolesPermissionsPage() {
   };
 
   const saveRole = async () => {
-    if (!me || me.uid !== OWNER_UID) return;
+    if (!me || !canManageRoles) return;
     setSaving(true);
     try {
-      const docRef = doc(db, "rolePermissions", selectedRole);
-      const payload = { permissions: matrix[selectedRole] || {}, updatedAt: serverTimestamp() };
-      const existing = await getDoc(docRef);
-      if (existing.exists()) await setDoc(docRef, payload, { merge: true });
-      else await setDoc(docRef, payload);
+      const payload = allPermissions.map((p) => ({
+        role: selectedRole,
+        permission: p.key,
+        allow: currentRoleMap[p.key] ? 1 : 0,
+        updated_at: new Date().toISOString(),
+      }));
+      
+      const { error } = await supabase
+        .from("role_permissions")
+        .upsert(payload, { onConflict: 'role,permission' });
+        
+      if (error) throw error;
+      
       toast.success(`Saved — ${selectedRole.toUpperCase()}`);
     } catch (e) {
       console.error(e);
@@ -444,7 +610,7 @@ export default function RolesPermissionsPage() {
   const totalCount = allPermissions.length;
 
   // non-owner
-  if (!loading && me && me.uid !== OWNER_UID) {
+  if (!loading && me && !canManageRoles) {
     return (
       <div className="h-[calc(100vh-120px)] flex items-center justify-center px-4">
         <div className="bg-white border border-gray-200 rounded-2xl p-10 shadow-xl max-w-sm w-full text-center space-y-4">
@@ -453,7 +619,7 @@ export default function RolesPermissionsPage() {
           </div>
           <div>
             <h2 className="text-lg font-bold text-gray-900">Access Restricted</h2>
-            <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">Only the platform owner can manage roles and permissions.</p>
+            <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">You need <code className="font-mono">settings.configureRoles</code> or admin access to manage roles and permissions.</p>
           </div>
         </div>
       </div>

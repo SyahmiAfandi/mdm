@@ -1,9 +1,13 @@
-// ReconciliationMatrix.firestore.jsx
+// ReconciliationMatrix.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import classNames from "classnames";
 import toast from "react-hot-toast";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../../firebaseClient";
+import { supabase } from "../../supabaseClient";
+import { Copy, Eye, EyeOff } from "lucide-react";
+
+const CELLS_TABLE = "recon_cells";
+const REPORT_TYPES_TABLE = "master_reporttypes";
+const DISTRIBUTORS_TABLE = "master_distributors";
 
 const monthNames = [
   "January", "February", "March", "April", "May", "June",
@@ -96,9 +100,56 @@ function TooltipToggle({ enabled, setEnabled }) {
   );
 }
 
+function CopyToggle({ enabled, setEnabled }) {
+  return (
+    <button
+      title={enabled ? "Hide copy buttons" : "Show copy buttons"}
+      onClick={() => setEnabled((e) => !e)}
+      className={classNames(
+        "ml-3 flex items-center px-2 py-1 rounded-full border transition",
+        enabled ? "bg-indigo-500 border-indigo-600 text-white" : "bg-gray-200 border-gray-300 text-gray-600"
+      )}
+      style={{ fontSize: "11px", height: "25px" }}
+    >
+      <span className="mr-1">
+        {enabled ? <Eye size={12} /> : <EyeOff size={12} />}
+      </span>
+      <span>{enabled ? "Hide Copy" : "Show Copy"}</span>
+    </button>
+  );
+}
+
 // ---------- helpers ----------
 function normalize(str = "") {
   return String(str ?? "").trim();
+}
+function mapReportType(row = {}) {
+  return {
+    id: normalize(row.code ?? row.report_type_code ?? row.reportTypeId ?? row.id),
+    name: normalize(row.name ?? row.report_type_name ?? row.reportTypeName ?? row.code ?? row.report_type_code ?? row.reportTypeId ?? row.id),
+    active: row.active === undefined ? true : !!row.active,
+    status: normalize(row.status).toLowerCase(),
+  };
+}
+function mapDistributor(row = {}) {
+  return {
+    code: normalize(row.code ?? row.distributor_code ?? row.distributorCode ?? row.id),
+    name: normalize(row.name ?? row.distributor_name ?? row.distributorName ?? row.code ?? row.distributor_code ?? row.distributorCode ?? row.id),
+  };
+}
+function mapCell(row = {}) {
+  return {
+    periodId: normalize(row.period_id ?? row.periodId ?? row.id),
+    businessType: normalize(row.business_type ?? row.businessType ?? ""),
+    distributorCode: normalize(row.distributor_code ?? row.distributorCode ?? ""),
+    distributorName: normalize(row.distributor_name ?? row.distributorName ?? ""),
+    reportTypeId: normalize(row.report_type_id ?? row.reportTypeId ?? row.report_type_code ?? row.reportTypeCode ?? ""),
+    reportTypeName: normalize(row.report_type_name ?? row.reportTypeName ?? ""),
+    status: normalize(row.status),
+    updatedBy: normalize(row.updated_by ?? row.updatedBy ?? ""),
+    updatedAt: row.updated_at ?? row.updatedAt ?? null,
+    reconsNo: Number(row.recons_no ?? row.reconsNo ?? 0),
+  };
 }
 function toSheetLikeStatus(s) {
   // Firestore uses: match/mismatch/no_data
@@ -124,11 +175,12 @@ export default function ReconciliationMatrix() {
   const [sortConfig, setSortConfig] = useState({ key: "code", direction: "asc" });
   const [loading, setLoading] = useState(true);
   const [tooltipEnabled, setTooltipEnabled] = useState(true);
+  const [showCopyButtons, setShowCopyButtons] = useState(false);
 
   const [yearOptions, setYearOptions] = useState([]);
   const [yearsLoading, setYearsLoading] = useState(true);
 
-  // Firestore cells (each = one distributor+reportType cell)
+  // Reconciliation cells (each = one distributor + report type cell)
   const [cells, setCells] = useState([]);
 
   // ✅ Map reportTypeId -> reportTypeName (from master_reporttypes)
@@ -145,9 +197,9 @@ export default function ReconciliationMatrix() {
       try {
         setYearsLoading(true);
 
-        const snap = await getDocs(collection(db, "master_years"));
-        const years = snap.docs
-          .map((d) => d.data() || {})
+        const { data: snapDocs, error } = await supabase.from("master_years").select("*");
+        if (error) throw error;
+        const years = (snapDocs || [])
           .filter((r) => r.active !== false)
           .map((r) => String(r.year ?? "").trim())
           .filter(Boolean)
@@ -181,16 +233,15 @@ export default function ReconciliationMatrix() {
 
     async function loadReportTypes() {
       try {
-        const snap = await getDocs(collection(db, "master_reporttypes"));
+        const { data: snapDocs, error } = await supabase.from(REPORT_TYPES_TABLE).select("*");
+        if (error) throw error;
         const m = new Map();
 
-        snap.docs.forEach((d) => {
-          const v = d.data() || {};
-          const id = normalize(v.code ?? v.reportTypeId ?? d.id);
-          const name = normalize(v.name ?? v.reportTypeName ?? id);
-
-          const active = v.active === undefined ? true : !!v.active;
-          const status = normalize(v.status).toLowerCase();
+        (snapDocs || []).map(mapReportType).forEach((v) => {
+          const id = v.id;
+          const name = v.name;
+          const active = v.active;
+          const status = v.status;
 
           if (!id) return;
           if (!active) return;
@@ -219,13 +270,13 @@ export default function ReconciliationMatrix() {
 
     async function loadDistributors() {
       try {
-        const snap = await getDocs(collection(db, "master_distributors"));
+        const { data: snapDocs, error } = await supabase.from(DISTRIBUTORS_TABLE).select("*");
+        if (error) throw error;
         const m = new Map();
 
-        snap.docs.forEach((d) => {
-          const v = d.data() || {};
-          const code = normalize(v.code ?? d.id);
-          const name = normalize(v.name ?? code);
+        (snapDocs || []).map(mapDistributor).forEach((v) => {
+          const code = v.code;
+          const name = v.name;
 
           if (!code) return;
           m.set(code, name);
@@ -244,7 +295,7 @@ export default function ReconciliationMatrix() {
     };
   }, []);
 
-  // ===== Load reconCells from Firestore based on periodId + businessType =====
+  // ===== Load reconciliation cells from Supabase based on period + business =====
   useEffect(() => {
     let alive = true;
 
@@ -253,38 +304,37 @@ export default function ReconciliationMatrix() {
       try {
         const pid = toPeriodId(selectedYear, selectedMonth);
 
-        const q = query(
-          collection(db, "reconCells"),
-          where("periodId", "==", pid),
-          where("businessType", "==", selectedBusinessType)
-        );
-
-        const snap = await getDocs(q);
-        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const { data, error } = await supabase.from(CELLS_TABLE)
+          .select("*")
+          .eq("period_id", pid)
+          .eq("business_type", selectedBusinessType);
+        if (error) throw error;
 
         if (!alive) return;
 
         // Normalize into the shape your matrix expects
-        const normalized = data.map((x) => {
-          const distributorCode = normalize(x.distributorCode);
+        const normalized = (data || []).map((raw) => {
+          const x = mapCell(raw);
+          const distributorCode = x.distributorCode;
           // ✅ Use name from master data if available, otherwise fallback to existing
           const masterName = distNameByCode.get(distributorCode);
-          const distributorName = masterName || normalize(x.distributorName);
+          const distributorName = masterName || x.distributorName;
           const reconsNo = Number(x.reconsNo || 0);
-          const reportTypeId = normalize(x.reportTypeId);
+          const reportTypeId = x.reportTypeId;
           // ✅ Column header should be report TYPE NAME
           const reportTypeName =
-            normalize(x.reportTypeName) ||
+            x.reportTypeName ||
             normalize(rptNameById.get(reportTypeId)) ||
             reportTypeId;
 
           const status = toSheetLikeStatus(x.status);
-          const pic = normalize(x.updatedBy);
+          const pic = x.updatedBy;
 
           const time =
-            x.updatedAt?.toDate?.()
+            x.updatedAt
               ? (() => {
-                const d = x.updatedAt.toDate();
+                const d = new Date(x.updatedAt);
+                if (isNaN(d.getTime())) return String(x.updatedAt);
                 const mm = String(d.getMonth() + 1).padStart(2, "0");
                 const dd = String(d.getDate()).padStart(2, "0");
                 const yyyy = d.getFullYear();
@@ -293,7 +343,7 @@ export default function ReconciliationMatrix() {
                 const ss = String(d.getSeconds()).padStart(2, "0");
                 return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
               })()
-              : (x.updatedAt ? String(x.updatedAt) : "");
+              : "";
 
           return {
             distributorCode,
@@ -309,7 +359,7 @@ export default function ReconciliationMatrix() {
         setCells(normalized);
       } catch (e) {
         console.error("loadCells:", e);
-        toast.error(`${e?.code || "error"}: ${e?.message || "Failed to load Firestore data"}`);
+        toast.error(`${e?.code || "error"}: ${e?.message || "Failed to load Supabase data"}`);
       } finally {
         if (alive) setLoading(false);
       }
@@ -319,7 +369,7 @@ export default function ReconciliationMatrix() {
     return () => {
       alive = false;
     };
-  }, [selectedYear, selectedMonth, selectedBusinessType, rptNameById]);
+  }, [selectedYear, selectedMonth, selectedBusinessType, rptNameById, distNameByCode]);
 
   // ===== Transform cells -> grouped matrix format =====
   const { sortedDistributors, sortedReportTypes } = useMemo(() => {
@@ -384,6 +434,31 @@ export default function ReconciliationMatrix() {
     }));
   };
 
+  const handleCopyColumn = async (reportTypeName) => {
+    try {
+      // 1. Sort distributors by code ascending
+      const sortedByCodeAsc = [...sortedDistributors].sort((a, b) => {
+        return a.code.localeCompare(b.code);
+      });
+
+      // 2. Extract column data for the specific report type
+      const columnData = sortedByCodeAsc.map((d) => {
+        const status = d.reports[reportTypeName]?.status?.trim() || "No Data";
+        return status;
+      });
+
+      // 3. Join with newline
+      const textToCopy = columnData.join("\n");
+
+      // 4. Copy to clipboard
+      await navigator.clipboard.writeText(textToCopy);
+      toast.success(`Copied data for ${reportTypeName} column!`);
+    } catch (err) {
+      console.error("Failed to copy text: ", err);
+      toast.error("Failed to copy column data.");
+    }
+  };
+
   const sortIcon = (colKey) => {
     if (sortConfig.key !== colKey) return <span className="inline-block w-2" />;
     return sortConfig.direction === "asc" ? <span>▲</span> : <span>▼</span>;
@@ -396,6 +471,7 @@ export default function ReconciliationMatrix() {
           Reconciliation Status Report
         </h1>
         <TooltipToggle enabled={tooltipEnabled} setEnabled={setTooltipEnabled} />
+        <CopyToggle enabled={showCopyButtons} setEnabled={setShowCopyButtons} />
       </div>
 
       <div className="flex gap-4 items-start">
@@ -412,7 +488,7 @@ export default function ReconciliationMatrix() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
               </svg>
-              <span className="ml-2 text-gray-500 text-sm">Loading Firestore data...</span>
+              <span className="ml-2 text-gray-500 text-sm">Loading Supabase data...</span>
             </div>
           ) : (
             <table className="w-full table-auto border text-center text-[9px]">
@@ -607,6 +683,28 @@ export default function ReconciliationMatrix() {
               ))}
             </div>
           </div>
+
+          {/* Copy Actions (conditional) */}
+          {showCopyButtons && sortedReportTypes.length > 0 && (
+            <div className="mt-4 border-t pt-4 w-full">
+              <div className="text-[11px] font-bold mb-2 flex items-center gap-1 text-indigo-700">
+                <Copy size={12} /> Copy Column Data
+              </div>
+              <div className="flex flex-col gap-1.5 w-full pr-1">
+                {sortedReportTypes.map((r) => (
+                  <button
+                    key={`copy-${r}`}
+                    onClick={() => handleCopyColumn(r)}
+                    className="flex items-center justify-between px-2.5 py-1.5 border border-indigo-200 rounded text-[10px] w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition-colors text-left"
+                    title={`Copy all ${r} statuses`}
+                  >
+                    <span className="truncate mr-2 max-w-[120px]">{r}</span>
+                    <Copy size={10} className="shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

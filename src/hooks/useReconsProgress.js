@@ -1,17 +1,8 @@
 // src/hooks/useReconsProgress.js
 import { useEffect, useMemo, useState } from "react";
-import {
-  collection,
-  getCountFromServer,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
-import { db } from "../firebaseClient";
+import { supabase } from "../supabaseClient";
 
-const COL = "reconCells";
+const COL = "recon_cells";
 const POLL_MS = 60000;
 
 const MONTHS = [
@@ -39,14 +30,13 @@ function normalizeMonthToNumber(month) {
 
 function formatLastRun(d) {
   if (!d) return "—";
-  return d.toLocaleString();
+  return new Date(d).toLocaleString();
 }
 
-function baseQuery(year, monthNum) {
-  const colRef = collection(db, COL);
-  const filters = [where("year", "==", Number(year))];
-  if (monthNum) filters.push(where("month", "==", Number(monthNum)));
-  return query(colRef, ...filters);
+function baseQuery(queryBuild, year, monthNum) {
+  let q = queryBuild.eq("year", Number(year));
+  if (monthNum) q = q.eq("month", Number(monthNum));
+  return q;
 }
 
 export default function useReconsProgress(params = {}) {
@@ -69,32 +59,34 @@ export default function useReconsProgress(params = {}) {
     async function load() {
       setLoading(true);
       try {
-        const qBase = baseQuery(year, monthNum);
-
-        // counts
+        // Build base queries for counts
+        const getBase = () => baseQuery(supabase.from(COL).select('*', { count: 'exact', head: true }), year, monthNum);
+        
         const [t, m, mm, nd] = await Promise.all([
-          getCountFromServer(qBase),
-          getCountFromServer(query(qBase, where("status", "==", "match"))),
-          getCountFromServer(query(qBase, where("status", "==", "mismatch"))),
-          getCountFromServer(query(qBase, where("status", "==", "no_data"))),
+          getBase(),
+          getBase().eq("status", "match"),
+          getBase().eq("status", "mismatch"),
+          getBase().eq("status", "no_data"),
         ]);
 
-        const totalCount = t.data().count || 0;
-        const matchCount = m.data().count || 0;
-        const mismatchCount = mm.data().count || 0;
-        const noDataCount = nd.data().count || 0;
+        const totalCount = t.count || 0;
+        const matchCount = m.count || 0;
+        const mismatchCount = mm.count || 0;
+        const noDataCount = nd.count || 0;
 
-        // lastRunAt (try with orderBy; if index missing, fall back to "—")
+        // lastRunAt
         let latest = null;
         try {
-          const qLatest = query(qBase, orderBy("updatedAt", "desc"), limit(1));
-          const snap = await getDocs(qLatest);
-          if (!snap.empty) {
-            const d = snap.docs[0].data();
-            latest = d?.updatedAt?.toDate ? d.updatedAt.toDate() : null;
+          const { data: latestData } = await baseQuery(
+            supabase.from(COL).select('updated_at').order('updated_at', { ascending: false }).limit(1),
+            year, 
+            monthNum
+          ).maybeSingle();
+
+          if (latestData?.updated_at) {
+            latest = latestData.updated_at;
           }
         } catch (err) {
-          // Common: missing index. We don't fail the whole card.
           latest = null;
         }
 

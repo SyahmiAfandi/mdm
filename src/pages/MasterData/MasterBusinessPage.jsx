@@ -1,19 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { db } from "../../firebaseClient";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
-import { Plus, RefreshCcw, Save, Trash2, Pencil, X, Search } from "lucide-react";
+import { supabase } from "../../supabaseClient";
+
+import { Plus, RefreshCcw, Save, Trash2, Pencil, X, Search, Shield } from "lucide-react";
 import { useUser } from "../../context/UserContext";
+import { usePermissions } from "../../hooks/usePermissions";
 
 const COL = "master_businesses";
 
@@ -25,34 +16,49 @@ function makeIdFromCode(code) {
   return normalize(code).toUpperCase().replace(/\s+/g, "_");
 }
 
+function mapRow(row) {
+  return {
+    ...row,
+    businessCode: row.businessCode ?? row.business_code ?? "",
+    businessName: row.businessName ?? row.business_name ?? "",
+  };
+}
+
 export default function MasterBusinessPage() {
   const { user } = useUser();
+  const CURRENT_USER = user?.email || user?.name || user?.uid || "";
+
+  const { can, role } = usePermissions();
+  const canView = can("masterData.view") || can("masterData.*") || role === "admin";
+  const canEdit = can("masterData.business.edit") || can("masterData.*") || role === "admin";
 
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
 
   const [qText, setQText] = useState("");
-  const [sortKey, setSortKey] = useState("businessCode"); // businessCode | businessName | activeLabel
+  const [sortKey, setSortKey] = useState("businessCode");
   const [sortDir, setSortDir] = useState("asc");
 
-  // modal state
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState("create"); // create | edit
+  const [mode, setMode] = useState("create");
   const [editingId, setEditingId] = useState(null);
 
   const [form, setForm] = useState({
     businessCode: "",
     businessName: "",
-    active: true, // ✅ boolean
+    active: true,
   });
 
   async function fetchRows() {
     setLoading(true);
     try {
-      const q = query(collection(db, COL), orderBy("businessCode", "asc"));
-      const snap = await getDocs(q);
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setRows(data);
+      const { data, error } = await supabase
+        .from(COL)
+        .select("*")
+        .order("business_code", { ascending: true });
+
+      if (error) throw error;
+      setRows((data || []).map(mapRow));
     } catch (e) {
       console.error(e);
       toast.error(e?.message || "Failed to load businesses");
@@ -62,9 +68,10 @@ export default function MasterBusinessPage() {
   }
 
   useEffect(() => {
+    if (!canView) return;
     fetchRows();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [canView]);
 
   const filtered = useMemo(() => {
     const t = normalize(qText).toLowerCase();
@@ -107,7 +114,7 @@ export default function MasterBusinessPage() {
     setForm({
       businessCode: row.businessCode || "",
       businessName: row.businessName || "",
-      active: row.active !== false, // ✅ default true if missing
+      active: row.active !== false,
     });
     setOpen(true);
   }
@@ -117,6 +124,8 @@ export default function MasterBusinessPage() {
   }
 
   async function onSave() {
+    if (!canEdit) return toast.error("No permission to edit master data");
+
     const businessCode = normalize(form.businessCode).toUpperCase();
     const businessName = normalize(form.businessName);
     const active = !!form.active;
@@ -128,29 +137,30 @@ export default function MasterBusinessPage() {
     try {
       if (mode === "create") {
         const id = makeIdFromCode(businessCode);
-        await setDoc(
-          doc(db, COL, id),
-          {
-            businessCode,
-            businessName,
-            active, // ✅ boolean stored
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            createdBy: user?.email || user?.uid || null,
-            updatedBy: user?.email || user?.uid || null,
-          },
-          { merge: true }
-        );
+        const { error: insErr } = await supabase.from(COL).insert({
+          id,
+          business_code: businessCode,
+          business_name: businessName,
+          active,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          created_by: CURRENT_USER || null,
+          updated_by: CURRENT_USER || null,
+        });
+        if (insErr) throw insErr;
         toast.success("Business created");
       } else {
         if (!editingId) throw new Error("Missing editing id");
-        await updateDoc(doc(db, COL, editingId), {
-          // businessCode locked by design (doc id)
-          businessName,
-          active,
-          updatedAt: serverTimestamp(),
-          updatedBy: user?.email || user?.uid || null,
-        });
+        const { error: updErr } = await supabase
+          .from(COL)
+          .update({
+            business_name: businessName,
+            active,
+            updated_at: new Date().toISOString(),
+            updated_by: CURRENT_USER || null,
+          })
+          .eq("id", editingId);
+        if (updErr) throw updErr;
         toast.success("Business updated");
       }
 
@@ -165,12 +175,15 @@ export default function MasterBusinessPage() {
   }
 
   async function onDelete(row) {
+    if (!canEdit) return toast.error("No permission to edit master data");
+
     const ok = confirm(`Delete business "${row.businessCode}"?`);
     if (!ok) return;
 
     setLoading(true);
     try {
-      await deleteDoc(doc(db, COL, row.id));
+      const { error } = await supabase.from(COL).delete().eq("id", row.id);
+      if (error) throw error;
       toast.success("Deleted");
       await fetchRows();
     } catch (e) {
@@ -181,16 +194,43 @@ export default function MasterBusinessPage() {
     }
   }
 
+  if (!canView) {
+    return (
+      <div className="max-w-3xl mx-auto p-6">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+            </div>
+            <div>
+              <div className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                Access restricted
+              </div>
+              <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                You do not have permission to view Business master.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6">
-      {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-            Master Data — Business
+            Master Data - Business
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Manage business codes (CRUD)
+          </p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Mode:{" "}
+            <span className="font-semibold text-gray-700 dark:text-gray-200">
+              {canEdit ? "Editable" : "Read only"}
+            </span>
           </p>
         </div>
 
@@ -206,7 +246,8 @@ export default function MasterBusinessPage() {
 
           <button
             onClick={openCreate}
-            className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-black dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+            disabled={!canEdit}
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-black disabled:opacity-60 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
           >
             <Plus className="h-4 w-4" />
             New Business
@@ -214,14 +255,13 @@ export default function MasterBusinessPage() {
         </div>
       </div>
 
-      {/* Controls */}
       <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
           <input
             value={qText}
             onChange={(e) => setQText(e.target.value)}
-            placeholder="Search code / name / status…"
+            placeholder="Search code / name / status..."
             className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-800 shadow-sm outline-none focus:border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
           />
         </div>
@@ -246,12 +286,11 @@ export default function MasterBusinessPage() {
           </button>
         </div>
 
-        <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center justify-end">
+        <div className="flex items-center justify-end text-sm text-gray-500 dark:text-gray-400">
           {filtered.length} record(s)
         </div>
       </div>
 
-      {/* Table */}
       <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
@@ -285,14 +324,16 @@ export default function MasterBusinessPage() {
                     <div className="flex justify-end gap-2">
                       <button
                         onClick={() => openEdit(r)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                        disabled={!canEdit}
+                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
                       >
                         <Pencil className="h-4 w-4" />
                         Edit
                       </button>
                       <button
                         onClick={() => onDelete(r)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 dark:border-red-900/40 dark:bg-gray-900 dark:text-red-300 dark:hover:bg-red-900/20"
+                        disabled={!canEdit}
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60 dark:border-red-900/40 dark:bg-gray-900 dark:text-red-300 dark:hover:bg-red-900/20"
                       >
                         <Trash2 className="h-4 w-4" />
                         Delete
@@ -305,7 +346,7 @@ export default function MasterBusinessPage() {
               {!filtered.length && (
                 <tr>
                   <td colSpan={4} className="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
-                    {loading ? "Loading…" : "No records found."}
+                    {loading ? "Loading..." : "No records found."}
                   </td>
                 </tr>
               )}
@@ -314,7 +355,6 @@ export default function MasterBusinessPage() {
         </div>
       </div>
 
-      {/* Modal */}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl dark:bg-gray-900">
@@ -335,7 +375,7 @@ export default function MasterBusinessPage() {
               </button>
             </div>
 
-            <div className="px-5 py-4 space-y-3">
+            <div className="space-y-3 px-5 py-4">
               <div>
                 <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">
                   Business Code
@@ -345,7 +385,7 @@ export default function MasterBusinessPage() {
                   onChange={(e) => setForm((f) => ({ ...f, businessCode: e.target.value }))}
                   placeholder="e.g. HPC"
                   className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                  disabled={mode === "edit"}
+                  disabled={!canEdit || mode === "edit"}
                 />
                 {mode === "edit" && (
                   <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
@@ -362,6 +402,7 @@ export default function MasterBusinessPage() {
                   value={form.businessName}
                   onChange={(e) => setForm((f) => ({ ...f, businessName: e.target.value }))}
                   placeholder="e.g. Home & Personal Care"
+                  disabled={!canEdit}
                   className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                 />
               </div>
@@ -373,6 +414,7 @@ export default function MasterBusinessPage() {
                 <select
                   value={form.active ? "true" : "false"}
                   onChange={(e) => setForm((f) => ({ ...f, active: e.target.value === "true" }))}
+                  disabled={!canEdit}
                   className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                 >
                   <option value="true">Active</option>
@@ -390,7 +432,7 @@ export default function MasterBusinessPage() {
               </button>
               <button
                 onClick={onSave}
-                disabled={loading}
+                disabled={!canEdit || loading}
                 className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
               >
                 <Save className="h-4 w-4" />

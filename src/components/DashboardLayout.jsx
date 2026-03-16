@@ -53,7 +53,7 @@ const DashboardLayout = ({ children, pageTitle, breadcrumbs }) => {
           </div>
 
           {/* ✅ Always show scrollbar (prevents sudden scrollbar + blink) */}
-          <div className="flex-1 min-w-0 overflow-y-scroll overflow-x-hidden px-4 pb-4 pt-1 page-wrap">
+          <div className="flex-1 min-w-0 overflow-y-scroll overflow-x-hidden px-4 pb-4 pt-1 page-wrap relative">
             {children}
           </div>
         </div>

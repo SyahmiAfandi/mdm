@@ -1,18 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { db } from "../../firebaseClient";
+import { supabase } from "../../supabaseClient";
 import { useUser } from "../../context/UserContext";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
+
 import { Plus, RefreshCcw, Save, Trash2, Pencil, X, Globe, Shield, Search } from "lucide-react";
 import { usePermissions } from "../../hooks/usePermissions";
 
@@ -27,47 +17,48 @@ function makeIdFromCode(code) {
   return normalize(code).toUpperCase().replace(/\s+/g, "_");
 }
 
+function mapRow(row) {
+  return {
+    ...row,
+    code: row.code ?? row.country_code ?? "",
+    name: row.name ?? row.country_name ?? "",
+  };
+}
+
 export default function MasterCountryPage() {
   const { user } = useUser();
   const CURRENT_USER = user?.email || user?.name || user?.uid || "";
 
-  const { can, role } = usePermissions({
-    defaultRole: "viewer",
-    roleCollection: "roles",
-    roleField: "role",
-    rolePermissionsCollection: "rolePermissions",
-  });
-
+  const { can, role } = usePermissions();
   const canView = can("masterData.view") || can("masterData.*") || role === "admin";
-  const canEdit =
-    can("masterData.countries.edit") || can("masterData.*") || role === "admin";
+  const canEdit = can("masterData.countries.edit") || can("masterData.*") || role === "admin";
 
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState([]);
 
-  // Search / sort
   const [qText, setQText] = useState("");
-  const [sortKey, setSortKey] = useState("code"); // code | name | activeLabel
+  const [sortKey, setSortKey] = useState("code");
   const [sortDir, setSortDir] = useState("asc");
 
-  // Modal
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState("create"); // create | edit
+  const [mode, setMode] = useState("create");
   const [editingId, setEditingId] = useState(null);
 
   const [form, setForm] = useState({
     code: "",
     name: "",
-    status: "Active", // Active | Inactive
+    status: "Active",
   });
 
   async function fetchRows() {
     try {
       setLoading(true);
-      const q = query(collection(db, COL), orderBy("code", "asc"));
-      const snap = await getDocs(q);
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setRows(data);
+      const { data, error } = await supabase
+        .from(COL)
+        .select("*")
+        .order("code", { ascending: true });
+      if (error) throw error;
+      setRows((data || []).map(mapRow));
     } catch (e) {
       console.error(e);
       toast.error(e?.message || "Failed to load countries");
@@ -98,14 +89,8 @@ export default function MasterCountryPage() {
     }
 
     out.sort((a, b) => {
-      const av =
-        (a?.[sortKey] ?? "")
-          .toString()
-          .toLowerCase();
-      const bv =
-        (b?.[sortKey] ?? "")
-          .toString()
-          .toLowerCase();
+      const av = (a?.[sortKey] ?? "").toString().toLowerCase();
+      const bv = (b?.[sortKey] ?? "").toString().toLowerCase();
 
       if (av < bv) return sortDir === "asc" ? -1 : 1;
       if (av > bv) return sortDir === "asc" ? 1 : -1;
@@ -152,30 +137,31 @@ export default function MasterCountryPage() {
 
       if (mode === "create") {
         const id = makeIdFromCode(code);
-        await setDoc(
-          doc(db, COL, id),
-          {
-            code,
-            name,
-            active,
-            createdAt: serverTimestamp(),
-            createdBy: CURRENT_USER,
-            updatedAt: serverTimestamp(),
-            updatedBy: CURRENT_USER,
-          },
-          { merge: true }
-        );
-        toast.success("Country created ✅");
-      } else {
-        if (!editingId) throw new Error("Missing editing id");
-        await updateDoc(doc(db, COL, editingId), {
-          // code locked by design (doc id = code)
+        const { error: insErr } = await supabase.from(COL).insert({
+          id,
+          code,
           name,
           active,
-          updatedAt: serverTimestamp(),
-          updatedBy: CURRENT_USER,
+          created_at: new Date().toISOString(),
+          created_by: CURRENT_USER || null,
+          updated_at: new Date().toISOString(),
+          updated_by: CURRENT_USER || null,
         });
-        toast.success("Country updated ✅");
+        if (insErr) throw insErr;
+        toast.success("Country created");
+      } else {
+        if (!editingId) throw new Error("Missing editing id");
+        const { error: updErr } = await supabase
+          .from(COL)
+          .update({
+            name,
+            active,
+            updated_at: new Date().toISOString(),
+            updated_by: CURRENT_USER || null,
+          })
+          .eq("id", editingId);
+        if (updErr) throw updErr;
+        toast.success("Country updated");
       }
 
       setOpen(false);
@@ -196,8 +182,9 @@ export default function MasterCountryPage() {
 
     try {
       setLoading(true);
-      await deleteDoc(doc(db, COL, row.id));
-      toast.success("Deleted ✅");
+      const { error } = await supabase.from(COL).delete().eq("id", row.id);
+      if (error) throw error;
+      toast.success("Deleted");
       await fetchRows();
     } catch (e) {
       console.error(e);
@@ -220,7 +207,7 @@ export default function MasterCountryPage() {
                 Access restricted
               </div>
               <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                You don’t have permission to view Countries master.
+                You do not have permission to view Countries master.
               </div>
             </div>
           </div>
@@ -231,7 +218,6 @@ export default function MasterCountryPage() {
 
   return (
     <div className="p-4 md:p-6">
-      {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-3">
           <div className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
@@ -239,10 +225,10 @@ export default function MasterCountryPage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-              Master Data — Countries
+              Master Data - Countries
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Maintain country codes & names for dropdowns and reporting filters.
+              Maintain country codes and names for dropdowns and reporting filters.
             </p>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               Mode:{" "}
@@ -274,14 +260,13 @@ export default function MasterCountryPage() {
         </div>
       </div>
 
-      {/* Controls */}
       <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
           <input
             value={qText}
             onChange={(e) => setQText(e.target.value)}
-            placeholder="Search code / name / status…"
+            placeholder="Search code / name / status..."
             className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-800 shadow-sm outline-none focus:border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
           />
         </div>
@@ -311,7 +296,6 @@ export default function MasterCountryPage() {
         </div>
       </div>
 
-      {/* Table */}
       <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
@@ -369,7 +353,7 @@ export default function MasterCountryPage() {
               {!filtered.length && (
                 <tr>
                   <td colSpan={4} className="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
-                    {loading ? "Loading…" : "No records found."}
+                    {loading ? "Loading..." : "No records found."}
                   </td>
                 </tr>
               )}
@@ -378,7 +362,6 @@ export default function MasterCountryPage() {
         </div>
       </div>
 
-      {/* Modal */}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl dark:bg-gray-900">

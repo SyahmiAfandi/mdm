@@ -1,7 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, RotateCcw, FileDown, ArrowLeft, CheckCircle2, AlertCircle, FileSpreadsheet, Activity } from 'lucide-react';
+import { Upload, RotateCcw, FileDown, ArrowLeft, CheckCircle2, AlertCircle, FileSpreadsheet, Activity, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
+import { usePermissions } from '../hooks/usePermissions';
 
 function AutoGenerateMonthlyICPromotion() {
   const navigate = useNavigate();
@@ -15,15 +17,21 @@ function AutoGenerateMonthlyICPromotion() {
   const [summaryPreview, setSummaryPreview] = useState([]); // preview ic_main_out from backend
   const [mounted, setMounted] = useState(false);
 
+  const { can, role } = usePermissions();
+
+  const canEdit = can("tools.promotions.edit") || can("tools.*") || role === "admin";
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const handleBrowseClick = () => {
+    if (!canEdit) return toast.error("No permission to edit promotions");
     if (fileInputRef.current) fileInputRef.current.click();
   };
 
   const handleExport = async () => {
+    if (!canEdit) return toast.error("No permission to edit promotions");
     try {
       setIsExporting(true);
       setLogStatus({ type: 'loading', message: 'Preparing IC Promo Template for download...' });
@@ -71,6 +79,8 @@ function AutoGenerateMonthlyICPromotion() {
   };
 
   const handleGenerateExport = async () => {
+    if (!canEdit) return toast.error("No permission to edit promotions");
+
     if (!selectedFile) {
       setLogStatus({ type: 'error', message: 'Please import a file before generating the promotion.' });
       return;
@@ -160,6 +170,12 @@ function AutoGenerateMonthlyICPromotion() {
           <p className="text-sm text-slate-500 font-medium mt-1">
             Automated processing and generation of Monthly IC Promotions templates.
           </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Mode:{" "}
+            <span className="font-semibold text-slate-700">
+              {canEdit ? "Editable" : "Read only"}
+            </span>
+          </p>
         </div>
         <div className="flex items-center gap-2 text-xs font-bold text-violet-600 uppercase tracking-widest bg-violet-50 px-4 py-2 rounded-full border border-violet-100 shadow-sm self-start md:self-auto">
           <Activity size={14} className="text-violet-500" /> Auto-IC Engine Active
@@ -181,16 +197,16 @@ function AutoGenerateMonthlyICPromotion() {
           <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 transition-colors duration-300">
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-xl bg-white shadow-sm border ${logStatus.type === 'error' ? 'border-rose-100' :
-                  logStatus.type === 'success' ? 'border-emerald-100' :
-                    logStatus.type === 'loading' ? 'border-blue-100' : 'border-violet-100'
+                logStatus.type === 'success' ? 'border-emerald-100' :
+                  logStatus.type === 'loading' ? 'border-blue-100' : 'border-violet-100'
                 }`}>
                 <StatusIcon />
               </div>
               <div className="flex flex-col">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">System Status</span>
                 <span className={`text-sm font-medium ${logStatus.type === 'error' ? 'text-rose-600' :
-                    logStatus.type === 'success' ? 'text-emerald-700' :
-                      logStatus.type === 'loading' ? 'text-blue-700' : 'text-slate-700'
+                  logStatus.type === 'success' ? 'text-emerald-700' :
+                    logStatus.type === 'loading' ? 'text-blue-700' : 'text-slate-700'
                   }`}>
                   {logStatus.message}
                 </span>
@@ -284,7 +300,7 @@ function AutoGenerateMonthlyICPromotion() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleBrowseClick}
-              disabled={isProcessing}
+              disabled={!canEdit || isProcessing}
               className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             >
               <Upload className="w-4 h-4 text-slate-500" />
@@ -300,13 +316,13 @@ function AutoGenerateMonthlyICPromotion() {
 
             {/* Generate Button */}
             <motion.button
-              whileHover={!selectedFile || isProcessing ? {} : { scale: 1.02, boxShadow: "0 4px 12px rgba(124, 58, 237, 0.2)" }}
-              whileTap={!selectedFile || isProcessing ? {} : { scale: 0.98 }}
+              whileHover={!canEdit || !selectedFile || isProcessing ? {} : { scale: 1.02, boxShadow: "0 4px 12px rgba(124, 58, 237, 0.2)" }}
+              whileTap={!canEdit || !selectedFile || isProcessing ? {} : { scale: 0.98 }}
               onClick={handleGenerateExport}
-              disabled={!selectedFile || isProcessing}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold shadow-sm transition-all duration-200 ${!selectedFile || isProcessing
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                  : 'bg-violet-600 hover:bg-violet-700 text-white border border-violet-600 hover:border-violet-700'
+              disabled={!canEdit || !selectedFile || isProcessing}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold shadow-sm transition-all duration-200 ${!selectedFile || isProcessing || !canEdit
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                : 'bg-violet-600 hover:bg-violet-700 text-white border border-violet-600 hover:border-violet-700'
                 }`}
             >
               {isProcessing ? (
@@ -319,10 +335,10 @@ function AutoGenerateMonthlyICPromotion() {
 
             {/* Export Template Button */}
             <motion.button
-              whileHover={isProcessing || isExporting ? {} : { scale: 1.02 }}
-              whileTap={isProcessing || isExporting ? {} : { scale: 0.98 }}
+              whileHover={!canEdit || isProcessing || isExporting ? {} : { scale: 1.02 }}
+              whileTap={!canEdit || isProcessing || isExporting ? {} : { scale: 0.98 }}
               onClick={handleExport}
-              disabled={isProcessing || isExporting}
+              disabled={!canEdit || isProcessing || isExporting}
               className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-emerald-600/20"
             >
               <CheckCircle2 className={`w-4 h-4 ${isExporting ? 'animate-pulse' : ''}`} />
@@ -334,7 +350,7 @@ function AutoGenerateMonthlyICPromotion() {
               whileHover={{ scale: 1.02, rotate: -5 }}
               whileTap={{ scale: 0.98, rotate: -15 }}
               onClick={handleReset}
-              disabled={isProcessing}
+              disabled={!canEdit || isProcessing}
               className="flex items-center justify-center p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-50 shadow-sm"
               title="Reset Workspace"
             >

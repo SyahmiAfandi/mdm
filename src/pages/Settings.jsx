@@ -38,7 +38,7 @@ function SettingsPage() {
       <Toaster position="top-right" />
 
       {/* PERFECT FIT CONTAINER */}
-      <div className="absolute inset-0 pt-[104px] pb-6 px-5 sm:px-6 max-w-[1200px] mx-auto flex flex-col">
+      <div className="w-full min-w-0 px-3 sm:px-5 pb-3 flex flex-col">
 
         {/* ── Hero Banner ── */}
         <div className="relative overflow-hidden rounded-2xl mb-6 shrink-0 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 shadow-md shadow-slate-200/50 px-6 py-5">
@@ -61,11 +61,11 @@ function SettingsPage() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6"
+          className="grid grid-cols-1 lg:grid-cols-12 gap-6"
         >
 
           {/* LEFT COLUMN (Profile & Security) */}
-          <div className="lg:col-span-5 flex flex-col gap-6 overflow-y-auto custom-scrollbar pr-2 pb-2">
+          <div className="lg:col-span-5 flex flex-col gap-6">
 
             {/* Profile Card */}
             <motion.section variants={cardVariants} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 relative overflow-hidden group">
@@ -85,7 +85,7 @@ function SettingsPage() {
                   {getInitials(user?.name)}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-lg font-bold text-slate-900 leading-tight truncate">{user?.name || 'User Name'}</h3>
+                  <h3 className="text-lg font-bold text-slate-900 leading-tight truncate">{user?.display_name || 'User Name'}</h3>
                   <div className="mt-1 inline-flex items-center text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
                     {role || 'USER'}
                   </div>
@@ -124,7 +124,7 @@ function SettingsPage() {
 
 
           {/* RIGHT COLUMN (Preferences & Data & Admin) */}
-          <div className="lg:col-span-7 flex flex-col gap-6 overflow-y-auto custom-scrollbar pr-2 pb-2">
+          <div className="lg:col-span-7 flex flex-col gap-6">
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Preferences Card */}

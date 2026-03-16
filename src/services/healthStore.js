@@ -1,25 +1,23 @@
 // src/services/healthStore.js
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "../firebase";
+import { supabase } from "../supabaseClient";
 
 /**
- * Writes a test health document to Firestore at:
- *   health / googleSheets
+ * Writes a test health document to Supabase (assuming health_checks table)
+ * Fallback gracefully if table doesn't exist yet.
  */
 export async function writeTestHealth() {
-  const ref = doc(db, "health", "googleSheets");
-
-  await setDoc(
-    ref,
-    {
-      status: "UP",                // "UP" | "DEGRADED" | "DOWN"
-      latencyMs: 123,             // example test value
-      checkedAt: serverTimestamp(), // server-side timestamp
+  try {
+    await supabase.from("health").upsert({
+      id: "googleSheets",
+      status: "UP",
+      latencyMs: 123,
+      checkedAt: new Date().toISOString(),
       hint: "Manual test write",
       source: "GAS",
-      url: "https://your-gas-url/exec", // replace later with your real GAS URL
+      url: "https://your-gas-url/exec",
       updatedAtStr: new Date().toISOString(),
-    },
-    { merge: true }
-  );
+    });
+  } catch (err) {
+    console.error("writeTestHealth failed, table may not exist:", err);
+  }
 }

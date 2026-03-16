@@ -1,34 +1,47 @@
 import { useEffect, useMemo, useState } from "react";
-import { db } from "../firebaseClient";
-import { doc, onSnapshot } from "firebase/firestore";
+import { supabase } from "../supabaseClient";
 
-export default function useEmailTrackerSummaryFirestore() {
+export default function useEmailTrackerSummary() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [counts, setCounts] = useState({ new: 0, inProgress: 0, complete: 0, total: 0 });
 
   useEffect(() => {
-    const ref = doc(db, "stats", "email_tasks");
+    let alive = true;
 
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        const d = snap.exists() ? snap.data() : {};
-        setCounts({
-          new: Number(d.new || 0),
-          inProgress: Number(d.inProgress || 0),
-          complete: Number(d.complete || 0),
-          total: Number(d.total || 0),
-        });
+    async function fetchStats() {
+      try {
+        const [newRes, progRes, compRes] = await Promise.all([
+          supabase.from("email_tasks").select('*', { count: 'exact', head: true }).eq("status", "NEW"),
+          supabase.from("email_tasks").select('*', { count: 'exact', head: true }).eq("status", "IN_PROGRESS"),
+          supabase.from("email_tasks").select('*', { count: 'exact', head: true }).eq("status", "COMPLETE"),
+        ]);
+        
+        if (!alive) return;
+        const n = newRes.count || 0;
+        const p = progRes.count || 0;
+        const c = compRes.count || 0;
+
+        setCounts({ new: n, inProgress: p, complete: c, total: n + p + c });
         setLoading(false);
-      },
-      (e) => {
-        setError(e?.message || "Failed to load stats.");
+      } catch (err) {
+        if (!alive) return;
+        setError(err?.message || "Failed to load stats.");
         setLoading(false);
       }
-    );
+    }
 
-    return () => unsub();
+    fetchStats();
+    
+    // Poll every 10 seconds to simulate realtime behavior
+    const interval = setInterval(() => {
+      fetchStats();
+    }, 10000);
+
+    return () => {
+      alive = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const percentComplete = useMemo(() => {

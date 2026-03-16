@@ -1,15 +1,24 @@
 // src/components/GoogleSheetsHealthViewer.jsx
 import React, { useEffect, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "../firebase";
+import { supabase } from "../supabaseClient";
 
 export default function GoogleSheetsHealthViewer() {
   const [data, setData] = useState(null);
 
   useEffect(() => {
-    const ref = doc(db, "health", "googleSheets");
-    const unsub = onSnapshot(ref, (snap) => setData(snap.data() || null));
-    return () => unsub();
+    supabase.from("health").select("*").eq("id", "googleSheets").maybeSingle().then(({ data: initial }) => {
+      if (initial) setData(initial);
+    });
+
+    const channel = supabase.channel('health-googleSheets')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'health', filter: "id=eq.googleSheets" }, (payload) => {
+        setData(payload.new);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const Pill = ({ status }) => {
@@ -42,7 +51,7 @@ export default function GoogleSheetsHealthViewer() {
         </div>
         <div>
           <span className="font-medium">Last write:</span>{" "}
-          {data?.checkedAt?.toDate?.().toLocaleString?.() ?? "—"}
+          {data?.checkedAt ? new Date(data.checkedAt).toLocaleString() : "—"}
         </div>
         <div className="col-span-2">
           <span className="font-medium">Hint:</span> {data?.hint ?? "—"}

@@ -1,14 +1,8 @@
 import React, { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import Papa from "papaparse";
-import { db } from "../../firebaseClient";
-import {
-  collection,
-  doc,
-  runTransaction,
-  writeBatch,
-  Timestamp,
-} from "firebase/firestore";
+import { supabase } from "../../supabaseClient";
+import { usePermissions } from "../../hooks/usePermissions";
 
 /**
  * CSV headers expected (case-insensitive):
@@ -34,10 +28,10 @@ function normalizeStatus(s) {
 
 function parseDateToTimestamp(v) {
   const s = safeStr(v);
-  if (!s) return Timestamp.now();
+  if (!s) return new Date().toISOString();
   const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return Timestamp.now();
-  return Timestamp.fromDate(d);
+  if (Number.isNaN(d.getTime())) return new Date().toISOString();
+  return d.toISOString();
 }
 
 function getLowerKey(obj, key) {
@@ -47,6 +41,9 @@ function getLowerKey(obj, key) {
 }
 
 export default function EmailTrackerBulkImport() {
+  const { can, role } = usePermissions();
+  const canBulkImport = can("mdmEmailTracker.bulkImport") || role === "admin";
+
   const [file, setFile] = useState(null);
   const [rows, setRows] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -87,7 +84,7 @@ export default function EmailTrackerBulkImport() {
 
   function parseDateToTimestamp(v) {
     const s0 = safeStr(v);
-    if (!s0) return Timestamp.now();
+    if (!s0) return new Date().toISOString();
 
     // normalize Firestore console-like string:
     // "29 January 2026 at 9:33:00 AM UTC+8"
@@ -107,13 +104,13 @@ export default function EmailTrackerBulkImport() {
 
     // Try parse now that it's closer to a standard form
     const dt = new Date(s);
-    if (!Number.isNaN(dt.getTime())) return Timestamp.fromDate(dt);
+    if (!Number.isNaN(dt.getTime())) return dt.toISOString();
 
     // Fallback: handle "DD Month YYYY HH:MM:SS AM/PM +08:00" manually
     const m = s.match(
       /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)\s*([+-]\d{2}:\d{2})?$/
     );
-    if (!m) return Timestamp.now();
+    if (!m) return new Date().toISOString();
 
     const day = Number(m[1]);
     const monName = m[2].toLowerCase();
@@ -129,7 +126,7 @@ export default function EmailTrackerBulkImport() {
       july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
     };
     const month = months[monName];
-    if (month === undefined) return Timestamp.now();
+    if (month === undefined) return new Date().toISOString();
 
     if (ampm === "PM" && hour < 12) hour += 12;
     if (ampm === "AM" && hour === 12) hour = 0;
@@ -140,29 +137,24 @@ export default function EmailTrackerBulkImport() {
       `T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}${tz}`;
 
     const dt2 = new Date(iso);
-    if (!Number.isNaN(dt2.getTime())) return Timestamp.fromDate(dt2);
+    if (!Number.isNaN(dt2.getTime())) return dt2.toISOString();
 
-    return Timestamp.now();
+    return new Date().toISOString();
   }
 
   async function reserveTaskNoRange(count) {
-    // Reserve [start..start+count-1] in counters/email_tasks.next
-    const counterRef = doc(db, "counters", "email_tasks");
+    // Reserve [start..start+count-1] in counters
+    const { data: snap } = await supabase.from("counters").select("next").eq("id", "email_tasks").maybeSingle();
+    let current = Number(snap?.next || 1);
 
-    return await runTransaction(db, async (tx) => {
-      const snap = await tx.get(counterRef);
-
-      if (!snap.exists()) {
-        // If counter missing, start at 1
-        const start = 1;
-        tx.set(counterRef, { next: start + count });
-        return start;
-      }
-
-      const current = Number(snap.data()?.next || 1);
-      tx.update(counterRef, { next: current + count });
+    if (snap) {
+      await supabase.from("counters").update({ next: current + count }).eq("id", "email_tasks");
       return current;
-    });
+    } else {
+      const start = 1;
+      await supabase.from("counters").insert({ id: "email_tasks", next: start + count });
+      return start;
+    }
   }
 
   async function importToFirestore() {
@@ -179,13 +171,10 @@ export default function EmailTrackerBulkImport() {
       const startNo = await reserveTaskNoRange(rows.length);
 
       // 2) Batch write
-      const colRef = collection(db, "email_tasks");
-
       for (let i = 0; i < rows.length; i += BATCH_SIZE) {
         const chunk = rows.slice(i, i + BATCH_SIZE);
-        const batch = writeBatch(db);
-
-        chunk.forEach((r, idx) => {
+        
+        const inserts = chunk.map((r, idx) => {
           const taskNo = startNo + i + idx;
 
           const title = safeStr(getLowerKey(r, "title")) || "(no subject)";
@@ -196,9 +185,7 @@ export default function EmailTrackerBulkImport() {
           const messageId = safeStr(getLowerKey(r, "messageId"));
           const picAssign = safeStr(getLowerKey(r, "pic_assign"));
 
-          const docRef = doc(colRef); // auto id
-
-          batch.set(docRef, {
+          return {
             taskNo,
             title,
             senderEmail,
@@ -208,17 +195,19 @@ export default function EmailTrackerBulkImport() {
             status,
             remark,
 
-            // IMPORTANT: use Timestamp.now() so your UI (NEW 24h / sorting) updates immediately
+            // IMPORTANT: use new Date().toISOString() so your UI (NEW 24h / sorting) updates immediately
             pic_create: "bulk_import",
-            createdAt: Timestamp.now(),
+            createdAt: new Date().toISOString(),
             pic_update: "bulk_import",
-            updatedAt: Timestamp.now(),
+            updatedAt: new Date().toISOString(),
 
             messageId,
-          });
+          };
         });
 
-        await batch.commit();
+        const { error } = await supabase.from("email_tasks").insert(inserts);
+        if (error) throw error;
+        
         setProgress((p) => ({ ...p, done: Math.min(p.total, i + chunk.length) }));
       }
 
@@ -250,7 +239,7 @@ export default function EmailTrackerBulkImport() {
               type="file"
               accept=".csv"
               onChange={onPickFile}
-              disabled={busy}
+              disabled={busy || !canBulkImport}
               className="block text-sm"
             />
             {file && (
@@ -262,7 +251,7 @@ export default function EmailTrackerBulkImport() {
 
           <button
             onClick={importToFirestore}
-            disabled={busy || rows.length === 0}
+            disabled={busy || rows.length === 0 || !canBulkImport}
             className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
           >
             {busy ? "Importing..." : "Import to Firestore"}

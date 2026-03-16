@@ -21,18 +21,7 @@ import {
   Settings,
 } from "lucide-react";
 
-/* Firestore */
-import {
-  doc,
-  setDoc,
-  serverTimestamp,
-  onSnapshot,
-  collection,
-  query,
-  orderBy,
-  getDocs,
-} from "firebase/firestore";
-import { db } from "../firebaseClient";
+import { supabase } from "../supabaseClient";
 
 import useReconsProgress from "../hooks/useReconsProgress";
 import useEmailTrackerSummaryCounts from "../hooks/useEmailTrackerSummaryCounts";
@@ -68,22 +57,25 @@ function HomePage() {
   const inFlightRef = useRef(false);
   const lastHealthRef = useRef({ api: null, sheets: null, storage: null });
 
-  /* Write to Firestore */
+  /* Write to Supabase */
   async function writeHealthDoc(docId, payload, sourceOverride) {
-    const ref = doc(db, "health", docId);
-    await setDoc(
-      ref,
-      {
-        status: payload.status ?? "Unknown",
-        latencyMs: payload.latencyMs ?? null,
-        checkedAt: serverTimestamp(),
-        hint: payload.hint ?? null,
-        source: sourceOverride ?? payload.source ?? "Unknown",
-        url: payload.url ?? null,
-        updatedAtStr: payload.updatedAt ?? new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    try {
+      await supabase.from("health").upsert(
+        {
+          id: docId,
+          status: payload.status ?? "Unknown",
+          latencyMs: payload.latencyMs ?? null,
+          checkedAt: new Date().toISOString(),
+          hint: payload.hint ?? null,
+          source: sourceOverride ?? payload.source ?? "Unknown",
+          url: payload.url ?? null,
+          updatedAtStr: payload.updatedAt ?? new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
+    } catch (e) {
+      console.warn("Health doc update failed:", e);
+    }
   }
 
   /*--------------FLIP CARD-------------------- */
@@ -121,11 +113,14 @@ function HomePage() {
         try {
           setYearsLoading(true);
 
-          const q = query(collection(db, "master_years"), orderBy("year", "desc"));
-          const snap = await getDocs(q);
+          const { data, error } = await supabase
+            .from("master_years")
+            .select("*")
+            .order("year", { ascending: false });
 
-          const years = snap.docs
-            .map((d) => d.data())
+          if (error) throw error;
+
+          const years = data
             .filter((r) => r && r.active !== false)
             .map((r) => Number(r.year))
             .filter((y) => Number.isFinite(y));
@@ -488,13 +483,33 @@ function HomePage() {
   }, [emailSummary]);
 
   useEffect(() => {
-    const ref = doc(db, "stats_ping", "email_tasks");
-    const unsub = onSnapshot(
-      ref,
-      () => refreshRef.current?.(),
-      (err) => console.error("stats_ping listener error:", err)
-    );
-    return () => unsub();
+    let channel;
+    try {
+      channel = supabase
+        .channel('home-stats-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'stats_ping',
+            filter: 'id=eq.email_tasks'
+          },
+          () => refreshRef.current?.()
+        )
+        .subscribe((status, err) => {
+          if (err) {
+            // stats_ping table may not exist yet — silently ignore
+            console.warn('[home] stats_ping subscription error:', err?.message || err);
+          }
+        });
+    } catch (e) {
+      console.warn('[home] Failed to connect to stats_ping realtime:', e);
+    }
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
   const emailHint = useMemo(() => {

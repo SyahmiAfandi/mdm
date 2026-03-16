@@ -51,13 +51,16 @@ const utilities = [
 
 /** ANIMATION VARIANTS */
 const containerVariants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.05 } },
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.07, delayChildren: 0.15, duration: 0.3 }
+  },
 };
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 15 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
+  hidden: { opacity: 0, scale: 0.97 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.35, ease: [0.25, 0.1, 0.25, 1] } },
 };
 
 export default function UtilitiesPage() {
@@ -67,10 +70,10 @@ export default function UtilitiesPage() {
   return (
     <MotionConfig reducedMotion={reduceMotion ? 'user' : 'never'}>
       {/* PERFECT FIT CONTAINER */}
-      <div className="absolute inset-0 pt-[104px] pb-6 px-5 sm:px-6 max-w-[1400px] mx-auto flex flex-col">
+      <div className="w-full min-w-0 px-3 sm:px-5 pb-3 flex flex-col">
 
         {/* ── Hero Banner ── */}
-        <div className="relative overflow-hidden rounded-2xl mb-6 shrink-0 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 shadow-md shadow-emerald-200/50 px-6 py-5">
+        <div className="relative overflow-hidden rounded-2xl mb-4 shrink-0 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 shadow-md shadow-emerald-200/50 px-5 py-3.5">
           {/* Decorative shapes */}
           <div className="absolute -top-10 -right-10 w-44 h-44 rounded-full bg-white/10 blur-xl pointer-events-none" />
           <div className="absolute -bottom-12 right-1/4 w-32 h-32 rounded-full bg-cyan-400/20 blur-2xl pointer-events-none" />
@@ -91,10 +94,10 @@ export default function UtilitiesPage() {
         </div>
 
         {/* ── Content Area ── */}
-        <div className="flex-1 flex flex-col min-h-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6 pb-2">
+        <div className="flex flex-col bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 pb-2">
 
           <div className="flex items-center gap-3 mb-4 shrink-0">
-            <div className="w-1.5 h-6 rounded-full bg-gradient-to-b from-teal-400 to-emerald-600" />
+            <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-teal-400 to-emerald-600" />
             <div>
               <h2 className="text-base font-bold text-gray-800 tracking-tight">
                 Available Tools
@@ -107,7 +110,7 @@ export default function UtilitiesPage() {
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="flex-1 overflow-y-auto custom-scrollbar pr-3 pb-4"
+            className="pr-3 pb-4"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {utilities.map((tool, index) => {
@@ -118,11 +121,11 @@ export default function UtilitiesPage() {
                     variants={cardVariants}
                     whileHover={{ y: -3, boxShadow: '0 10px 30px rgba(0,0,0,0.06)' }}
                     onClick={() => navigate(tool.path)}
-                    className="group relative border border-gray-100 rounded-2xl shadow-sm bg-white overflow-hidden cursor-pointer hover:border-teal-200 transition-all duration-200 flex flex-col h-[180px]"
+                    className={`group relative border border-gray-100 rounded-2xl shadow-sm bg-white overflow-hidden ${tool.path !== '#' ? 'cursor-pointer hover:border-teal-200' : 'cursor-not-allowed opacity-80'} transition-all duration-300 flex flex-col h-[160px]`}
                   >
                     <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${tool.color}`} />
 
-                    <div className="p-5 flex flex-col h-full">
+                    <div className="p-4 flex flex-col h-full">
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div className={`shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br ${tool.color} flex items-center justify-center shadow-sm text-white`}>
                           <Icon size={22} className="opacity-90 group-hover:opacity-100 group-hover:scale-110 transition-all duration-300" />

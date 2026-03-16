@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { db } from "../../firebaseClient";
-import { collection, getCountFromServer, query, where } from "firebase/firestore";
+import { supabase } from "../../supabaseClient";
+
 import { usePermissions } from "../../hooks/usePermissions";
 import { motion, MotionConfig, useReducedMotion } from "framer-motion";
 import {
@@ -18,6 +18,7 @@ import {
   Package,
   Lock,
   Sparkles,
+  Boxes,
 } from "lucide-react";
 
 function classNames(...xs) {
@@ -26,13 +27,16 @@ function classNames(...xs) {
 
 /** ANIMATION VARIANTS */
 const containerVariants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.05 } },
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.07, delayChildren: 0.15, duration: 0.3 }
+  },
 };
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 15 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
+  hidden: { opacity: 0, scale: 0.97 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.35, ease: [0.25, 0.1, 0.25, 1] } },
 };
 
 /** COMPONENTS */
@@ -69,8 +73,8 @@ function Badge({ tone = "success", children }) {
 
 function SectionHeader({ label, desc, count, iconBg }) {
   return (
-    <div className="flex items-center gap-3 mb-4 shrink-0">
-      <div className={`w-1.5 h-6 rounded-full bg-gradient-to-b ${iconBg}`} />
+    <div className="flex items-center gap-3 mb-3 shrink-0">
+      <div className={`w-1.5 h-5 rounded-full bg-gradient-to-b ${iconBg}`} />
       <div>
         <h2 className="text-base font-bold text-gray-800 tracking-tight flex items-center gap-2">
           {label}
@@ -100,8 +104,8 @@ function InfoCard({ title, desc, to, icon, status = "ready", disabled, iconColor
     >
       <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${iconColor}`} />
 
-      <div className="p-4 sm:p-5 flex items-start gap-4">
-        <div className={`shrink-0 w-11 h-11 rounded-xl bg-gradient-to-br ${iconColor} flex items-center justify-center shadow-sm text-white`}>
+      <div className="p-3.5 sm:p-4 flex items-start gap-3">
+        <div className={`shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br ${iconColor} flex items-center justify-center shadow-sm text-white`}>
           {icon}
         </div>
 
@@ -119,7 +123,7 @@ function InfoCard({ title, desc, to, icon, status = "ready", disabled, iconColor
 
           <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{desc}</p>
 
-          <div className="mt-4 flex items-center font-semibold text-xs">
+          <div className="mt-2.5 flex items-center font-semibold text-xs">
             {isDisabled ? (
               <span className="flex items-center gap-1.5 text-slate-400">
                 <Lock className="w-3.5 h-3.5" /> Locked
@@ -146,12 +150,7 @@ function InfoCard({ title, desc, to, icon, status = "ready", disabled, iconColor
 
 
 export default function MasterDataHome() {
-  const { can, role } = usePermissions({
-    defaultRole: "viewer",
-    roleCollection: "roles",
-    roleField: "role",
-    rolePermissionsCollection: "rolePermissions",
-  });
+  const { can, role } = usePermissions();
 
   const reduceMotion = useReducedMotion();
   const canViewMaster = can("masterData.view") || can("masterData.*");
@@ -165,12 +164,17 @@ export default function MasterDataHome() {
     async function run() {
       try {
         setLoadingCounts(true);
-        const totalSnap = await getCountFromServer(collection(db, "master_distributors"));
-        const activeSnap = await getCountFromServer(query(collection(db, "master_distributors"), where("active", "==", true)));
+        const [{ count: totalCount, error: totalError }, { count: activeCount, error: activeError }] = await Promise.all([
+          supabase.from("master_distributors").select("id", { count: "exact", head: true }),
+          supabase.from("master_distributors").select("id", { count: "exact", head: true }).eq("active", true),
+        ]);
+
+        if (totalError) throw totalError;
+        if (activeError) throw activeError;
 
         if (!alive) return;
-        setDistCount(totalSnap.data().count || 0);
-        setActiveDistCount(activeSnap.data().count || 0);
+        setDistCount(totalCount || 0);
+        setActiveDistCount(activeCount || 0);
       } catch {
       } finally {
         if (alive) setLoadingCounts(false);
@@ -231,12 +235,11 @@ export default function MasterDataHome() {
       {
         key: "sku",
         title: "SKU Master",
-        desc: "SKU master list for product validations and reporting.",
+        desc: "Maintain SKU list for promotions use and others.",
         to: "/master-data/sku",
         icon: <Package className="w-5 h-5" />,
-        status: "coming",
-        disabled: true,
-        color: "from-slate-400 to-slate-500"
+        status: "ready",
+        color: "from-teal-500 to-emerald-500"
       },
     ],
     []
@@ -280,29 +283,31 @@ export default function MasterDataHome() {
   return (
     <MotionConfig reducedMotion={reduceMotion ? 'user' : 'never'}>
       {/* PERFECT FIT CONTAINER */}
-      <div className="absolute inset-0 pt-[104px] pb-6 px-5 sm:px-6 max-w-[1400px] mx-auto flex flex-col">
+      <div className="w-full min-w-0 px-3 sm:px-5 pb-3 flex flex-col">
 
         {/* ── Hero Banner ── */}
-        <div className="relative overflow-hidden rounded-2xl mb-6 shrink-0 bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 shadow-md shadow-blue-200 px-6 py-5">
+        <div className="relative overflow-hidden rounded-2xl mb-4 shrink-0 bg-gradient-to-r from-blue-700 via-indigo-700 to-violet-700 shadow-md shadow-blue-200 px-5 py-3.5">
           {/* Decorative shapes */}
           <div className="absolute -top-10 -right-10 w-44 h-44 rounded-full bg-white/10 blur-xl pointer-events-none" />
           <div className="absolute -bottom-12 right-1/4 w-32 h-32 rounded-full bg-indigo-400/20 blur-2xl pointer-events-none" />
 
           <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-9 h-9 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center shadow-inner">
-                  <Database size={18} className="text-white" />
-                </div>
-                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                  Master Data
-                </h1>
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center shadow-inner shrink-0">
+                <Database size={20} className="text-white" />
               </div>
-              <p className="text-indigo-100 text-xs sm:text-sm max-w-md leading-relaxed">
-                Centrally manage reference lists, mapping rules, and core configurations used across the MDM application.
-              </p>
-              <div className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-100 bg-black/20 px-2.5 py-1 rounded-full border border-white/10">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Role: {role || "-"}
+              <div>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
+                    Master Data
+                  </h1>
+                  <div className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-100 bg-black/20 px-2 py-0.5 rounded-full border border-white/10">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> {role || "-"}
+                  </div>
+                </div>
+                <p className="text-indigo-100 text-xs sm:text-sm max-w-xl leading-relaxed mt-0.5">
+                  Centrally manage reference lists, mapping rules, and core configurations used across the MDM application.
+                </p>
               </div>
             </div>
 
@@ -326,10 +331,10 @@ export default function MasterDataHome() {
         </div>
 
         {/* ── 2-Column Grid ── */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-0">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
           {/* Reference Data Column */}
-          <div className="flex flex-col min-h-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6 pb-2">
+          <div className="flex flex-col bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 pb-2">
             <SectionHeader
               label="Reference Data"
               desc="Maintain single-source-of-truth master lists."
@@ -341,11 +346,11 @@ export default function MasterDataHome() {
               variants={containerVariants}
               initial="hidden"
               animate="visible"
-              className="flex-1 overflow-y-auto custom-scrollbar pr-3 pb-4 space-y-4"
+              className="pr-2 pb-3 space-y-3"
             >
-              {mainDataItems.map((item) => (
+              {mainDataItems.map(({ key, ...item }) => (
                 <InfoCard
-                  key={item.key}
+                  key={key}
                   {...item}
                   iconColor={item.color}
                 />
@@ -354,7 +359,7 @@ export default function MasterDataHome() {
           </div>
 
           {/* Mappings & Rules Column */}
-          <div className="flex flex-col min-h-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6 pb-2">
+          <div className="flex flex-col bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 pb-2">
             <SectionHeader
               label="Mappings & Rules"
               desc="Configure relationships between data entities."
@@ -366,11 +371,11 @@ export default function MasterDataHome() {
               variants={containerVariants}
               initial="hidden"
               animate="visible"
-              className="flex-1 overflow-y-auto custom-scrollbar pr-3 pb-4 space-y-4"
+              className="pr-2 pb-3 space-y-3"
             >
-              {mappingItems.map((item) => (
+              {mappingItems.map(({ key, ...item }) => (
                 <InfoCard
-                  key={item.key}
+                  key={key}
                   {...item}
                   iconColor={item.color}
                 />

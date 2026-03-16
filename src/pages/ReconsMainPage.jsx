@@ -56,22 +56,22 @@ const ReconsMainPage = () => {
   const Section = ({ title, description, children, icon: Icon }) => (
     <motion.div
       variants={itemVariants}
-      className="flex flex-col flex-1 min-w-0 bg-white dark:bg-slate-900/40 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden"
+      className="flex flex-col flex-1 min-w-0 bg-white dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden"
     >
-      <div className="p-5 bg-violet-600 dark:bg-violet-700 flex items-start gap-4">
-        <div className="p-2.5 rounded-xl bg-white/20 text-white shadow-sm ring-1 ring-white/30 shrink-0 mt-0.5">
-          <Icon size={20} />
+      <div className="px-4 py-3 bg-violet-600 dark:bg-violet-700 flex items-center gap-3">
+        <div className="p-2 rounded-lg bg-white/20 text-white shadow-sm ring-1 ring-white/30 shrink-0">
+          <Icon size={16} />
         </div>
         <div className="flex flex-col min-w-0">
-          <h2 className="text-[17px] font-bold text-white uppercase tracking-tight leading-tight mb-0.5">
+          <h2 className="text-[14px] font-bold text-white uppercase tracking-tight leading-tight">
             {title}
           </h2>
-          <p className="text-[11px] text-violet-100 dark:text-violet-200 font-medium opacity-90 leading-snug">
+          <p className="text-[10px] text-violet-100 dark:text-violet-200 font-medium opacity-90 leading-snug">
             {description}
           </p>
         </div>
       </div>
-      <div className="flex-1 p-4 flex flex-col gap-3 overflow-y-auto custom-scrollbar bg-white dark:bg-slate-900">
+      <div className="flex-1 p-3 flex flex-col gap-2 overflow-y-auto custom-scrollbar bg-white dark:bg-slate-900">
         {children}
       </div>
     </motion.div>
@@ -88,10 +88,10 @@ const ReconsMainPage = () => {
         whileTap={{ scale: 0.99 }}
         disabled={disabled}
         onClick={() => !disabled && handleNavigate(path, label)}
-        className={`group relative flex items-center gap-4 p-3.5 w-full bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-violet-200 dark:hover:border-violet-500/30 shadow-sm hover:shadow-md transition-all duration-200 text-left overflow-hidden ${disabled ? 'opacity-50 grayscale' : ''}`}
+        className={`group relative flex items-center gap-3 p-2.5 w-full bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-violet-200 dark:hover:border-violet-500/30 shadow-sm hover:shadow-md transition-all duration-200 text-left overflow-hidden ${disabled ? 'opacity-50 grayscale' : ''}`}
       >
         {image ? (
-          <div className="shrink-0 relative w-12 h-12 rounded-xl overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700">
+          <div className="shrink-0 relative w-10 h-10 rounded-lg overflow-hidden shadow-sm border border-slate-200 dark:border-slate-700">
             <AnimatePresence mode="wait">
               <motion.img
                 key={isHovered && hoverImage ? 'hover' : 'default'}
@@ -106,17 +106,17 @@ const ReconsMainPage = () => {
             </AnimatePresence>
             <div className="absolute inset-0 bg-violet-600/5 mix-blend-multiply" />
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-[2px]">
-              <Icon size={16} className="drop-shadow-md" />
+              <Icon size={14} className="drop-shadow-md" />
             </div>
           </div>
         ) : (
-          <div className="shrink-0 p-2.5 rounded-xl bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 group-hover:scale-110 transition-transform duration-300 shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-700/50">
-            <Icon size={18} />
+          <div className="shrink-0 p-2 rounded-lg bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 group-hover:scale-110 transition-transform duration-300 shadow-sm ring-1 ring-slate-200/50 dark:ring-slate-700/50">
+            <Icon size={16} />
           </div>
         )}
 
         <div className="flex-1 min-w-0">
-          <h3 className="text-[13px] font-bold text-slate-900 dark:text-slate-100 mb-0.5 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+          <h3 className="text-[12px] font-bold text-slate-900 dark:text-slate-100 mb-0 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors leading-tight">
             {label}
           </h3>
           <p className="text-[10px] text-slate-500 dark:text-slate-500 leading-tight font-medium truncate">
@@ -132,7 +132,7 @@ const ReconsMainPage = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-120px)] flex flex-col p-2 space-y-6 max-w-[1600px] mx-auto overflow-hidden">
+    <div className="h-[calc(100vh-120px)] flex flex-col p-2 space-y-3 max-w-[1600px] mx-auto overflow-hidden">
       {/* Header Section - Lilac Theme */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -140,15 +140,15 @@ const ReconsMainPage = () => {
         className="flex items-end justify-between px-2 shrink-0"
       >
         <div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+          <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
             Reconciliation <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-indigo-600">Hub</span>
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
             Centralized operations for data matching and analysis.
           </p>
         </div>
-        <div className="hidden sm:flex items-center gap-2 text-[11px] font-bold text-violet-500/70 dark:text-violet-400/70 uppercase tracking-widest bg-violet-50 dark:bg-violet-900/10 px-3 py-1.5 rounded-full border border-violet-100 dark:border-violet-800/50 shadow-sm">
-          <Activity size={12} className="text-violet-500" /> System Active
+        <div className="hidden sm:flex items-center gap-2 text-[10px] font-bold text-violet-500/70 dark:text-violet-400/70 uppercase tracking-widest bg-violet-50 dark:bg-violet-900/10 px-2.5 py-1 rounded-full border border-violet-100 dark:border-violet-800/50 shadow-sm">
+          <Activity size={11} className="text-violet-500" /> System Active
         </div>
       </motion.div>
 
@@ -156,7 +156,7 @@ const ReconsMainPage = () => {
         variants={containerVariants}
         initial="hidden"
         animate={mounted ? "visible" : "hidden"}
-        className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 min-h-0"
+        className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 min-h-0"
       >
         {/* Operations Section */}
         <Section
@@ -248,20 +248,14 @@ const ReconsMainPage = () => {
             icon={Activity}
           />
           <ReconsCard
-            label="Mismatch List Report"
-            description="Quick-copy distributor codes & names"
-            path="/reports/mismatch-list"
-            icon={ListFilter}
-          />
-          <ReconsCard
-            label="Export Reports"
-            description="Downloadable Excel & PDF files"
-            path="/recons/export"
+            label="Recons Status Report"
+            description="Check reconciliation report status by year, month, and business type"
+            path="/reports/matrix_recons"
             icon={FileSearch}
             color="orange"
           />
           <ReconsCard
-            label="Recon Schedule Report"
+            label="Recons Tracker Report"
             description="Yearly schedule with recon status per period"
             path="/reports/recon-schedule"
             icon={CalendarDays}

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { collection, getCountFromServer, query, where } from "firebase/firestore";
-import { db } from "../firebaseClient";
+import { supabase } from "../supabaseClient";
 
 export default function useEmailTrackerSummaryCounts() {
   const [loading, setLoading] = useState(true);
@@ -11,17 +10,15 @@ export default function useEmailTrackerSummaryCounts() {
     setLoading(true);
     setError("");
     try {
-      const col = collection(db, "email_tasks");
-
-      const [newSnap, progSnap, compSnap] = await Promise.all([
-        getCountFromServer(query(col, where("status", "==", "NEW"))),
-        getCountFromServer(query(col, where("status", "==", "IN_PROGRESS"))),
-        getCountFromServer(query(col, where("status", "==", "COMPLETE"))),
+      const [newRes, progRes, compRes] = await Promise.all([
+        supabase.from("email_tasks").select('*', { count: 'exact', head: true }).eq("status", "NEW"),
+        supabase.from("email_tasks").select('*', { count: 'exact', head: true }).eq("status", "IN_PROGRESS"),
+        supabase.from("email_tasks").select('*', { count: 'exact', head: true }).eq("status", "COMPLETE"),
       ]);
 
-      const n = newSnap.data().count;
-      const p = progSnap.data().count;
-      const c = compSnap.data().count;
+      const n = newRes.count || 0;
+      const p = progRes.count || 0;
+      const c = compRes.count || 0;
 
       setCounts({ new: n, inProgress: p, complete: c, total: n + p + c });
     } catch (e) {

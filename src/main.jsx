@@ -5,6 +5,7 @@ import App from './App.jsx';
 
 import { SidebarProvider } from './context/SidebarContext';
 import { UserProvider } from './context/UserContext';
+import { PermissionsProvider } from './hooks/usePermissions';
 import { TooltipProvider } from './context/TooltipContext';
 
 import { Toaster } from 'react-hot-toast';
@@ -19,7 +20,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <UserProvider>
         <TooltipProvider>
           <SidebarProvider>
-            <App />
+            <PermissionsProvider>
+              <App />
+            </PermissionsProvider>
             <Toaster
               position="top-center"
               reverseOrder={false}

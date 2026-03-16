@@ -5,13 +5,16 @@ import { motion, MotionConfig, useReducedMotion } from 'framer-motion';
 
 /** ANIMATION VARIANTS */
 const containerVariants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.05 } },
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.07, delayChildren: 0.15, duration: 0.3 }
+  },
 };
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 15 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
+  hidden: { opacity: 0, scale: 0.97 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.35, ease: [0.25, 0.1, 0.25, 1] } },
 };
 
 export default function ToolsSelectionPage() {
@@ -45,37 +48,37 @@ export default function ToolsSelectionPage() {
   return (
     <MotionConfig reducedMotion={reduceMotion ? 'user' : 'never'}>
       {/* PERFECT FIT CONTAINER */}
-      <div className="absolute inset-0 pt-[104px] pb-6 px-5 sm:px-6 max-w-[1400px] mx-auto flex flex-col">
+      <div className="w-full min-w-0 px-3 sm:px-5 pb-3 flex flex-col">
 
         {/* ── Hero Banner ── */}
-        <div className="relative overflow-hidden rounded-2xl mb-6 shrink-0 bg-gradient-to-r from-blue-800 via-indigo-900 to-slate-900 shadow-md shadow-indigo-200/50 px-6 py-8">
+        <div className="relative overflow-hidden rounded-2xl mb-4 shrink-0 bg-gradient-to-r from-blue-800 via-indigo-900 to-slate-900 shadow-md shadow-indigo-200/50 px-5 py-3.5">
           {/* Decorative shapes */}
           <div className="absolute -top-10 -right-10 w-44 h-44 rounded-full bg-white/5 blur-xl pointer-events-none" />
           <div className="absolute -bottom-16 right-1/4 w-40 h-40 rounded-full bg-indigo-500/20 blur-2xl pointer-events-none" />
 
-          <div className="relative flex flex-col items-center text-center">
-            <div className="flex items-center justify-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shadow-inner backdrop-blur-sm">
-                <AppWindow size={20} className="text-white" />
-              </div>
+          <div className="relative flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shadow-inner backdrop-blur-sm shrink-0">
+              <AppWindow size={20} className="text-white" />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-2">
-              Select a Workspace
-            </h1>
-            <p className="text-indigo-100 text-sm max-w-lg leading-relaxed">
-              Choose a module below to access its specialized tools, dashboards, and settings.
-            </p>
+            <div>
+              <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight mb-0.5">
+                Select a Workspace
+              </h1>
+              <p className="text-indigo-100 text-xs sm:text-sm max-w-xl leading-relaxed">
+                Choose a module below to access its specialized tools, dashboards, and settings.
+              </p>
+            </div>
           </div>
         </div>
 
         {/* ── Content Area ── */}
-        <div className="flex-1 flex flex-col justify-center min-h-0 bg-transparent rounded-2xl pb-2">
+        <div className="flex flex-col justify-center bg-transparent rounded-2xl pb-2">
 
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="w-full max-w-5xl mx-auto overflow-y-auto custom-scrollbar px-2 py-4"
+            className="w-full max-w-5xl mx-auto px-2 py-4"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {tools.map((tool, index) => {
@@ -86,7 +89,7 @@ export default function ToolsSelectionPage() {
                     variants={cardVariants}
                     whileHover={{ y: -4, boxShadow: '0 12px 30px rgba(0,0,0,0.08)' }}
                     onClick={() => tool.path !== '#' && navigate(tool.path)}
-                    className={`group relative border border-gray-100 rounded-3xl shadow-sm bg-white overflow-hidden ${tool.path !== '#' ? 'cursor-pointer hover:border-indigo-200' : 'cursor-not-allowed opacity-80'} transition-all duration-300 flex flex-col h-[220px]`}
+                    className={`group relative border border-gray-100 rounded-3xl shadow-sm bg-white overflow-hidden ${tool.path !== '#' ? 'cursor-pointer hover:border-indigo-200' : 'cursor-not-allowed opacity-80'} transition-all duration-300 flex flex-col h-[190px]`}
                   >
                     <div className={`absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r ${tool.color}`} />
 

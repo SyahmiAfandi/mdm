@@ -33,22 +33,8 @@ import {
   History,
 } from "lucide-react";
 
-/* Firestore */
-import { db, auth } from "../../firebaseClient";
-import {
-  collection,
-  query,
-  orderBy,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  setDoc,
-  doc,
-  serverTimestamp,
-  runTransaction,
-  Timestamp,
-} from "firebase/firestore";
+/* Supabase */
+import { supabase } from "../../supabaseClient";
 
 /**
  * EmailTracker (Firestore)
@@ -93,6 +79,10 @@ function toJsDate(v) {
   if (!v) return null;
   if (v instanceof Date) return v;
   if (isFsTimestamp(v)) return v.toDate();
+  if (typeof v === "string") {
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return d;
+  }
   return null;
 }
 
@@ -161,16 +151,25 @@ function isNewWithin24h(row) {
 // ====== Main Component ======
 export default function EmailTracker() {
   const { user } = useUser();
-  const CURRENT_USER = safeStr(user?.name || user?.email || "");
-  const CURRENT_UID = safeStr(user?.uid || "");
+  const CURRENT_USER = safeStr(user?.display_name || user?.name || user?.email || "");
+  const CURRENT_UID = safeStr(user?.uid || user?.id || "");
 
-  //delete button hide
-  const { can } = usePermissions();
+  // permissions
+  const { can, role } = usePermissions();
   const canDelete = can("mdmEmailTracker.delete");
+  const canEdit = can("mdmEmailTracker.edit") || role === "admin";
   //console.log("canDelete:", canDelete);
 
   const [loading, setLoading] = useState(false);
-  const [rawRows, setRawRows] = useState([]); // firestore docs mapped
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [rawRows, setRawRows] = useState(() => {
+    try {
+      const cached = localStorage.getItem("email_tasks_cache");
+      return cached ? JSON.parse(cached) : [];
+    } catch (e) {
+      return [];
+    }
+  }); // local cache + fetched docs mapped
 
   // filters
   const [q, setQ] = useState("");
@@ -264,65 +263,98 @@ export default function EmailTracker() {
     };
   }, []);
 
-  // ===== Firestore: Counter (running taskNo) =====
   async function getNextTaskNo() {
-    const counterRef = doc(db, "counters", "email_tasks");
+    const { data: snap } = await supabase.from("counters").select("next").eq("id", "email_tasks").maybeSingle();
+    const current = Number(snap?.next || 1);
 
-    return await runTransaction(db, async (tx) => {
-      const snap = await tx.get(counterRef);
-
-      // If not exists, start at 1
-      if (!snap.exists()) {
-        tx.set(counterRef, { next: 2 });
-        return 1;
-      }
-
-      const current = Number(snap.data()?.next || 1);
-      tx.update(counterRef, { next: current + 1 });
-      return current;
-    });
+    if (snap) {
+      await supabase.from("counters").update({ next: current + 1 }).eq("id", "email_tasks");
+    } else {
+      await supabase.from("counters").insert({ id: "email_tasks", next: 2 });
+    }
+    return current;
   }
 
-  // ===== Firestore: Fetch =====
+  // ===== Supabase: Fetch =====
   async function fetchTasks() {
-    setLoading(true);
+    if (rawRows.length === 0) setLoading(true);
+    setIsSyncing(true);
     try {
-      const qy = query(collection(db, "email_tasks"), orderBy("createdAt", "desc"));
-      const snap = await getDocs(qy);
+      const { data: snapDocs, error, status, statusText } = await supabase
+        .from("email_tasks")
+        .select("*")
+        .order("created_at", { ascending: false });
+        
+      if (error) throw error;
 
-      const rows = snap.docs.map((d) => {
-        const data = d.data() || {};
-        return {
-          _id: d.id, // Firestore doc id
-          ...data,
-          status: normalizeStatus(data.status),
-        };
-      });
+      const rows = (snapDocs || []).map((data) => {
+        try {
+          return {
+            _id: data.id, // Supabase id
+            taskNo: data.task_no,
+            title: data.title,
+            senderEmail: data.sender_email,
+            receivedAt: data.received_at,
+            pic_assign: data.pic_assign,
+            status: normalizeStatus(data.status),
+            remark: data.remark,
+            pic_create: data.pic_create,
+            createdAt: data.created_at,
+            pic_update: data.pic_update,
+            updatedAt: data.updated_at,
+            messageId: data.message_id
+          };
+        } catch (mapErr) {
+          return null;
+        }
+      }).filter(Boolean);
 
       setRawRows(rows);
+      localStorage.setItem("email_tasks_cache", JSON.stringify(rows));
       setPage(1);
-      //toast.success(`Loaded ${rows.length} tasks`);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to load Firestore data (check rules / indexes).");
+      toast.error("Failed to load Supabase data (check rules / indexes).");
     } finally {
       setLoading(false);
+      setIsSyncing(false);
     }
   }
 
   useEffect(() => {
     fetchTasks();
+
+    // Set up Realtime subscription
+    const channel = supabase
+      .channel("email_tasks_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "email_tasks" },
+        (payload) => {
+          console.log("REALTIME UPDATE:", payload);
+          // If a change happened, just trigger a background sync
+          fetchTasks(); 
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  //--------------ping stats
   async function pingEmailStats() {
-    // one tiny doc to signal HomePage to refresh counts
-    await setDoc(
-      doc(db, "stats_ping", "email_tasks"),
-      { updatedAt: serverTimestamp() },
-      { merge: true }
-    );
+    // fire-and-forget: signal HomePage to refresh counts.
+    // Wrapped in try-catch so a missing table never blocks fetchTasks.
+    try {
+      await supabase.from("stats_ping").upsert({
+        id: "email_tasks",
+        updatedAt: new Date().toISOString()
+      });
+    } catch {
+      // silently ignore — stats_ping is a non-critical signal table
+    }
   }
 
   // ===== Actions: Assign / Done / Remark =====
@@ -332,37 +364,28 @@ export default function EmailTracker() {
     setRowBusy(rowId, "assign");
 
     try {
-      await runTransaction(db, async (transaction) => {
-        const taskRef = doc(db, "email_tasks", rowId);
-        const snap = await transaction.get(taskRef);
+      const { data, error: fetchErr } = await supabase.from("email_tasks").select("*").eq("id", rowId).maybeSingle();
+      if (fetchErr || !data) throw new Error("Task no longer exists.");
 
-        if (!snap.exists()) {
-          throw new Error("Task no longer exists.");
-        }
+      const currentStatus = normalizeStatus(data.status);
+      const currentPic = data.pic_assign;
 
-        const data = snap.data();
-        const currentStatus = normalizeStatus(data.status);
-        const currentPic = data.pic_assign;
+      // 🚨 If already assigned or not NEW → block
+      if (currentStatus !== "NEW" || currentPic) {
+        throw new Error(
+          `This email is already assigned to ${getPicName(currentPic) || "another user"}`
+        );
+      }
 
-        // 🚨 If already assigned or not NEW → block
-        if (currentStatus !== "NEW" || currentPic) {
-          throw new Error(
-            `This email is already assigned to ${getPicName(currentPic) || "another user"}`
-          );
-        }
-
-        // ✅ Safe to assign
-        transaction.update(taskRef, {
-          pic_assign: CURRENT_UID
-            ? { uid: CURRENT_UID, name: CURRENT_USER }
-            : CURRENT_USER,
-          status: "IN_PROGRESS",
-          pic_update: CURRENT_UID
-            ? { uid: CURRENT_UID, name: CURRENT_USER }
-            : CURRENT_USER,
-          updatedAt: serverTimestamp(),
-        });
-      });
+      // ✅ Safe to assign
+      const { error: updateErr } = await supabase.from("email_tasks").update({
+        pic_assign: CURRENT_USER,
+        status: "IN_PROGRESS",
+        pic_update: CURRENT_USER,
+        updated_at: new Date().toISOString(),
+      }).eq("id", rowId);
+      
+      if (updateErr) throw updateErr;
 
       toast.success("Assigned successfully ✅");
       await Promise.all([fetchTasks(), pingEmailStats()]);
@@ -390,11 +413,12 @@ export default function EmailTracker() {
 
     setRowBusy(rowId, "done");
     try {
-      await updateDoc(doc(db, "email_tasks", rowId), {
+      const { error } = await supabase.from("email_tasks").update({
         status: "COMPLETE",
-        pic_update: CURRENT_UID ? { uid: CURRENT_UID, name: CURRENT_USER } : CURRENT_USER,
-        updatedAt: serverTimestamp(),
-      });
+        pic_update: CURRENT_USER,
+        updated_at: new Date().toISOString(),
+      }).eq("id", rowId);
+      if (error) throw error;
 
       toast.success("Marked COMPLETE ✅");
       await Promise.all([fetchTasks(), pingEmailStats()]);
@@ -417,11 +441,12 @@ export default function EmailTracker() {
 
     setRowBusy(editRowId, "remark");
     try {
-      await updateDoc(doc(db, "email_tasks", editRowId), {
+      const { error } = await supabase.from("email_tasks").update({
         remark: safeStr(editRemark),
-        pic_remark: CURRENT_UID ? { uid: CURRENT_UID, name: CURRENT_USER } : CURRENT_USER,
-        remarkAt: serverTimestamp(),
-      });
+        pic_update: CURRENT_USER,
+        updated_at: new Date().toISOString(),
+      }).eq("id", editRowId);
+      if (error) throw error;
 
       toast.success("Remark saved ✅");
       await Promise.all([fetchTasks(), pingEmailStats()]);
@@ -568,25 +593,27 @@ export default function EmailTracker() {
         const receivedDate =
           item.date instanceof Date && !Number.isNaN(item.date.getTime()) ? item.date : new Date();
 
-        await addDoc(collection(db, "email_tasks"), {
-          taskNo,
+        const { error } = await supabase.from("email_tasks").insert({
+          id: crypto.randomUUID(),
+          task_no: taskNo,
           title: safeStr(item.subject) || safeStr(item.name) || "(no subject)",
-          senderEmail: safeStr(item.fromEmail) || "",
+          sender_email: safeStr(item.fromEmail) || "",
 
-          receivedAt: Timestamp.fromDate(receivedDate),
+          received_at: receivedDate.toISOString(),
 
           pic_assign: null,
           status: "NEW",
           remark: "",
 
-          pic_create: CURRENT_UID ? { uid: CURRENT_UID, name: CURRENT_USER } : CURRENT_USER,
-          createdAt: Timestamp.now(),
+          pic_create: CURRENT_USER,
+          created_at: new Date().toISOString(),
 
-          pic_update: CURRENT_UID ? { uid: CURRENT_UID, name: CURRENT_USER } : CURRENT_USER,
-          updatedAt: Timestamp.now(),
+          pic_update: CURRENT_USER,
+          updated_at: new Date().toISOString(),
 
-          messageId: safeStr(item.messageId) || "",
+          message_id: safeStr(item.messageId) || "",
         });
+        if (error) throw error;
       }
 
       toast.success(`Submitted ${ready.length} email task(s) ✅`);
@@ -607,7 +634,8 @@ export default function EmailTracker() {
     setRowBusy(rowId, "delete");
 
     try {
-      await deleteDoc(doc(db, "email_tasks", rowId));
+      const { error } = await supabase.from("email_tasks").delete().eq("id", rowId);
+      if (error) throw error;
       toast.success("Deleted ✅");
       setDeleteRow(null);
       await Promise.all([fetchTasks(), pingEmailStats()]);
@@ -751,10 +779,11 @@ export default function EmailTracker() {
         {/* ── Actions ── */}
         <div className="flex flex-col items-stretch gap-2 shrink-0">
           <motion.button
-            whileTap={{ scale: 0.97 }}
-            whileHover={{ scale: 1.02 }}
+            whileTap={canEdit ? { scale: 0.97 } : {}}
+            whileHover={canEdit ? { scale: 1.02 } : {}}
             onClick={openEmailModal}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-indigo-200 hover:shadow-lg hover:shadow-indigo-300 transition-all"
+            disabled={!canEdit}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-indigo-200 transition-all ${canEdit ? 'hover:shadow-lg hover:shadow-indigo-300' : 'opacity-50 cursor-not-allowed'}`}
           >
             <Plus className="h-3.5 w-3.5" />
             New Task
@@ -775,10 +804,10 @@ export default function EmailTracker() {
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={fetchTasks}
-              disabled={loading}
+              disabled={isSyncing || loading}
               className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-60 shadow-sm transition-all"
             >
-              <RefreshCcw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCcw className={`h-3.5 w-3.5 ${isSyncing || loading ? "animate-spin" : ""}`} />
               Sync
             </motion.button>
           </div>
@@ -1011,13 +1040,13 @@ export default function EmailTracker() {
                           <IconBtn title="View Details" onClick={() => openDetail(r)} disabled={assignBusy || doneBusy || remarkBusy}>
                             <ArrowUpRight size={13} />
                           </IconBtn>
-                          <IconBtn title={assignBusy ? "Assigning…" : "Assign to Me"} onClick={() => assignToMe(r)} disabled={!canAssign || assignBusy || doneBusy || remarkBusy}>
+                          <IconBtn title={assignBusy ? "Assigning…" : "Assign to Me"} onClick={() => assignToMe(r)} disabled={!canAssign || !canEdit || assignBusy || doneBusy || remarkBusy}>
                             {assignBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus2 size={13} />}
                           </IconBtn>
-                          <IconBtn title={doneBusy ? "Saving…" : "Mark Complete"} onClick={() => markDone(r)} disabled={!canDone || assignBusy || doneBusy || remarkBusy}>
+                          <IconBtn title={doneBusy ? "Saving…" : "Mark Complete"} onClick={() => markDone(r)} disabled={!canDone || !canEdit || assignBusy || doneBusy || remarkBusy}>
                             {doneBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 size={13} />}
                           </IconBtn>
-                          <IconBtn title="Edit Remark" onClick={() => openRemarkEditor(r._id, safeStr(r.remark))} disabled={assignBusy || doneBusy || remarkBusy}>
+                          <IconBtn title="Edit Remark" onClick={() => openRemarkEditor(r._id, safeStr(r.remark))} disabled={!canEdit || assignBusy || doneBusy || remarkBusy}>
                             <Pencil size={13} />
                           </IconBtn>
                           {canDelete && (

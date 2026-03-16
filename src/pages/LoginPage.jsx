@@ -1,5 +1,5 @@
 // src/pages/LoginPage.jsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -12,26 +12,34 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
+import { supabase } from "../supabaseClient";
 
 /**
  * IMPORTANT:
  * - This version logs in ONLY ONCE via loginWithUsername()
- * - loginWithUsername() already does Firebase Auth signInWithEmailAndPassword()
- * - We do NOT signIn again in this page (prevents "double login" + signOut issues)
+ * - loginWithUsername() already does Supabase auth for the main login flow
+ * - Recovery links are handled on this same page via supabase.auth.updateUser()
  */
 import {
   loginWithUsername,
   logout,
   buildPermissionSnapshot,
   persistPermissionSnapshot,
-} from "../firebaseClient";
+} from "../supabaseAuth";
 
 const PERM_STORAGE_KEY = "ff.permissions";
 const ROLE_STORAGE_KEY = "ff.role";
 
+function getLicenseValidUntil(license) {
+  return license?.valid_until ?? license?.validUntil ?? null;
+}
+
 export default function LoginPage() {
   const [username, setUserName] = useState("");
   const [password, setPassword] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [recoveryConfirm, setRecoveryConfirm] = useState("");
+  const [recoveryMode, setRecoveryMode] = useState(false);
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -39,7 +47,6 @@ export default function LoginPage() {
   const [success, setSuccess] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
 
-  // UI-only
   const [showPassword, setShowPassword] = useState(false);
   const [capsOn, setCapsOn] = useState(false);
   const [shake, setShake] = useState(false);
@@ -51,18 +58,22 @@ export default function LoginPage() {
     return !!username.trim() && !!password && !loading && !success;
   }, [username, password, loading, success]);
 
+  const canSubmitRecovery = useMemo(() => {
+    return !!recoveryPassword && !!recoveryConfirm && !loading;
+  }, [recoveryPassword, recoveryConfirm, loading]);
+
   const clearLocalPerms = () => {
     try {
       localStorage.removeItem(PERM_STORAGE_KEY);
       localStorage.removeItem(ROLE_STORAGE_KEY);
       localStorage.removeItem("username");
-    } catch { }
+    } catch {}
   };
 
   const hardSignOutEverywhere = async () => {
     try {
       await logout();
-    } catch { }
+    } catch {}
     clearLocalPerms();
   };
 
@@ -71,75 +82,136 @@ export default function LoginPage() {
     setTimeout(() => setShake(false), 420);
   };
 
-  const handleLogin = async () => {
+  useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    if (hashParams.get("type") === "recovery") {
+      setRecoveryMode(true);
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setRecoveryMode(true);
+        setError("");
+        setSuccess(false);
+        toast("Set a new password to finish recovery.", { id: "login" });
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleRecoverySubmit = async () => {
+    if (!recoveryPassword) {
+      toast.error("New password is required", { id: "login" });
+      return;
+    }
+    if (recoveryPassword.length < 6) {
+      toast.error("Password must be at least 6 characters", { id: "login" });
+      return;
+    }
+    if (recoveryPassword !== recoveryConfirm) {
+      toast.error("Passwords do not match", { id: "login" });
+      return;
+    }
+
     setLoading(true);
     setError("");
-
-    // prevent duplicates
     toast.dismiss("login");
 
     try {
-      // ✅ Single login source-of-truth:
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: recoveryPassword,
+      });
+      if (updateError) throw updateError;
+
+      await logout();
+      setRecoveryMode(false);
+      setRecoveryPassword("");
+      setRecoveryConfirm("");
+      setLoading(false);
+      setSuccess(false);
+      toast.success("Password updated. Please sign in with your new password.", { id: "login" });
+      window.history.replaceState({}, document.title, "/login");
+    } catch (e) {
+      console.error(e);
+      setLoading(false);
+      setError(e?.message || "Failed to update password");
+      toast.error(e?.message || "Failed to update password", { id: "login" });
+      triggerShake();
+    }
+  };
+
+  const handleLogin = async () => {
+    console.log("DEBUG LOGIN: handleLogin started");
+    setLoading(true);
+    setError("");
+    toast.dismiss("login");
+
+    try {
+      console.time("handleLogin:total");
+      const t0 = performance.now();
+
       const result = await loginWithUsername(username, password);
+      console.log(`[handleLogin] loginWithUsername finished in ${(performance.now() - t0).toFixed(0)}ms`, result);
       const { user, role, profile, license, licenseValid, permissions } = result;
 
       const resolvedRole = role || "viewer";
+      console.log("DEBUG RESOLVED ROLE:", resolvedRole);
 
-      // ✅ License gate
       if (!licenseValid) {
         await hardSignOutEverywhere();
         setLoading(false);
 
         let expText = "N/A";
         try {
-          const d = license?.validUntil?.toDate?.() || null;
-          if (d) expText = d.toISOString().slice(0, 10);
-        } catch { }
+          const validUntil = getLicenseValidUntil(license);
+          if (validUntil) {
+            expText = new Date(validUntil).toISOString().slice(0, 10);
+          }
+        } catch {}
 
-        toast.error(`❌ Account expired on ${expText}`, { id: "login" });
+        toast.error(`Account expired on ${expText}`, { id: "login" });
         triggerShake();
         return;
       }
 
-      // ✅ Put into context (for UI / headers / permissions)
       setRole(resolvedRole);
       setUser({
-        uid: user?.uid || "",
-        name: profile?.name || profile?.username || username,
+        id: user?.id || "",
+        display_name: profile?.display_name || profile?.name || profile?.username || username,
         email: profile?.email || user?.email || "",
       });
 
-      // ✅ Persist UI bits
       localStorage.setItem(
         "username",
         profile?.name || profile?.username || username
       );
       localStorage.setItem(ROLE_STORAGE_KEY, resolvedRole);
 
-      // ✅ Permission snapshot for sidebar/guards
       const permSnapshot = buildPermissionSnapshot(resolvedRole, permissions);
       persistPermissionSnapshot(resolvedRole, permSnapshot);
+      try {
+        localStorage.setItem("perm_cache_v1", JSON.stringify({
+          role: resolvedRole,
+          perms: permSnapshot,
+          expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+        }));
+      } catch {}
 
       setLoading(false);
       setSuccess(true);
+      console.timeEnd("handleLogin:total");
 
-      toast.success("🎉 Welcome! Logged in successfully.", { id: "login" });
-
-      // Navigate after a short success animation
-      setTimeout(() => {
-        setFadeOut(true);
-        setTimeout(() => navigate("/"), 450);
-      }, 900);
+      toast.success("Welcome! Logged in successfully.", { id: "login" });
+      setFadeOut(true);
+      setTimeout(() => navigate("/"), 50);
     } catch (e) {
       console.error(e);
       setLoading(false);
-
-      // Ensure no partial session remains
       await hardSignOutEverywhere();
 
       const msg = e?.message || "Invalid credentials";
       setError(msg);
-
       toast.error(msg, { id: "login" });
       triggerShake();
     }
@@ -173,13 +245,13 @@ export default function LoginPage() {
         @keyframes shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-8px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
         @keyframes pop { 0% { transform: scale(.96); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         @keyframes float-icon { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-        
+
         .anim-in { animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; }
         .anim-out { animation: fadeOut 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
         .anim-shake { animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
         .anim-pop { animation: pop .35s ease-out both; }
         .float-icon { animation: float-icon 4s ease-in-out infinite; }
-        
+
         .glass-card {
           background: rgba(17, 24, 39, 0.45);
           backdrop-filter: blur(24px);
@@ -214,17 +286,19 @@ export default function LoginPage() {
         }
       `}</style>
 
-      {/* Background elements */}
       <div className="bg-rays"></div>
       <div className="orb-1"></div>
       <div className="orb-2"></div>
 
-      {/* Grid Pattern */}
-      <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik0wIDM5LjVoNDBWMGgtMXYzOXoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNCkiLz48L3N2Zz4=')" }}></div>
+      <div
+        className="absolute inset-0 opacity-20"
+        style={{
+          backgroundImage:
+            "url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTAgMGg0MHY0MEgweiIgZmlsbD0ibm9uZSIvPjxwYXRoIGQ9Ik0wIDM5LjVoNDBWMGgtMXYzOXoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNCkiLz48L3N2Zz4=')",
+        }}
+      ></div>
 
-      {/* Content */}
       <div className={["relative z-10 w-full max-w-[420px]", fadeOut ? "anim-out" : "anim-in"].join(" ")}>
-        {/* Logo / Header Icon above card */}
         <div className="flex justify-center mb-8">
           <div className="relative group float-icon">
             <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl blur opacity-40 group-hover:opacity-60 transition duration-500"></div>
@@ -234,87 +308,147 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div
-          className={[
-            "glass-card rounded-3xl p-8 sm:p-10",
-            shake ? "anim-shake" : "",
-          ].join(" ")}
-        >
-          {/* Header */}
+        <div className={["glass-card rounded-3xl p-8 sm:p-10", shake ? "anim-shake" : ""].join(" ")}>
           <div className="text-center mb-8">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-2">
-              Welcome back
+              {recoveryMode ? "Reset password" : "Welcome back"}
             </h2>
             <p className="text-sm text-slate-400">
-              Enter your credentials to access your dashboard
+              {recoveryMode
+                ? "Enter a new password to complete your recovery link."
+                : "Enter your credentials to access your dashboard"}
             </p>
           </div>
 
-          {/* Username */}
-          <div className="mb-5">
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 ml-1">
-              Username
-            </label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
-                <User size={18} />
-              </span>
-              <input
-                type="text"
-                placeholder="Enter your username"
-                className="glass-input w-full pl-11 pr-4 py-3.5 rounded-xl focus:outline-none"
-                value={username}
-                onChange={(e) => setUserName(e.target.value)}
-                disabled={loading || success}
-                autoComplete="username"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && canSubmit) handleLogin();
-                }}
-                aria-label="Username"
-              />
-            </div>
-          </div>
+          {recoveryMode ? (
+            <>
+              <div className="mb-5">
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 ml-1">
+                  New Password
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
+                    <Lock size={18} />
+                  </span>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter new password"
+                    className="glass-input w-full pl-11 pr-12 py-3.5 rounded-xl focus:outline-none"
+                    value={recoveryPassword}
+                    onChange={(e) => setRecoveryPassword(e.target.value)}
+                    disabled={loading}
+                    autoComplete="new-password"
+                    onKeyDown={(e) => {
+                      setCapsOn(!!e.getModifierState?.("CapsLock"));
+                      if (e.key === "Enter" && canSubmitRecovery) handleRecoverySubmit();
+                    }}
+                    onBlur={() => setCapsOn(false)}
+                    aria-label="New Password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+                    disabled={loading || !recoveryPassword}
+                    title={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
 
-          {/* Password */}
-          <div className="mb-6">
-            <div className="flex justify-between items-end mb-2 ml-1">
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Password
-              </label>
-            </div>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
-                <Lock size={18} />
-              </span>
+              <div className="mb-6">
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 ml-1">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
+                    <Lock size={18} />
+                  </span>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Confirm new password"
+                    className="glass-input w-full pl-11 pr-4 py-3.5 rounded-xl focus:outline-none"
+                    value={recoveryConfirm}
+                    onChange={(e) => setRecoveryConfirm(e.target.value)}
+                    disabled={loading}
+                    autoComplete="new-password"
+                    onKeyDown={(e) => {
+                      setCapsOn(!!e.getModifierState?.("CapsLock"));
+                      if (e.key === "Enter" && canSubmitRecovery) handleRecoverySubmit();
+                    }}
+                    onBlur={() => setCapsOn(false)}
+                    aria-label="Confirm Password"
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mb-5">
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 ml-1">
+                  Username
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
+                    <User size={18} />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Enter your username"
+                    className="glass-input w-full pl-11 pr-4 py-3.5 rounded-xl focus:outline-none"
+                    value={username}
+                    onChange={(e) => setUserName(e.target.value)}
+                    disabled={loading || success}
+                    autoComplete="username"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && canSubmit) handleLogin();
+                    }}
+                    aria-label="Username"
+                  />
+                </div>
+              </div>
 
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                className="glass-input w-full pl-11 pr-12 py-3.5 rounded-xl focus:outline-none"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading || success}
-                autoComplete="current-password"
-                onKeyDown={(e) => {
-                  setCapsOn(!!e.getModifierState?.("CapsLock"));
-                  if (e.key === "Enter" && canSubmit) handleLogin();
-                }}
-                onBlur={() => setCapsOn(false)}
-                aria-label="Password"
-              />
-
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
-                disabled={loading || success || !password}
-                title={showPassword ? "Hide password" : "Show password"}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
+              <div className="mb-6">
+                <div className="flex justify-between items-end mb-2 ml-1">
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Password
+                  </label>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
+                    <Lock size={18} />
+                  </span>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Password"
+                    className="glass-input w-full pl-11 pr-12 py-3.5 rounded-xl focus:outline-none"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={loading || success}
+                    autoComplete="current-password"
+                    onKeyDown={(e) => {
+                      setCapsOn(!!e.getModifierState?.("CapsLock"));
+                      if (e.key === "Enter" && canSubmit) handleLogin();
+                    }}
+                    onBlur={() => setCapsOn(false)}
+                    aria-label="Password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+                    disabled={loading || success || !password}
+                    title={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
 
           {capsOn && (
             <div className="flex items-center gap-2 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-3 mb-6 anim-pop">
@@ -323,32 +457,31 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Login Button */}
           <button
-            onClick={handleLogin}
-            disabled={!canSubmit}
-            className="shimmer-btn w-full relative overflow-hidden rounded-xl py-3.5 font-bold text-white
-                        disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
-            title={!username.trim() || !password ? "Enter username and password" : ""}
+            onClick={recoveryMode ? handleRecoverySubmit : handleLogin}
+            disabled={recoveryMode ? !canSubmitRecovery : !canSubmit}
+            className="shimmer-btn w-full relative overflow-hidden rounded-xl py-3.5 font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
+            title={recoveryMode ? "" : !username.trim() || !password ? "Enter username and password" : ""}
           >
             <span className="relative flex items-center justify-center gap-2">
               {loading ? (
                 <>
                   <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Authenticating...
+                  {recoveryMode ? "Updating password..." : "Authenticating..."}
                 </>
               ) : success ? (
                 <>
                   <CheckCircle className="text-white anim-pop" size={20} />
                   Success!
                 </>
+              ) : recoveryMode ? (
+                "Update Password"
               ) : (
                 "Sign In"
               )}
             </span>
           </button>
 
-          {/* Inline error */}
           {error && (
             <div className="mt-5 flex items-start gap-2 text-sm text-red-200 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 anim-pop">
               <AlertCircle className="mt-0.5 text-red-400 shrink-0" size={16} />
@@ -357,7 +490,6 @@ export default function LoginPage() {
           )}
         </div>
 
-        {/* Footer subtle text */}
         <p className="mt-8 text-xs text-slate-500 text-center font-medium tracking-wide">
           SECURE ENCRYPTED LOGIN
         </p>

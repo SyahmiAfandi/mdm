@@ -151,8 +151,8 @@ export default function ReportSummaryPage() {
     defaultYear = defaultYear - 1;
   }
   const monthNames = [
-    'January','February','March','April','May','June','July',
-    'August','September','October','November','December',
+    'January', 'February', 'March', 'April', 'May', 'June', 'July',
+    'August', 'September', 'October', 'November', 'December',
   ];
 
   // ---- Main state hooks ----
@@ -375,7 +375,7 @@ export default function ReportSummaryPage() {
   function handleToggleCol(col) {
     setVisibleCols((prev) => ({ ...prev, [col]: !prev[col] }));
   }
-    // Helper for rendering status cell
+  // Helper for rendering status cell
   function getStatusCell(status, hasType) {
     if (!hasType) return <span className="text-gray-400 italic">Not Applicable</span>;
     if (status === undefined || status === null || /^\s*$/.test(status)) {
@@ -395,7 +395,7 @@ export default function ReportSummaryPage() {
   useEffect(() => { setCurrentPage(1); }, [searchTerm, filters, sortConfig]);
 
   // Add this just above your component (or in your CSS)
-const tooltipStyle = `
+  const tooltipStyle = `
   .custom-tooltip {
     position: absolute;
     z-index: 40;
@@ -416,7 +416,7 @@ const tooltipStyle = `
 `;
 
 
-<style>{tooltipStyle}</style>
+  <style>{tooltipStyle}</style>
   return (
     <>
       <motion.div
@@ -524,101 +524,101 @@ const tooltipStyle = `
         {/* 2) Combined: Hide/Show Search, Search Input, + Chart/Table Toggle */}
         {/* =============================================================== */}
         <div className="flex items-center justify-between">
-        {/* LEFT: Hide/Show Search & Search Bar (Table view only) */}
-        <div className="flex items-center gap-4">
-          {!viewMode && (
-            <>
-              <button
-                type="button"
-                onClick={() => setShowSearchBar((v) => !v)}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-1.5 rounded-md shadow-sm transition-colors duration-150"
-              >
-                {showSearchBar ? <EyeOff size={16} /> : <Eye size={16} />}
-                {showSearchBar ? 'Hide Search' : 'Show Search'}
-              </button>
-              <AnimatePresence initial={false}>
-                {showSearchBar && (
-                  <motion.div
-                    key="search"
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.3, ease: 'easeOut' }}
-                    className="relative"
-                  >
-                    <Search
-                      size={18}
-                      className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Search Distributor code or name…"
-                      className="pl-10 pr-2 py-1.5 w-64 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-colors duration-150"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </>
-          )}
-        </div>
-
-        {/* RIGHT: Show Columns + Toggle */}
-        <div className="flex items-center gap-3">
-          {/* Show Columns: only in Table View */}
-          {!viewMode && (
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setShowDropdown((v) => !v)}
-                className="flex items-center gap-1 bg-white border border-gray-300 rounded-md px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 shadow transition"
-              >
-                <Eye className="w-4 h-4 mr-1" />
-                Show Columns
-              </button>
-              {showDropdown && (
-                <div className="absolute left-0 z-50 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg p-2 space-y-1">
-                  {Object.entries(visibleCols).map(([col, val]) => (
-                    <label key={col} className="flex items-center gap-2 cursor-pointer px-2 py-1 rounded hover:bg-gray-100">
-                      <input
-                        type="checkbox"
-                        checked={val}
-                        onChange={() => handleToggleCol(col)}
-                        className="form-checkbox"
+          {/* LEFT: Hide/Show Search & Search Bar (Table view only) */}
+          <div className="flex items-center gap-4">
+            {!viewMode && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowSearchBar((v) => !v)}
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-1.5 rounded-md shadow-sm transition-colors duration-150"
+                >
+                  {showSearchBar ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showSearchBar ? 'Hide Search' : 'Show Search'}
+                </button>
+                <AnimatePresence initial={false}>
+                  {showSearchBar && (
+                    <motion.div
+                      key="search"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.3, ease: 'easeOut' }}
+                      className="relative"
+                    >
+                      <Search
+                        size={18}
+                        className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400"
                       />
-                      <span className="text-xs">
-                        {col === 'BusinessType' ? 'Business Type'
-                          : col === 'Distributor' ? 'Distributor Code'
-                          : col === 'DistributorName' ? 'Distributor Name'
-                          : col}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Chart/Table Toggle: always visible, always at the end/right */}
-          <button
-            type="button"
-            onClick={() => setViewMode((v) => !v)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-1.5 rounded-md shadow-sm transition-colors duration-150"
-          >
-            {viewMode ? (
-              <>
-                <Table size={18} className="inline-block mr-1" />
-                Table View
-              </>
-            ) : (
-              <>
-                <BarChart2 size={18} className="inline-block mr-1" />
-                Chart View
+                      <input
+                        type="text"
+                        placeholder="Search Distributor code or name…"
+                        className="pl-10 pr-2 py-1.5 w-64 bg-white border border-gray-300 rounded-md text-sm text-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 shadow-sm transition-colors duration-150"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </>
             )}
-          </button>
+          </div>
+
+          {/* RIGHT: Show Columns + Toggle */}
+          <div className="flex items-center gap-3">
+            {/* Show Columns: only in Table View */}
+            {!viewMode && (
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setShowDropdown((v) => !v)}
+                  className="flex items-center gap-1 bg-white border border-gray-300 rounded-md px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 shadow transition"
+                >
+                  <Eye className="w-4 h-4 mr-1" />
+                  Show Columns
+                </button>
+                {showDropdown && (
+                  <div className="absolute left-0 z-50 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg p-2 space-y-1">
+                    {Object.entries(visibleCols).map(([col, val]) => (
+                      <label key={col} className="flex items-center gap-2 cursor-pointer px-2 py-1 rounded hover:bg-gray-100">
+                        <input
+                          type="checkbox"
+                          checked={val}
+                          onChange={() => handleToggleCol(col)}
+                          className="form-checkbox"
+                        />
+                        <span className="text-xs">
+                          {col === 'BusinessType' ? 'Business Type'
+                            : col === 'Distributor' ? 'Distributor Code'
+                              : col === 'DistributorName' ? 'Distributor Name'
+                                : col}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Chart/Table Toggle: always visible, always at the end/right */}
+            <button
+              type="button"
+              onClick={() => setViewMode((v) => !v)}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-1.5 rounded-md shadow-sm transition-colors duration-150"
+            >
+              {viewMode ? (
+                <>
+                  <Table size={18} className="inline-block mr-1" />
+                  Table View
+                </>
+              ) : (
+                <>
+                  <BarChart2 size={18} className="inline-block mr-1" />
+                  Chart View
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
 
 
 
@@ -768,7 +768,7 @@ const tooltipStyle = `
                         <th
                           key={report}
                           className="px-2 py-2 w-24"
-                          //style={{ minWidth: 90, maxWidth: 90 }}
+                        //style={{ minWidth: 90, maxWidth: 90 }}
                         >
                           {report}
                         </th>
@@ -870,7 +870,7 @@ const tooltipStyle = `
                           <td
                             key={report}
                             className={cellClass}
-                            //style={{ minWidth: 90, maxWidth: 90 }}
+                          //style={{ minWidth: 90, maxWidth: 90 }}
                           >
                             {display}
                           </td>
@@ -919,11 +919,10 @@ const tooltipStyle = `
                       <button
                         key={idx}
                         onClick={() => setCurrentPage(idx + 1)}
-                        className={`px-2 py-1 text-xs rounded border ${
-                          currentPage === idx + 1
-                            ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-white hover:bg-gray-100'
-                        }`}
+                        className={`px-2 py-1 text-xs rounded border ${currentPage === idx + 1
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white hover:bg-gray-100'
+                          }`}
                       >
                         {idx + 1}
                       </button>

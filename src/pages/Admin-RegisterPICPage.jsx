@@ -1,8 +1,5 @@
 import React, { useState } from "react";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth } from "../firebaseClient";
-import { db } from "../firebaseClient";
+import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
 import { UserPlus2 } from "lucide-react";
@@ -34,28 +31,32 @@ function RegisterPICPage() {
     try {
       setLoading(true);
 
-      // 1️⃣ Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        form.email,
-        form.password
-      );
-
-      const uid = userCredential.user.uid;
-
-      // 2️⃣ Store profile in Firestore
-      await setDoc(doc(db, "users", uid), {
-        name: form.name,
+      // 1️⃣ Create user in Supabase Auth
+      const { data: authData, error: authErr } = await supabase.auth.signUp({
         email: form.email,
-        role: form.role,
-        createdAt: serverTimestamp(),
+        password: form.password,
       });
 
-      // 3️⃣ (Optional but recommended) Store role separately if you use roles collection
-      await setDoc(doc(db, "roles", uid), {
-        role: form.role,
-        createdAt: serverTimestamp(),
+      if (authErr) throw authErr;
+
+      const uid = authData.user?.id;
+      if (!uid) throw new Error("Failed to get user ID after registration.");
+
+      // 2️⃣ Store profile in Supabase profiles table
+      const { error: profErr } = await supabase.from("profiles").insert({
+        id: uid,
+        display_name: form.name,
+        email: form.email,
+        username: form.email,
       });
+      if (profErr) throw profErr;
+
+      // 3️⃣ Store role in user_roles table
+      const { error: roleErr } = await supabase.from("user_roles").insert({
+        id: uid,
+        role: form.role,
+      });
+      if (roleErr) throw roleErr;
 
       toast.success("New User registered successfully!");
 

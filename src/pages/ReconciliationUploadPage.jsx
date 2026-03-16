@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { BriefcaseIcon, DocumentTextIcon } from '@heroicons/react/24/solid';
 import { getBackendUrl } from "../config/backend";
+import { usePermissions } from '../hooks/usePermissions';
 
 function ReconciliationUploadPage() {
   const [files, setFiles] = useState([]);
@@ -30,9 +31,13 @@ function ReconciliationUploadPage() {
   const uploadEndpointOSDP = location.state?.uploadEndpointOSDP || '/upload_HPCRAWDATA_OSDP';
   const uploadEndpointPBI = location.state?.uploadEndpointPBI || '/upload_FCSHPC_PBI';
   const nextPath = location.state?.nextPath || '/recons/summary';
-  const reportTypeId =location.state?.reportTypeId || sessionStorage.getItem("reportTypeId") || "";
-  const reportTypeName =location.state?.reportTypeName || sessionStorage.getItem("reportTypeName") || fromButton;
+  const reportTypeId = location.state?.reportTypeId || sessionStorage.getItem("reportTypeId") || "";
+  const reportTypeName = location.state?.reportTypeName || sessionStorage.getItem("reportTypeName") || fromButton;
   const [loadingNext, setLoadingNext] = useState(false);
+
+  const { can, role } = usePermissions();
+
+  const canEdit = can("tools.reconciliation.edit") || can("tools.*") || role === "admin";
 
   const osdpInputRef = useRef();
   const pbiInputRef = useRef();
@@ -189,42 +194,42 @@ function ReconciliationUploadPage() {
   };
 
   // THE MAIN FIX: dynamic rendering and safe toast logic
-const handleUploadOSDP = async () => {
-  if (!files.length) return alert("Please choose at least one file.");
-  setLoadingOSDP(true);
-  setError(null);
+  const handleUploadOSDP = async () => {
+    if (!files.length) return alert("Please choose at least one file.");
+    setLoadingOSDP(true);
+    setError(null);
 
-  const formData = new FormData();
-  Array.from(files).forEach(file => formData.append('files', file));
+    const formData = new FormData();
+    Array.from(files).forEach(file => formData.append('files', file));
 
-  try {
-    const endpoint = location.state?.uploadEndpointOSDP || '/upload_HPCRAWDATA_OSDP';
-    const res = await axios.post(`${requireBackend()}${endpoint}`, formData);
-    // Use these directly from response
-    const sorted_data = Array.isArray(res.data?.sorted_data) ? res.data.sorted_data : [];
-    const summary_data = Array.isArray(res.data?.summary_data) ? res.data.summary_data : [];
+    try {
+      const endpoint = location.state?.uploadEndpointOSDP || '/upload_HPCRAWDATA_OSDP';
+      const res = await axios.post(`${requireBackend()}${endpoint}`, formData);
+      // Use these directly from response
+      const sorted_data = Array.isArray(res.data?.sorted_data) ? res.data.sorted_data : [];
+      const summary_data = Array.isArray(res.data?.summary_data) ? res.data.summary_data : [];
 
-    // Set React state (table will re-render)
-    setSortedData(sorted_data);
-    setSummaryData(summary_data);
+      // Set React state (table will re-render)
+      setSortedData(sorted_data);
+      setSummaryData(summary_data);
 
-    // Use server response to decide toast, not state
-    if (summary_data && summary_data.length > 0) {
-      toast.success('OSDP upload successful!');
-    } else if (sorted_data && sorted_data.length > 0) {
-      toast.success('OSDP upload successful! (Details)');
-    } else {
-      toast.error("Upload finished, but no records found.");
+      // Use server response to decide toast, not state
+      if (summary_data && summary_data.length > 0) {
+        toast.success('OSDP upload successful!');
+      } else if (sorted_data && sorted_data.length > 0) {
+        toast.success('OSDP upload successful! (Details)');
+      } else {
+        toast.error("Upload finished, but no records found.");
+      }
+    } catch (err) {
+      setError("Upload failed: " + (err?.response?.data?.error || err.message));
+      toast.error("Upload failed: " + (err?.response?.data?.error || err.message));
+      setSortedData([]);
+      setSummaryData([]);
+    } finally {
+      setLoadingOSDP(false);
     }
-  } catch (err) {
-    setError("Upload failed: " + (err?.response?.data?.error || err.message));
-    toast.error("Upload failed: " + (err?.response?.data?.error || err.message));
-    setSortedData([]);
-    setSummaryData([]);
-  } finally {
-    setLoadingOSDP(false);
-  }
-};
+  };
 
 
   const handleUploadPBI = async () => {
@@ -323,6 +328,13 @@ const handleUploadOSDP = async () => {
               {fromButton}
             </span>
           </div>
+
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-600">Mode:</span>
+            <span className="inline-block px-2 py-0.5 text-xs rounded bg-gray-200 text-gray-700 font-semibold">
+              {canEdit ? "Editable" : "Read only"}
+            </span>
+          </div>
         </motion.div>
 
         <motion.button
@@ -355,8 +367,8 @@ const handleUploadOSDP = async () => {
               setLoadingNext(false);
             }
           }}
-          className={`px-4 py-2 text-white text-sm rounded ${summaryData.length === 0 || summaryDataPBI.length === 0 ? 'bg-gray-500 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-600'}`}
-          disabled={summaryData.length === 0 || summaryDataPBI.length === 0}
+          className={`px-4 py-2 text-white text-sm rounded ${summaryData.length === 0 || summaryDataPBI.length === 0 || !canEdit ? 'bg-gray-500 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-600'}`}
+          disabled={summaryData.length === 0 || summaryDataPBI.length === 0 || !canEdit}
         >
           Next →
         </motion.button>
@@ -376,7 +388,7 @@ const handleUploadOSDP = async () => {
           >
             <DropOverlay active={dragActiveOSDP} />
             <h2 className="text-xl font-semibold mb-4">Upload OSDP Files</h2>
-            <input ref={osdpInputRef} type="file" multiple accept=".xlsx,.xls" onChange={handleFileChange} className="block w-full text-sm mb-2" />
+            <input ref={osdpInputRef} type="file" disabled={!canEdit} multiple accept=".xlsx,.xls" onChange={handleFileChange} className="block w-full text-sm mb-2 disabled:opacity-50" />
             {droppedFilesOSDP > 0 ? (
               <p className="text-green-600 text-sm mb-2">{droppedFilesOSDP} file(s) dropped here</p>
             ) : (
@@ -407,15 +419,15 @@ const handleUploadOSDP = async () => {
                 >
                   <button
                     onClick={handleUploadOSDP}
-                    disabled={loadingOSDP}
-                    className={`px-4 py-2 rounded text-white ${loadingOSDP ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
+                    disabled={loadingOSDP || !canEdit}
+                    className={`px-4 py-2 rounded text-white ${loadingOSDP || !canEdit ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
                   >
                     {loadingOSDP ? 'Uploading...' : 'Upload'}
                   </button>
                   <button
                     onClick={handleClear}
-                    disabled={loadingOSDP}
-                    className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-500"
+                    disabled={loadingOSDP || !canEdit}
+                    className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-500 disabled:opacity-50"
                   >
                     Clear Data
                   </button>
@@ -464,7 +476,7 @@ const handleUploadOSDP = async () => {
           >
             <DropOverlay active={dragActivePBI} />
             <h2 className="text-xl font-semibold mb-4">Upload Power BI Files</h2>
-            <input ref={pbiInputRef} type="file" multiple accept=".xlsx,.xls" onChange={handleFileChangePBI} className="block w-full text-sm mb-2" />
+            <input ref={pbiInputRef} type="file" disabled={!canEdit} multiple accept=".xlsx,.xls" onChange={handleFileChangePBI} className="block w-full text-sm mb-2 disabled:opacity-50" />
             {droppedFilesPBI > 0 ? (
               <p className="text-green-600 text-sm mb-2">{droppedFilesPBI} file(s) dropped here</p>
             ) : (
@@ -495,15 +507,15 @@ const handleUploadOSDP = async () => {
                 >
                   <button
                     onClick={handleUploadPBI}
-                    disabled={loadingPBI}
-                    className={`px-4 py-2 rounded text-white ${loadingPBI ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
+                    disabled={loadingPBI || !canEdit}
+                    className={`px-4 py-2 rounded text-white ${loadingPBI || !canEdit ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
                   >
                     {loadingPBI ? 'Uploading...' : 'Upload'}
                   </button>
                   <button
                     onClick={handleClearPBI}
-                    disabled={loadingPBI}
-                    className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-500"
+                    disabled={loadingPBI || !canEdit}
+                    className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-500 disabled:opacity-50"
                   >
                     Clear Data
                   </button>

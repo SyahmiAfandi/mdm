@@ -1,23 +1,12 @@
 // ReconCellsPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  runTransaction,
-  serverTimestamp,
-  where,
-  writeBatch,
-} from "firebase/firestore";
-import { db } from "../../../../firebaseClient";
+import { supabase } from "../../../../supabaseClient";
 import { useUser } from "../../../../context/UserContext";
 import { RefreshCcw, Save, Pencil, Search, Trash2 } from "lucide-react";
 
-const COL_CELLS = "reconCells";
-const COL_PERIODS = "reconPeriods";
+const COL_CELLS = "recon_cells";
+const COL_PERIODS = "recon_periods";
 const COL_DIST = "master_distributors";
 const COL_RPT = "master_reporttypes";
 const COL_BUS = "master_businesses";
@@ -35,6 +24,25 @@ const STATUSES = [
 
 function normalize(str = "") {
   return String(str ?? "").trim();
+}
+
+function mapCell(v = {}) {
+  return {
+    ...v,
+    id: v.id ?? "",
+    periodId: v.periodId ?? v.period_id ?? "",
+    businessType: v.businessType ?? v.business_type ?? "",
+    distributorCode: v.distributorCode ?? v.distributor_code ?? "",
+    distributorName: v.distributorName ?? v.distributor_name ?? "",
+    reportTypeId: v.reportTypeId ?? v.report_type_id ?? "",
+    reportTypeName: v.reportTypeName ?? v.report_type_name ?? "",
+    reconsNo: v.reconsNo ?? v.recons_no ?? 0,
+    createdAt: v.createdAt ?? v.created_at ?? null,
+    createdBy: v.createdBy ?? v.created_by ?? "",
+    updatedAt: v.updatedAt ?? v.updated_at ?? null,
+    updatedBy: v.updatedBy ?? v.updated_by ?? "",
+    pic: v.pic ?? v.updatedBy ?? v.updated_by ?? "",
+  };
 }
 
 function makeCellId(periodId, businessType, distributorCode, reportTypeId) {
@@ -138,10 +146,14 @@ export default function ReconCellsPage() {
     [reportTypes, reportTypeId]
   );
 
-  // ----------------- Fetchers -----------------
   async function fetchPeriods() {
-    const snap = await getDocs(collection(db, COL_PERIODS));
-    const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const { data: snapData, error } = await supabase.from(COL_PERIODS).select('*');
+    if (error) throw error;
+    const data = (snapData || []).map((v) => ({
+      ...v,
+      periodId: normalize(v.periodId ?? v.period_id ?? v.id),
+      monthName: normalize(v.monthName ?? v.month_name ?? ""),
+    }));
     data.sort((a, b) =>
       String(b.periodId || b.id).localeCompare(String(a.periodId || a.id))
     );
@@ -150,13 +162,13 @@ export default function ReconCellsPage() {
   }
 
   async function fetchBusinesses() {
-    const snap = await getDocs(collection(db, COL_BUS));
-    const data = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
+    const { data: snapData, error } = await supabase.from(COL_BUS).select('*');
+    if (error) throw error;
+    const data = (snapData || [])
       .map((v) => {
-        const code = normalize(v.code ?? v.businessType ?? v.businessCode ?? v.id);
-        const name = normalize(v.name ?? v.businessName ?? code);
-        const order = numOr(v.order ?? v.sortOrder ?? v.orderNo, 999);
+        const code = normalize(v.code ?? v.businessType ?? v.businessCode ?? v.business_code ?? v.id);
+        const name = normalize(v.name ?? v.businessName ?? v.business_name ?? code);
+        const order = numOr(v.order ?? v.sortOrder ?? v.orderNo ?? v.sort_order, 999);
         const st = normalize(v.status ?? (v.active === false ? "Inactive" : "Active"));
         return { code, name, order, status: st };
       })
@@ -174,22 +186,22 @@ export default function ReconCellsPage() {
   }
 
   async function fetchDistributors() {
-    const distSnap = await getDocs(collection(db, COL_DIST));
+    const { data: distSnap, error } = await supabase.from(COL_DIST).select('*');
+    if (error) throw error;
 
-    const dist = distSnap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
+    const dist = (distSnap || [])
       .map((x) => {
-        const code = normalize(x.code ?? x.distributorCode ?? x.id);
-        const name = normalize(x.name ?? x.distributorName ?? "");
+        const code = normalize(x.code ?? x.distributorCode ?? x.distributor_code ?? x.id);
+        const name = normalize(x.name ?? x.distributorName ?? x.distributor_name ?? "");
 
         // business type list
-        const btRaw = normalize(x.businessType ?? x.bizType ?? "");
+        const btRaw = normalize(x.businessType ?? x.business_type ?? x.bizType ?? "");
         const btList = btRaw
           ? btRaw.split(",").map((s) => normalize(s)).filter(Boolean)
           : [];
 
         // ✅ country support (string or array)
-        const country = normalize(x.country ?? x.countryCode ?? "");
+        const country = normalize(x.country ?? x.countryCode ?? x.country_code ?? "");
         const countries = Array.isArray(x.countries)
           ? x.countries.map((c) => normalize(c)).filter(Boolean)
           : [];
@@ -203,13 +215,14 @@ export default function ReconCellsPage() {
   }
 
   async function fetchReportTypes() {
-    const rptSnap = await getDocs(collection(db, COL_RPT));
-    const rpt = rptSnap.docs
-      .map((d) => {
-        const v = d.data() || {};
-        const id = normalize(v.code ?? v.reportTypeId ?? d.id);
-        const name = normalize(v.name ?? v.reportTypeName ?? id);
-        const order = numOr(v.order ?? v.sortOrder ?? v.orderNo, 999);
+    const { data: rptSnap, error } = await supabase.from(COL_RPT).select('*');
+    if (error) throw error;
+    
+    const rpt = (rptSnap || [])
+      .map((v) => {
+        const id = normalize(v.code ?? v.reportTypeId ?? v.report_type_code ?? v.id);
+        const name = normalize(v.name ?? v.reportTypeName ?? v.report_type_name ?? id);
+        const order = numOr(v.order ?? v.sortOrder ?? v.orderNo ?? v.sort_order, 999);
         const st = normalize(v.status ?? (v.active === false ? "Inactive" : "Active"));
         return { id, name, order, status: st };
       })
@@ -226,12 +239,13 @@ export default function ReconCellsPage() {
   }
 
   async function fetchBizReportTypeMapping() {
-    const snap = await getDocs(collection(db, COL_MAP));
+    const { data: snapData, error } = await supabase.from(COL_MAP).select('*');
+    if (error) throw error;
+    
     const m = new Map();
 
-    for (const d of snap.docs) {
-      const v = d.data() || {};
-      const b = normalize(v.businessType ?? v.businessCode ?? v.code);
+    for (const v of (snapData || [])) {
+      const b = normalize(v.businessType ?? v.businessCode ?? v.business_code ?? v.code);
       if (!b) continue;
 
       // Shape B: { businessType, reportTypeIds: [] }
@@ -247,7 +261,7 @@ export default function ReconCellsPage() {
       }
 
       // Shape A: { businessType, reportTypeId, active }
-      const rt = normalize(v.reportTypeId ?? v.reportTypeCode ?? v.reportType);
+      const rt = normalize(v.reportTypeId ?? v.reportTypeCode ?? v.report_type_code ?? v.reportType);
       const active = v.active === undefined ? true : Boolean(v.active);
       if (rt && active) {
         const set = m.get(b) || new Set();
@@ -261,15 +275,15 @@ export default function ReconCellsPage() {
 
   async function fetchReconConfigCountries() {
     try {
-      const cfgSnap = await getDoc(doc(db, COL_RECON_CFG, "default"));
+      const { data: cfgSnap, error } = await supabase.from(COL_RECON_CFG).select('*').eq('id', 'default').maybeSingle();
 
-      if (!cfgSnap.exists()) {
+      if (error || !cfgSnap) {
         setAllowedCountries(null);
         return;
       }
 
-      const cfg = cfgSnap.data() || {};
-      const raw = cfg.allowedCountries;
+      const cfg = cfgSnap || {};
+      const raw = cfg.allowedCountries ?? cfg.allowed_countries;
 
       let arr = [];
       if (Array.isArray(raw)) arr = raw;
@@ -288,13 +302,14 @@ export default function ReconCellsPage() {
     if (!periodId || !businessType) return;
     setLoading(true);
     try {
-      const q = query(
-        collection(db, COL_CELLS),
-        where("periodId", "==", periodId),
-        where("businessType", "==", businessType)
-      );
-      const snap = await getDocs(q);
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const { data: snapData, error } = await supabase
+        .from(COL_CELLS)
+        .select('*')
+        .eq('period_id', periodId)
+        .eq('business_type', businessType);
+        
+      if (error) throw error;
+      const data = (snapData || []).map(mapCell);
 
       data.sort((a, b) => {
         const an = (a.distributorName || "").localeCompare(b.distributorName || "");
@@ -305,7 +320,7 @@ export default function ReconCellsPage() {
       setRows(data);
     } catch (e) {
       console.error(e);
-      toast.error(`${e?.code || "error"}: ${e?.message || "Failed to load reconCells"}`);
+      toast.error(`${e?.code || "error"}: ${e?.message || "Failed to load reconciliation cells"}`);
     } finally {
       setLoading(false);
     }
@@ -388,18 +403,18 @@ export default function ReconCellsPage() {
     const cellId = makeCellId(periodId, businessType, distributorCode, reportTypeId);
     setLoading(true);
     try {
-      const snap = await getDoc(doc(db, COL_CELLS, cellId));
-      if (!snap.exists()) {
+      const { data: d, error } = await supabase.from(COL_CELLS).select('*').eq('id', cellId).maybeSingle();
+      const row = d ? mapCell(d) : null;
+      if (error || !row) {
         toast("No existing cell. You will create a new one.", { icon: "ℹ️" });
         setStatus("no_data");
         setRemark("");
         setLocked(false);
         return;
       }
-      const d = snap.data();
-      setStatus(d.status || "no_data");
-      setRemark(d.remark || "");
-      const isLocked = (d.status || "") === "match";
+      setStatus(row.status || "no_data");
+      setRemark(row.remark || "");
+      const isLocked = (row.status || "") === "match";
       setLocked(isLocked);
       toast.success(isLocked ? "Loaded (LOCKED: Match)" : "Loaded existing cell");
     } catch (e) {
@@ -435,102 +450,105 @@ export default function ReconCellsPage() {
     }
 
     const cellId = makeCellId(periodId, businessType, distributorCode, reportTypeId);
-    const cellRef = doc(db, COL_CELLS, cellId);
-
     const distName = selectedDistributor?.name || "";
     const rptName = selectedReportType?.name || "";
 
     const payload = {
-      periodId,
+      period_id: periodId,
       year: Number(String(periodId).split("-")[0] || 0),
       month: Number(String(periodId).split("-")[1] || 0),
 
-      businessType,
-      distributorCode,
-      distributorName: distName,
-      reportTypeId,
-      reportTypeName: rptName,
+      business_type: businessType,
+      distributor_code: distributorCode,
+      distributor_name: distName,
+      report_type_id: reportTypeId,
+      report_type_name: rptName,
 
       status,
       remark: remark || "",
 
       pic: actorName,
-      picUid: actorUid,
-      picEmail: actorEmail,
+      pic_uid: actorUid,
+      pic_email: actorEmail,
+      updated_by: actorName,
     };
 
     setLoading(true);
     try {
-      const res = await runTransaction(db, async (tx) => {
-        const snap = await tx.get(cellRef);
-        const prev = snap.exists() ? snap.data() : null;
+      const { data: prevRaw, error: readErr } = await supabase.from(COL_CELLS).select('*').eq('id', cellId).maybeSingle();
+      if (readErr) throw readErr;
+      const prev = prevRaw ? mapCell(prevRaw) : null;
 
-        if (prev?.status === "match") {
-          const err = new Error("LOCKED_MATCH");
-          err.code = "LOCKED_MATCH";
-          throw err;
-        }
+      if (prev?.status === "match") {
+        const err = new Error("LOCKED_MATCH");
+        err.code = "LOCKED_MATCH";
+        throw err;
+      }
 
-        const prevReconsNo = Number(prev?.reconsNo || 0) || 0;
-        const nextReconsNo = prevReconsNo + 1;
+      const prevReconsNo = Number(prev?.reconsNo || 0) || 0;
+      const nextReconsNo = prevReconsNo + 1;
 
-        const createdAt = prev?.createdAt || serverTimestamp();
-        const createdBy = prev?.createdBy || actorName;
+      const createdAt = prev?.createdAt || new Date().toISOString();
+      const createdBy = prev?.createdBy || actorName;
 
-        tx.set(
-          cellRef,
-          {
-            ...payload,
-            reconsNo: nextReconsNo,
-            updatedAt: serverTimestamp(),
-            createdAt,
-            createdBy,
-          },
-          { merge: true }
-        );
+      // 2) Upsert main record
+      const { error: upsertErr } = await supabase.from(COL_CELLS).upsert({
+        id: cellId,
+        ...payload,
+        recons_no: nextReconsNo,
+        updated_at: new Date().toISOString(),
+        created_at: createdAt,
+        created_by: createdBy,
+      }, { onConflict: 'id' });
 
-        const attemptSnapshot = {
-          cellId,
-          reconsNo: nextReconsNo,
+      if (upsertErr) throw upsertErr;
 
-          periodId: payload.periodId,
-          year: payload.year,
-          month: payload.month,
+      // 3) Insert attempt
+      const attemptSnapshot = {
+        cellId,
+        recons_no: nextReconsNo,
 
-          businessType: payload.businessType,
-          distributorCode: payload.distributorCode,
-          distributorName: payload.distributorName,
-          reportTypeId: payload.reportTypeId,
-          reportTypeName: payload.reportTypeName,
+        period_id: payload.period_id,
+        year: payload.year,
+        month: payload.month,
 
-          status: payload.status,
-          remark: payload.remark,
+        business_type: payload.business_type,
+        distributor_code: payload.distributor_code,
+        distributor_name: payload.distributor_name,
+        report_type_id: payload.report_type_id,
+        report_type_name: payload.report_type_name,
 
-          pic: actorName,
-          picUid: actorUid,
-          picEmail: actorEmail,
-          updatedAt: serverTimestamp(),
-          clientUpdatedAt: new Date().toISOString(),
+        status: payload.status,
+        remark: payload.remark,
 
-          previousStatus: prev?.status || (snap.exists() ? "no_data" : "new"),
-          previousReconsNo: prevReconsNo,
-          source: "ui",
-        };
+        pic: actorName,
+        pic_uid: actorUid,
+        pic_email: actorEmail,
+        updated_at: new Date().toISOString(),
+        client_updated_at: new Date().toISOString(),
 
-        const attemptRef = doc(db, COL_CELLS, cellId, "attempts", String(nextReconsNo));
-        tx.set(attemptRef, attemptSnapshot);
+        previous_status: prev?.status || (prev ? "no_data" : "new"),
+        previous_recons_no: prevReconsNo,
+        source: "ui",
+      };
 
-        if (COL_GLOBAL_ATTEMPTS) {
-          const globalRef = doc(collection(db, COL_GLOBAL_ATTEMPTS));
-          tx.set(globalRef, attemptSnapshot);
-        }
+      try {
+        await supabase.from('reconCells_attempts').insert(attemptSnapshot);
+      } catch (e) {
+        console.warn('Could not insert into reconCells_attempts (might not exist):', e);
+      }
 
-        return { nextReconsNo, willLock: payload.status === "match" };
-      });
+      if (COL_GLOBAL_ATTEMPTS) {
+        try {
+          await supabase.from(COL_GLOBAL_ATTEMPTS).insert(attemptSnapshot);
+        } catch(e) { /* ignore */ }
+      }
 
-      setLocked(res.willLock);
+      const willLock = payload.status === "match";
+
+      setLocked(willLock);
       toast.success(
-        `Saved ${cellId} (Recons #${res.nextReconsNo})${res.willLock ? " — LOCKED" : ""}`
+        `Saved ${cellId} (Recons #${nextReconsNo})${willLock ? " — LOCKED" : ""}`
       );
       await fetchCells();
     } catch (e) {
@@ -566,26 +584,17 @@ export default function ReconCellsPage() {
     setLoading(true);
     const toastId = toast.loading("Deleting selected...");
     try {
-      // 1) Delete main docs (batch)
-      const batch = writeBatch(db);
-      selectedRows.forEach((r) => {
-        batch.delete(doc(db, COL_CELLS, r.id));
-      });
-      await batch.commit();
+      // 1) Delete main docs
+      const idsToDelete = selectedRows.map((r) => r.id);
+      
+      const { error: delErr } = await supabase.from(COL_CELLS).delete().in('id', idsToDelete);
+      if (delErr) throw delErr;
 
-      // 2) Delete attempts subcollection docs (best effort)
-      for (const r of selectedRows) {
-        try {
-          const attemptsRef = collection(db, COL_CELLS, r.id, "attempts");
-          const attemptsSnap = await getDocs(attemptsRef);
-          if (!attemptsSnap.empty) {
-            const b2 = writeBatch(db);
-            attemptsSnap.docs.forEach((ad) => b2.delete(ad.ref));
-            await b2.commit();
-          }
-        } catch (e) {
-          console.warn("Attempts delete skipped/failed for", r.id, e);
-        }
+      // 2) Delete attempts (best effort)
+      try {
+        await supabase.from('reconCells_attempts').delete().in('cellId', idsToDelete);
+      } catch (e) {
+        console.warn("Attempts delete skipped/failed:", e);
       }
 
       setSelectedIds(new Set());

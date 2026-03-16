@@ -2,9 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useMediaQuery } from 'react-responsive';
-import { db } from '../firebaseClient';
-
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { supabase } from '../supabaseClient';
 
 
 function ReconsHPCPage() {
@@ -120,14 +118,18 @@ function ReconsHPCPage() {
 
     const fetchMappings = async () => {
       try {
-        const q = query(collection(db, 'recons_button_mapping'), where('page', '==', 'HPC'));
-        const snap = await getDocs(q);
+        const { data, error } = await supabase
+          .from('recons_button_mapping')
+          .select('*')
+          .eq('page', 'HPC');
+          
+        if (error) throw error;
+        
         const map = {};
-        snap.docs.forEach(doc => {
-          const data = doc.data();
-          map[data.buttonLabel] = {
-            id: data.reportTypeId,
-            name: data.reportTypeName
+        data?.forEach(row => {
+          map[row.buttonLabel] = {
+            id: row.reportTypeId,
+            name: row.reportTypeName
           };
         });
         setBtnMappings(map);
