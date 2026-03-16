@@ -7,9 +7,11 @@ import { DownloadIcon } from 'lucide-react'; // or another icon of your choice
 import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react'; // spinner icon
 import { ChevronDownIcon } from 'lucide-react';
+import { useUser } from "../context/UserContext";
 
 function ReconciliationSummary() {
   const navigate = useNavigate();
+  const { user } = useUser();
   const [osdpData, setOsdpData] = useState([]);
   const [pbiData, setPbiData] = useState([]);
   const [source, setSource] = useState('OSDP');
@@ -23,7 +25,11 @@ function ReconciliationSummary() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportYear, setExportYear] = useState('2025');
   const [exportMonth, setExportMonth] = useState('January');
-  const creator = localStorage.getItem('username') || 'Auto Generated';
+  const creator =
+    user?.display_name?.trim() ||
+    localStorage.getItem('display_name') ||
+    localStorage.getItem('username') ||
+    'Auto Generated';
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -106,15 +112,31 @@ function ReconciliationSummary() {
           reportType: fromButton,
           records: dataToExport,
           source,
-          pic: creator,
+          displayName: creator,
+          updatedBy: creator,
         })
       });
 
-      if (!response.ok) throw new Error('Failed to export to Google Sheets');
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = result?.errors?.[0]?.error || result?.error || 'Failed to export to Report Database';
+        throw new Error(message);
+      }
 
-      toast.success('Successfully exported to Report Database!', { id: toastId });
+      const updated = Number(result?.updated || 0);
+      const locked = Number(result?.locked || 0);
+      const errorCount = Array.isArray(result?.errors) ? result.errors.length : 0;
+
+      if (updated === 0 && errorCount > 0) {
+        throw new Error(result.errors[0]?.error || 'No records were exported to Supabase.');
+      }
+
+      const summary = [`${updated} updated`];
+      if (locked) summary.push(`${locked} locked`);
+      if (errorCount) summary.push(`${errorCount} errors`);
+      toast.success(`Exported to Report Database: ${summary.join(', ')}`, { id: toastId });
     } catch (err) {
-      toast.error('Failed to export to Report Database.', { id: toastId });
+      toast.error(err?.message || 'Failed to export to Report Database.', { id: toastId });
     } finally {
       setShowExportModal(false);
     }

@@ -127,9 +127,11 @@ function ReconsHPCPage() {
         
         const map = {};
         data?.forEach(row => {
-          map[row.buttonLabel] = {
-            id: row.reportTypeId,
-            name: row.reportTypeName
+          const buttonLabel = row.button_label ?? row.buttonLabel;
+          if (!buttonLabel) return;
+          map[buttonLabel] = {
+            id: row.report_type_id ?? row.reportTypeId,
+            name: row.report_type_name ?? row.reportTypeName
           };
         });
         setBtnMappings(map);

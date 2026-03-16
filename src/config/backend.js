@@ -29,7 +29,13 @@ export function isVercelProdDomain(hostname) {
 
 export function getBackendMode() {
   const m = localStorage.getItem(KEY_MODE);
-  return m === "local" || m === "tunnel" ? m : "tunnel";
+  if (m === "local" || m === "tunnel") return m;
+
+  if (typeof window !== "undefined" && !isProdSiteHost(window.location.hostname)) {
+    return "local";
+  }
+
+  return "tunnel";
 }
 export function saveBackendMode(mode) {
   localStorage.setItem(KEY_MODE, mode === "local" ? "local" : "tunnel");
@@ -59,5 +65,10 @@ export function clearBackendUrlLocal() {
 
 export function getBackendUrl() {
   const mode = getBackendMode();
-  return mode === "local" ? getBackendUrlLocal() : getBackendUrlTunnel();
+  if (mode === "local") return getBackendUrlLocal();
+
+  const tunnelUrl = getBackendUrlTunnel();
+  if (tunnelUrl) return tunnelUrl;
+
+  return getBackendUrlLocal();
 }

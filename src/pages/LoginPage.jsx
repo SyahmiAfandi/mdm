@@ -67,6 +67,7 @@ export default function LoginPage() {
       localStorage.removeItem(PERM_STORAGE_KEY);
       localStorage.removeItem(ROLE_STORAGE_KEY);
       localStorage.removeItem("username");
+      localStorage.removeItem("display_name");
     } catch {}
   };
 
@@ -185,6 +186,10 @@ export default function LoginPage() {
       localStorage.setItem(
         "username",
         profile?.name || profile?.username || username
+      );
+      localStorage.setItem(
+        "display_name",
+        profile?.display_name || profile?.name || profile?.username || username
       );
       localStorage.setItem(ROLE_STORAGE_KEY, resolvedRole);
 

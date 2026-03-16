@@ -9,6 +9,11 @@ import { usePermissions } from '../../hooks/usePermissions';
 
 const MAPPING_COL = 'recons_button_mapping';
 const REPORT_TYPE_COL = 'master_reporttypes';
+const mapReportType = (row) => ({
+    ...row,
+    code: row.code ?? row.report_type_code ?? '',
+    name: row.name ?? row.report_type_name ?? '',
+});
 
 const IC_BUTTONS = [
     'Daily Sales Summary',
@@ -40,39 +45,28 @@ export default function ReconsButtonMappingPage() {
 
     const [loading, setLoading] = useState(false);
     const [reportTypes, setReportTypes] = useState([]);
-    const [mappings, setMappings] = useState({}); // { "page_buttonLabel": "reportTypeId" }
+    const [mappings, setMappings] = useState({});
 
     async function loadData() {
         try {
             setLoading(true);
 
-            // 1. Load Report Types
-            let rtSnap;
-            try {
-                rtSnap = await getDocs(query(collection(db, REPORT_TYPE_COL), orderBy('code', 'asc')));
-            } catch (err) {
-                console.error("Error loading report types:", err);
-                toast.error(`Report Types error: ${err.message}`);
-                return;
-            }
-            setReportTypes(rtSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            const [{ data: rtData, error: rtError }, { data: mapData, error: mapError }] = await Promise.all([
+                supabase.from(REPORT_TYPE_COL).select('*').order('code', { ascending: true }),
+                supabase.from(MAPPING_COL).select('*'),
+            ]);
+            if (rtError) throw rtError;
+            if (mapError) throw mapError;
 
-            // 2. Load Mappings
-            let mapSnap;
-            try {
-                mapSnap = await getDocs(collection(db, MAPPING_COL));
-            } catch (err) {
-                // If it's just missing collection, don't throw error
-                console.warn("Mappings collection empty or missing:", err);
-                setMappings({});
-                return;
-            }
+            setReportTypes((rtData || []).map(mapReportType));
 
             const mapObj = {};
-            mapSnap.docs.forEach(d => {
-                const data = d.data();
-                if (data.page && data.buttonLabel) {
-                    mapObj[`${data.page}_${data.buttonLabel}`] = data.reportTypeId;
+            (mapData || []).forEach((row) => {
+                const page = row.page;
+                const buttonLabel = row.button_label ?? row.buttonLabel;
+                const reportTypeId = row.report_type_id ?? row.reportTypeId ?? '';
+                if (page && buttonLabel) {
+                    mapObj[`${page}_${buttonLabel}`] = reportTypeId;
                 }
             });
             setMappings(mapObj);
@@ -100,50 +94,48 @@ export default function ReconsButtonMappingPage() {
 
         try {
             setLoading(true);
-            const batchPromises = [];
+            const updatedAt = new Date().toISOString();
+            const payloads = [];
 
-            // Save IC mappings
-            IC_BUTTONS.forEach(btn => {
+            IC_BUTTONS.forEach((btn) => {
                 const key = `IC_${btn}`;
                 const reportTypeId = mappings[key] || '';
-                const rtObj = reportTypes.find(rt => rt.code === reportTypeId);
+                const rtObj = reportTypes.find((rt) => rt.code === reportTypeId);
                 const reportTypeName = rtObj ? rtObj.name : '';
 
-                const docId = `IC_${btn.replace(/\s+/g, '_')}`;
-                batchPromises.push(
-                    setDoc(doc(db, MAPPING_COL, docId), {
-                        page: 'IC',
-                        buttonLabel: btn,
-                        reportTypeId,
-                        reportTypeName,
-                        updatedAt: serverTimestamp(),
-                        updatedBy: email,
-                    }, { merge: true })
-                );
+                payloads.push({
+                    id: `IC_${btn.replace(/\s+/g, '_')}`,
+                    page: 'IC',
+                    button_label: btn,
+                    report_type_id: reportTypeId,
+                    report_type_name: reportTypeName,
+                    updated_at: updatedAt,
+                    updated_by: email,
+                });
             });
 
-            // Save HPC mappings
-            HPC_BUTTONS.forEach(btn => {
+            HPC_BUTTONS.forEach((btn) => {
                 const key = `HPC_${btn}`;
                 const reportTypeId = mappings[key] || '';
-                const rtObj = reportTypes.find(rt => rt.code === reportTypeId);
+                const rtObj = reportTypes.find((rt) => rt.code === reportTypeId);
                 const reportTypeName = rtObj ? rtObj.name : '';
 
-                const docId = `HPC_${btn.replace(/\s+/g, '_')}`;
-                batchPromises.push(
-                    setDoc(doc(db, MAPPING_COL, docId), {
-                        page: 'HPC',
-                        buttonLabel: btn,
-                        reportTypeId,
-                        reportTypeName,
-                        updatedAt: serverTimestamp(),
-                        updatedBy: email,
-                    }, { merge: true })
-                );
+                payloads.push({
+                    id: `HPC_${btn.replace(/\s+/g, '_')}`,
+                    page: 'HPC',
+                    button_label: btn,
+                    report_type_id: reportTypeId,
+                    report_type_name: reportTypeName,
+                    updated_at: updatedAt,
+                    updated_by: email,
+                });
             });
 
-            await Promise.all(batchPromises);
-            toast.success('Mappings saved successfully ✅');
+            const { error } = await supabase.from(MAPPING_COL).upsert(payloads, { onConflict: 'id' });
+            if (error) throw error;
+
+            toast.success('Mappings saved successfully');
+            await loadData();
         } catch (e) {
             console.error("Save error:", e);
             toast.error(`Save failed: ${e.message}`);
@@ -159,7 +151,7 @@ export default function ReconsButtonMappingPage() {
             </div>
             <div className="p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {buttons.map(btn => (
+                    {buttons.map((btn) => (
                         <div key={btn} className="flex flex-col gap-1">
                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                 {btn}
@@ -171,7 +163,7 @@ export default function ReconsButtonMappingPage() {
                                 disabled={!canEdit || loading}
                             >
                                 <option value="">-- No Mapping --</option>
-                                {reportTypes.map(rt => (
+                                {reportTypes.map((rt) => (
                                     <option key={rt.id} value={rt.code}>
                                         {rt.code} - {rt.name}
                                     </option>
@@ -186,7 +178,6 @@ export default function ReconsButtonMappingPage() {
 
     return (
         <div className="p-4 md:p-6 max-w-5xl mx-auto">
-            {/* Header */}
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
                 <div className="flex items-start gap-3">
                     <button
@@ -252,7 +243,7 @@ export default function ReconsButtonMappingPage() {
                         </h4>
                         <p className="text-amber-700 dark:text-amber-500 text-xs leading-relaxed">
                             Mapped Report Type IDs (e.g., R001) are sent to the reconciliation upload page.
-                            Ensure these codes match the "Code" field in Master Data — Report Types exactly.
+                            Ensure these codes match the "Code" field in Master Data - Report Types exactly.
                         </p>
                     </div>
                 </>

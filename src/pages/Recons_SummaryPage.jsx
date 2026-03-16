@@ -6,6 +6,7 @@ import { DownloadIcon, Loader2, ChevronDownIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { APP_FULL_NAME } from '../config';
 import { getBackendUrl } from "../config/backend";
+import { useUser } from "../context/UserContext";
 
 const monthNames = [
   'January','February','March','April','May','June',
@@ -37,6 +38,7 @@ function getDefaultMonthYear() {
 function ReconciliationSummary() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useUser();
 
   // --- Place this at the top ---
   const resultId = location.state?.result_id || sessionStorage.getItem('reconcileResultId');
@@ -57,7 +59,11 @@ function ReconciliationSummary() {
   const { defaultMonth, defaultYear } = getDefaultMonthYear();
   const [exportYear, setExportYear] = useState(defaultYear);
   const [exportMonth, setExportMonth] = useState(defaultMonth);
-  const creator = localStorage.getItem('username') || 'Auto Generated';
+  const creator =
+    user?.display_name?.trim() ||
+    localStorage.getItem('display_name') ||
+    localStorage.getItem('username') ||
+    'Auto Generated';
   const [loading, setLoading] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
   const backendUrl = getBackendUrl();
@@ -152,13 +158,30 @@ function ReconciliationSummary() {
           reportType: fromButton,
           records: dataToExport,
           source,
-          pic: creator,
+          displayName: creator,
+          updatedBy: creator,
         })
       });
-      if (!response.ok) throw new Error('Failed to export to Google Sheets');
-      toast.success('Successfully exported to Report Database!', { id: toastId });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = result?.errors?.[0]?.error || result?.error || 'Failed to export to Report Database';
+        throw new Error(message);
+      }
+
+      const updated = Number(result?.updated || 0);
+      const locked = Number(result?.locked || 0);
+      const errorCount = Array.isArray(result?.errors) ? result.errors.length : 0;
+
+      if (updated === 0 && errorCount > 0) {
+        throw new Error(result.errors[0]?.error || 'No records were exported to Supabase.');
+      }
+
+      const summary = [`${updated} updated`];
+      if (locked) summary.push(`${locked} locked`);
+      if (errorCount) summary.push(`${errorCount} errors`);
+      toast.success(`Exported to Report Database: ${summary.join(', ')}`, { id: toastId });
     } catch (err) {
-      toast.error('Failed to export to Report Database.', { id: toastId });
+      toast.error(err?.message || 'Failed to export to Report Database.', { id: toastId });
     } finally {
       setShowExportModal(false);
     }

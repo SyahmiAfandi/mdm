@@ -1,13 +1,201 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Database, Eye, Info, Plus, RefreshCcw, Save, Search, Trash2, Undo2 } from 'lucide-react';
+import { Database, Download, Eye, Info, Plus, RefreshCcw, Save, Search, Trash2, Undo2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { supabase } from '../../supabaseClient';
 import UfsPromoBlueprintDetailModal from './UfsPromoBlueprintDetailModal';
+import {
+  DEFAULT_PROMOTION_CONTROL_SCHEME_ID,
+  PROMOTION_CONTROL_DEFAULTS,
+} from './ufsPromotionControlDefaults';
 
 const GENERATED_PROMOTION_TABLE = 'ufs_promotion_blueprints';
 const GENERATED_PROMOTION_ROW_TABLE = 'ufs_promotion_blueprint_rows';
+const PROMOTION_CONTROL_TABLE = 'promo_scheme_controls';
+const BLUEPRINT_EXPORT_COLUMNS = [
+  'PromotionCode',
+  'PromotionDescription',
+  'PromotionType',
+  'NationalBudget',
+  'TestScheme',
+  'BuyBase',
+  'GetBase',
+  'MultiplicationFactor',
+  'StartDate',
+  'EndDate',
+  'PromotionStatus',
+  'PromotionQuotaLevel',
+  'PromotionQuotaOn',
+  'PromotionClaimable',
+  'OPSOID',
+  'MaxInvoicesperOutlet',
+  'MinBuySKUs',
+  'PromotionUOM',
+  'AlternatePromotionDescription',
+  'UserExpire',
+  'PromotionSlab',
+  'PromotionSlabDescription',
+  'RangeLow',
+  'RangeHigh',
+  'PromotionReturn',
+  'ForEvery',
+  'PurchaseLimit',
+  'ProductHierarchyLevel',
+  'ProductHierarchyCode',
+  'Exclude',
+  'ConditionGroup',
+  'GroupType',
+  'MinimumQty',
+  'BasketPromotion',
+  'CriteriaType',
+  'CriteriaValue',
+  'CriteriaExclude',
+];
+const DEFAULT_CONTROL_VALUES = PROMOTION_CONTROL_DEFAULTS.reduce((accumulator, item) => ({
+  ...accumulator,
+  [item.label]: item.type === 'number' && item.value !== '' ? Number(item.value) : item.value,
+}), {});
+const GROUP_TYPE_ORDER = { Q: 0, A: 1 };
+
+function pickFirstValue(...values) {
+  const match = values.find((value) => value !== '' && value != null);
+  return match ?? '';
+}
+
+function readBlueprintField(record, fieldName) {
+  if (!record || typeof record !== 'object') return '';
+  if (record[fieldName] != null) return record[fieldName];
+
+  const lowerFieldName = fieldName.toLowerCase();
+  if (record[lowerFieldName] != null) return record[lowerFieldName];
+
+  return '';
+}
+
+function normalizeExportDate(value) {
+  if (!value) return '';
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return parsedDate.toISOString().slice(0, 10);
+}
+
+function buildControlValues(controlRow) {
+  return PROMOTION_CONTROL_DEFAULTS.reduce((accumulator, item) => ({
+    ...accumulator,
+    [item.label]: controlRow?.[item.field] != null ? controlRow[item.field] : DEFAULT_CONTROL_VALUES[item.label],
+  }), DEFAULT_CONTROL_VALUES);
+}
+
+function buildExportFilename() {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, '0');
+  const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  return `ufs_promotion_blueprints_${timestamp}.xlsx`;
+}
+
+function buildExportRow(record, blueprint, controlValues) {
+  const slabId = Number(pickFirstValue(readBlueprintField(record, 'PromotionSlab'), ''));
+  const matchedSlab = Array.isArray(blueprint?.slabs)
+    ? blueprint.slabs.find((slab) => Number(slab.serialNo) === slabId)
+    : null;
+  const promoDescription = pickFirstValue(
+    readBlueprintField(record, 'PromotionDescription'),
+    blueprint?.description,
+    ''
+  );
+
+  return {
+    PromotionCode: pickFirstValue(readBlueprintField(record, 'PromotionCode'), blueprint?.promoNumber, ''),
+    PromotionDescription: promoDescription,
+    PromotionType: pickFirstValue(readBlueprintField(record, 'PromotionType'), controlValues.PromotionType),
+    NationalBudget: pickFirstValue(readBlueprintField(record, 'NationalBudget'), controlValues.NationalBudget),
+    TestScheme: pickFirstValue(readBlueprintField(record, 'TestScheme'), controlValues.TestScheme),
+    BuyBase: pickFirstValue(readBlueprintField(record, 'BuyBase'), controlValues.BuyBase),
+    GetBase: pickFirstValue(
+      readBlueprintField(record, 'GetBase'),
+      blueprint?.promoType ? (blueprint.promoType === 'FOC' ? '4' : '5') : '',
+      ''
+    ),
+    MultiplicationFactor: pickFirstValue(readBlueprintField(record, 'MultiplicationFactor'), controlValues.MultiplicationFactor),
+    StartDate: normalizeExportDate(
+      pickFirstValue(readBlueprintField(record, 'StartDate'), blueprint?.periodFrom, '')
+    ),
+    EndDate: normalizeExportDate(
+      pickFirstValue(readBlueprintField(record, 'EndDate'), blueprint?.periodTo, '')
+    ),
+    PromotionStatus: pickFirstValue(readBlueprintField(record, 'PromotionStatus'), controlValues.PromotionStatus),
+    PromotionQuotaLevel: pickFirstValue(readBlueprintField(record, 'PromotionQuotaLevel'), controlValues.PromotionQuotaLevel),
+    PromotionQuotaOn: pickFirstValue(readBlueprintField(record, 'PromotionQuotaOn'), controlValues.PromotionQuotaOn),
+    PromotionClaimable: pickFirstValue(readBlueprintField(record, 'PromotionClaimable'), controlValues.PromotionClaimable),
+    OPSOID: pickFirstValue(readBlueprintField(record, 'OPSOID'), blueprint?.schemeId, ''),
+    MaxInvoicesperOutlet: pickFirstValue(readBlueprintField(record, 'MaxInvoicesperOutlet'), controlValues.MaxInvoicesperOutlet),
+    MinBuySKUs: pickFirstValue(readBlueprintField(record, 'MinBuySKUs'), controlValues.MinBuySKUs),
+    PromotionUOM: pickFirstValue(
+      readBlueprintField(record, 'PromotionUOM'),
+      blueprint?.uom ? (blueprint.uom === 'PC' ? '3' : '1') : '',
+      ''
+    ),
+    AlternatePromotionDescription: pickFirstValue(
+      readBlueprintField(record, 'AlternatePromotionDescription'),
+      promoDescription,
+      ''
+    ),
+    UserExpire: pickFirstValue(readBlueprintField(record, 'UserExpire'), controlValues.UserExpire),
+    PromotionSlab: pickFirstValue(readBlueprintField(record, 'PromotionSlab'), matchedSlab?.serialNo, ''),
+    PromotionSlabDescription: pickFirstValue(
+      readBlueprintField(record, 'PromotionSlabDescription'),
+      promoDescription,
+      ''
+    ),
+    RangeLow: pickFirstValue(readBlueprintField(record, 'RangeLow'), matchedSlab?.quantityFrom, ''),
+    RangeHigh: pickFirstValue(readBlueprintField(record, 'RangeHigh'), matchedSlab?.quantityTo, ''),
+    PromotionReturn: pickFirstValue(readBlueprintField(record, 'PromotionReturn'), matchedSlab?.discountQty, ''),
+    ForEvery: pickFirstValue(readBlueprintField(record, 'ForEvery'), matchedSlab?.forEvery, ''),
+    PurchaseLimit: pickFirstValue(readBlueprintField(record, 'PurchaseLimit'), controlValues.PurchaseLimit, matchedSlab?.purchaseLimit),
+    ProductHierarchyLevel: pickFirstValue(readBlueprintField(record, 'ProductHierarchyLevel'), controlValues.ProductHierarchyLevel),
+    ProductHierarchyCode: pickFirstValue(readBlueprintField(record, 'ProductHierarchyCode'), ''),
+    Exclude: pickFirstValue(readBlueprintField(record, 'Exclude'), controlValues.Exclude),
+    ConditionGroup: pickFirstValue(readBlueprintField(record, 'ConditionGroup'), controlValues.ConditionGroup),
+    GroupType: pickFirstValue(readBlueprintField(record, 'GroupType'), ''),
+    MinimumQty: pickFirstValue(readBlueprintField(record, 'MinimumQty'), controlValues.MinimumQty),
+    BasketPromotion: pickFirstValue(readBlueprintField(record, 'BasketPromotion'), controlValues.BasketPromotion),
+    CriteriaType: pickFirstValue(readBlueprintField(record, 'CriteriaType'), ''),
+    CriteriaValue: pickFirstValue(readBlueprintField(record, 'CriteriaValue'), ''),
+    CriteriaExclude: pickFirstValue(readBlueprintField(record, 'CriteriaExclude'), controlValues.CriteriaExclude),
+  };
+}
+
+function compareBlueprintRows(leftRecord, rightRecord, schemeOrder) {
+  const leftSchemeId = pickFirstValue(readBlueprintField(leftRecord, 'OPSOID'), '');
+  const rightSchemeId = pickFirstValue(readBlueprintField(rightRecord, 'OPSOID'), '');
+  const leftGroupType = String(pickFirstValue(readBlueprintField(leftRecord, 'GroupType'), ''));
+  const rightGroupType = String(pickFirstValue(readBlueprintField(rightRecord, 'GroupType'), ''));
+
+  return (schemeOrder.get(leftSchemeId) ?? Number.MAX_SAFE_INTEGER)
+    - (schemeOrder.get(rightSchemeId) ?? Number.MAX_SAFE_INTEGER)
+    || Number(pickFirstValue(readBlueprintField(leftRecord, 'PromotionSlab'), 0))
+    - Number(pickFirstValue(readBlueprintField(rightRecord, 'PromotionSlab'), 0))
+    || (GROUP_TYPE_ORDER[leftGroupType] ?? 99) - (GROUP_TYPE_ORDER[rightGroupType] ?? 99)
+    || String(pickFirstValue(readBlueprintField(leftRecord, 'ProductHierarchyCode'), '')).localeCompare(
+      String(pickFirstValue(readBlueprintField(rightRecord, 'ProductHierarchyCode'), ''))
+    );
+}
+
+function buildWorksheetColumns(exportRows) {
+  return BLUEPRINT_EXPORT_COLUMNS.map((columnName) => {
+    const widestValue = exportRows.reduce((maxWidth, row) => {
+      const cellValue = row?.[columnName];
+      return Math.max(maxWidth, String(cellValue ?? '').length);
+    }, columnName.length);
+
+    return { wch: Math.min(Math.max(widestValue + 2, 14), 36) };
+  });
+}
 
 function mapStoredBlueprint(record) {
   return {
@@ -43,6 +231,7 @@ export default function UFSPromoListPage() {
   const [deletingSchemeIds, setDeletingSchemeIds] = useState([]);
   const [selectedDetail, setSelectedDetail] = useState(null);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadPromotions();
@@ -102,6 +291,82 @@ export default function UFSPromoListPage() {
       toast.error('Delete failed. Please check the saved blueprint tables.');
     } finally {
       setDeletingSchemeIds((current) => current.filter((schemeId) => schemeId !== row.schemeId));
+    }
+  }
+
+  async function handleExportExcel() {
+    const visibleSchemeIds = filteredRows
+      .map((row) => row.schemeId)
+      .filter(Boolean);
+
+    if (!visibleSchemeIds.length) {
+      toast.error('No promotion rows available to export.');
+      return;
+    }
+
+    setExporting(true);
+
+    try {
+      let controlRow = null;
+      try {
+        const { data, error } = await supabase
+          .from(PROMOTION_CONTROL_TABLE)
+          .select('*')
+          .eq('scheme_id', DEFAULT_PROMOTION_CONTROL_SCHEME_ID)
+          .maybeSingle();
+
+        if (error) throw error;
+        controlRow = data;
+      } catch (controlError) {
+        console.warn('Failed to load promotion controls for export. Using local defaults.', controlError);
+      }
+
+      const controlValues = buildControlValues(controlRow);
+      const blueprintRows = [];
+      const chunkSize = 25;
+
+      for (let index = 0; index < visibleSchemeIds.length; index += chunkSize) {
+        const schemeChunk = visibleSchemeIds.slice(index, index + chunkSize);
+        const { data, error } = await supabase
+          .from(GENERATED_PROMOTION_ROW_TABLE)
+          .select('*')
+          .in('OPSOID', schemeChunk);
+
+        if (error) throw error;
+
+        blueprintRows.push(...(data || []));
+      }
+
+      if (!blueprintRows.length) {
+        toast.error('No saved blueprint detail rows found for export.');
+        return;
+      }
+
+      const schemeOrder = new Map(visibleSchemeIds.map((schemeId, index) => [schemeId, index]));
+      const blueprintBySchemeId = new Map(filteredRows.map((row) => [row.schemeId, row]));
+      const exportRows = [...blueprintRows]
+        .sort((leftRecord, rightRecord) => compareBlueprintRows(leftRecord, rightRecord, schemeOrder))
+        .map((record) => {
+          const schemeId = pickFirstValue(readBlueprintField(record, 'OPSOID'), '');
+          return buildExportRow(record, blueprintBySchemeId.get(schemeId), controlValues);
+        });
+
+      const XLSX = await import('xlsx');
+      const worksheet = XLSX.utils.json_to_sheet(exportRows, {
+        header: BLUEPRINT_EXPORT_COLUMNS,
+      });
+      worksheet['!cols'] = buildWorksheetColumns(exportRows);
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'UFS Blueprints');
+      XLSX.writeFile(workbook, buildExportFilename());
+
+      toast.success(`Exported ${exportRows.length} template row${exportRows.length === 1 ? '' : 's'} to Excel.`);
+    } catch (error) {
+      console.error('Failed to export UFS promotion blueprint rows:', error);
+      toast.error('Export failed. Please check the saved blueprint rows and try again.');
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -197,6 +462,15 @@ export default function UFSPromoListPage() {
                 className="px-3 py-2 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all text-[10px] font-black uppercase tracking-[0.2em] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Reset
+              </button>
+              <button
+                onClick={handleExportExcel}
+                disabled={loading || exporting || filteredRows.length === 0}
+                className="px-4 py-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition-all text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                title={normalizedSearch ? 'Export current filtered blueprint rows' : 'Export all saved blueprint rows'}
+              >
+                <Download size={14} className={exporting ? 'animate-bounce' : ''} />
+                {exporting ? 'Exporting...' : 'Export Excel'}
               </button>
               <div className="px-3 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-[10px] font-black text-slate-500 uppercase tracking-tighter">
                 {filteredRows.length} / {rows.length} Saved
