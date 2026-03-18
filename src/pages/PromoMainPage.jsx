@@ -235,7 +235,7 @@ export default function PromoMainPage() {
             <PromoCard
               label="Manual Entry"
               description="Manually process, map, and review individual promotion datasets."
-              path="/in-progress"
+              path="/promotions/manual-entry"
               image="/images/promo_manual_bw.png"
               hoverImage="/images/promo_manual_color.png"
             />

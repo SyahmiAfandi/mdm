@@ -36,26 +36,296 @@ import useEmailTrackerSummaryCounts from "../hooks/useEmailTrackerSummaryCounts"
 const GAS_HEALTH_URL = import.meta.env.VITE_GAS_HEALTH_URL;
 const FLASK_HEALTH_URL = import.meta.env.VITE_FLASK_HEALTH_URL;
 const HEALTH_POLL_MS = 60000;
+const RECONS_MONTH_OPTIONS = [
+  { value: "", label: "All months" },
+  { value: "1", label: "January" },
+  { value: "2", label: "February" },
+  { value: "3", label: "March" },
+  { value: "4", label: "April" },
+  { value: "5", label: "May" },
+  { value: "6", label: "June" },
+  { value: "7", label: "July" },
+  { value: "8", label: "August" },
+  { value: "9", label: "September" },
+  { value: "10", label: "October" },
+  { value: "11", label: "November" },
+  { value: "12", label: "December" },
+];
+
+function getDefaultReconsFilter() {
+  const now = new Date();
+  let defaultYear = now.getFullYear();
+  let prevMonthIndex = now.getMonth() - 1;
+
+  if (prevMonthIndex < 0) {
+    prevMonthIndex = 11;
+    defaultYear -= 1;
+  }
+
+  return {
+    defaultYear,
+    defaultMonth: String(prevMonthIndex + 1),
+  };
+}
+
+function buildReconsHint(year, month) {
+  if (!year) return "";
+  const monthLabel = RECONS_MONTH_OPTIONS.find((m) => m.value === String(month))?.label || "";
+  return `Filter: ${year}${month ? ` • ${monthLabel}` : ""}`;
+}
+
+function FlipReconsCard() {
+  const { defaultYear, defaultMonth } = getDefaultReconsFilter();
+  const [yearsLoading, setYearsLoading] = useState(true);
+  const [masterYears, setMasterYears] = useState([]);
+  const didInitRef = useRef(false);
+  const [year, setYear] = useState(defaultYear);
+  const [month, setMonth] = useState(defaultMonth);
+  const [draftYear, setDraftYear] = useState(defaultYear);
+  const [draftMonth, setDraftMonth] = useState(defaultMonth);
+  const [flipped, setFlipped] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadYears() {
+      try {
+        setYearsLoading(true);
+
+        const { data, error } = await supabase
+          .from("master_years")
+          .select("*")
+          .order("year", { ascending: false });
+
+        if (error) throw error;
+
+        const years = data
+          .filter((r) => r && r.active !== false)
+          .map((r) => Number(r.year))
+          .filter((y) => Number.isFinite(y));
+
+        if (!alive) return;
+
+        setMasterYears(years);
+
+        if (!didInitRef.current && years.length) {
+          didInitRef.current = true;
+          setYear(years[0]);
+          setDraftYear(years[0]);
+        }
+      } catch (e) {
+        console.error("loadYears:", e);
+      } finally {
+        if (alive) setYearsLoading(false);
+      }
+    }
+
+    loadYears();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const reconsProgress = useReconsProgress({
+    year,
+    month: month === "" ? undefined : Number(month),
+  });
+
+  const yearOptions = useMemo(() => {
+    if (masterYears.length) return masterYears;
+    return Array.from({ length: 5 }, (_, i) => defaultYear - 2 + i);
+  }, [masterYears, defaultYear]);
+
+  const cardSubtitle = reconsProgress.loading
+    ? "Loading..."
+    : reconsProgress.hasData
+      ? "Latest run"
+      : "No data yet";
+
+  function openSettings() {
+    setDraftYear(year);
+    setDraftMonth(month);
+    setFlipped(true);
+  }
+
+  function applyFilter() {
+    setYear(Number(draftYear));
+    setMonth(draftMonth);
+    setFlipped(false);
+  }
+
+  return (
+    <div className="relative [perspective:1200px] h-full">
+      <div
+        className={[
+          "relative w-full h-full transition-transform duration-500 [transform-style:preserve-3d]",
+          flipped ? "[transform:rotateY(180deg)]" : "",
+        ].join(" ")}
+      >
+        <div className={`absolute inset-0 h-full [backface-visibility:hidden] ${flipped ? "pointer-events-none z-0 hidden sm:block" : "z-10"}`} style={{ WebkitBackfaceVisibility: "hidden" }}>
+          <ReconsDashboardCard
+            className="h-full"
+            title="Recons Progress"
+            subtitle={cardSubtitle}
+            icon={<FileSpreadsheet size={18} />}
+            percent={reconsProgress.percentDone}
+            hint={buildReconsHint(year, month)}
+            footer={
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <TinyPill
+                  icon={FileSpreadsheet}
+                  label="Processed"
+                  value={reconsProgress.processed}
+                  sub={`/ ${reconsProgress.total}`}
+                  tone="blue"
+                />
+                <TinyPill icon={AlertTriangle} label="Mismatch" value={reconsProgress.mismatches} tone="red" />
+                <TinyPill icon={CheckCircle2} label="Matched" value={reconsProgress.matched} tone="green" />
+                <TinyPill icon={Clock3} label="Last Run" value={reconsProgress.lastRunLabel} tone="gray" />
+              </div>
+            }
+            cta={{ href: "/reports/matrix_recons", label: "Open Report" }}
+            actionLeft={
+              <button
+                type="button"
+                onClick={openSettings}
+                className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg ring-1 ring-emerald-200/50 dark:ring-emerald-800/50 bg-white dark:bg-gray-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all text-xs font-bold text-emerald-600 dark:text-emerald-400 shadow-sm active:scale-95"
+                title="Filter"
+              >
+                <Settings size={14} /> Filter
+              </button>
+            }
+          />
+        </div>
+
+        <div className={`absolute inset-0 h-full w-full [backface-visibility:hidden] [transform:rotateY(180deg)] ${flipped ? "z-10" : "pointer-events-none z-0 hidden sm:block"}`} style={{ WebkitBackfaceVisibility: "hidden" }}>
+          <div className="bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 rounded-2xl p-4 h-full flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                <Settings size={14} className="text-blue-500" /> Recons Filters
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setFlipped(false)}
+                className="inline-flex items-center gap-1 text-sm font-semibold text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white transition"
+              >
+                <ArrowLeft size={14} /> Back
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">
+                  Year (from Master Data)
+                </label>
+
+                <select
+                  value={draftYear}
+                  onChange={(e) => setDraftYear(e.target.value)}
+                  disabled={yearsLoading}
+                  className="w-full rounded-xl px-3 py-2 bg-white dark:bg-gray-900/30 ring-1 ring-gray-200 dark:ring-gray-700 text-sm text-gray-800 dark:text-gray-100 disabled:opacity-60"
+                >
+                  {yearsLoading ? (
+                    <option value={draftYear}>Loading...</option>
+                  ) : (
+                    yearOptions.map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">
+                  Month
+                </label>
+                <select
+                  value={draftMonth}
+                  onChange={(e) => setDraftMonth(e.target.value)}
+                  className="w-full rounded-xl px-3 py-2 bg-white dark:bg-gray-900/30 ring-1 ring-gray-200 dark:ring-gray-700 text-sm text-gray-800 dark:text-gray-100"
+                >
+                  {RECONS_MONTH_OPTIONS.map((m) => (
+                    <option key={m.value || "all"} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+                <div className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
+                  Tip: leave "All months" to view the full year summary.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={applyFilter}
+                className="inline-flex items-center justify-center gap-1 rounded-xl px-3 py-2 bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition active:scale-[0.98]"
+              >
+                <Check size={15} /> Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="invisible h-auto opacity-0 pointer-events-none">
+        <ReconsDashboardCard
+          title="Recons Progress"
+          subtitle={cardSubtitle}
+          icon={<FileSpreadsheet size={18} />}
+          percent={reconsProgress.percentDone}
+          hint={buildReconsHint(year, month)}
+          footer={
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <TinyPill
+                icon={FileSpreadsheet}
+                label="Processed"
+                value={reconsProgress.processed}
+                sub={`/ ${reconsProgress.total}`}
+                tone="blue"
+              />
+              <TinyPill icon={AlertTriangle} label="Mismatch" value={reconsProgress.mismatches} tone="red" />
+              <TinyPill icon={CheckCircle2} label="Matched" value={reconsProgress.matched} tone="green" />
+              <TinyPill icon={Clock3} label="Last Run" value={reconsProgress.lastRunLabel} tone="gray" />
+            </div>
+          }
+          cta={{ href: "/reports/matrix_recons", label: "Open Report" }}
+        />
+      </div>
+    </div>
+  );
+}
 
 function HomePage() {
-  const lastSync = useMemo(() => new Date().toLocaleString(), []);
+  const [liveNow, setLiveNow] = useState(() => new Date());
+  const lastSync = useMemo(
+    () =>
+      liveNow.toLocaleString([], {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }),
+    [liveNow]
+  );
 
   // ---- System Health local state ----
   const [apiStatus, setApiStatus] = useState("Loading...");
-  const [sheetStatus, setSheetStatus] = useState("Loading...");
-  const [storageStatus, setStorageStatus] = useState("Loading...");
+  const [dbStatus, setDbStatus] = useState("Loading...");
   const [apiHint, setApiHint] = useState("");
-  const [sheetHint, setSheetHint] = useState("");
-  const [storageHint, setStorageHint] = useState("");
-  const [sheetLatency, setSheetLatency] = useState(null);
+  const [dbHint, setDbHint] = useState("");
   const [apiLatency, setApiLatency] = useState(null);
-  const [storageLatency, setStorageLatency] = useState(null);
+  const [dbLatency, setDbLatency] = useState(null);
+  const [healthCheckedAt, setHealthCheckedAt] = useState(null);
+  const [healthRefreshing, setHealthRefreshing] = useState(false);
 
   const abortRef = useRef(null);
+  const runHealthCheckRef = useRef(async () => { });
 
   // ✅ prevent overlapping health polls + reduce UI flicker
   const inFlightRef = useRef(false);
-  const lastHealthRef = useRef({ api: null, sheets: null, storage: null });
+  const lastHealthRef = useRef({ api: null, db: null });
 
   /* Write to Supabase */
   async function writeHealthDoc(docId, payload, sourceOverride) {
@@ -79,7 +349,7 @@ function HomePage() {
   }
 
   /*--------------FLIP CARD-------------------- */
-  function FlipReconsCard() {
+  function LegacyFlipReconsCard() {
     const now = new Date();
 
     // ✅ previous month properly
@@ -370,24 +640,23 @@ function HomePage() {
     return norm;
   }
 
-  async function fetchSheetsHealth(signal) {
-    const url = `${GAS_HEALTH_URL}?mode=health&service=${encodeURIComponent("Google Sheets")}`;
-    const res = await fetch(url, { signal, cache: "no-store" });
-    if (!res.ok) throw new Error(`GAS HTTP ${res.status}`);
-    const data = await res.json();
-    const norm = normalizeHealthPayload(data, url);
-    norm.source = "GAS";
-    return norm;
-  }
+  async function fetchSupabaseHealth() {
+    const startedAt = performance.now();
+    const { error } = await supabase
+      .from("health")
+      .select("id")
+      .limit(1);
 
-  async function fetchStorageHealth(signal) {
-    const url = `${GAS_HEALTH_URL}?mode=health&service=${encodeURIComponent("Storage")}`;
-    const res = await fetch(url, { signal, cache: "no-store" });
-    if (!res.ok) throw new Error(`GAS HTTP ${res.status}`);
-    const data = await res.json();
-    const norm = normalizeHealthPayload(data, url);
-    norm.source = "GAS";
-    return norm;
+    if (error) throw error;
+
+    return {
+      status: "UP",
+      hint: "Database connection healthy",
+      latencyMs: Math.round(performance.now() - startedAt),
+      updatedAt: new Date().toISOString(),
+      url: "supabase",
+      source: "Supabase",
+    };
   }
 
   // ✅ Health poll with guard (no overlapping) + no flicker
@@ -398,25 +667,22 @@ function HomePage() {
     const hydrate = async () => {
       if (inFlightRef.current) return;
       inFlightRef.current = true;
+      setHealthRefreshing(true);
 
       try {
         if (typeof navigator !== "undefined" && navigator.onLine === false) {
           setApiStatus("OFFLINE");
-          setSheetStatus("OFFLINE");
-          setStorageStatus("OFFLINE");
+          setDbStatus("OFFLINE");
           setApiHint("No internet connection");
-          setSheetHint("No internet connection");
-          setStorageHint("No internet connection");
+          setDbHint("No internet connection");
           setApiLatency(null);
-          setSheetLatency(null);
-          setStorageLatency(null);
+          setDbLatency(null);
           return;
         }
 
-        const [api, sheets, storage] = await Promise.allSettled([
+        const [api, db] = await Promise.allSettled([
           fetchApiHealth(controller.signal),
-          fetchSheetsHealth(controller.signal),
-          fetchStorageHealth(controller.signal),
+          fetchSupabaseHealth(),
         ]);
 
         const apply = async (key, result, setStatus, setHint, setLatency, docId, fallbackUrl, source) => {
@@ -447,23 +713,22 @@ function HomePage() {
         };
 
         await apply("api", api, setApiStatus, setApiHint, setApiLatency, "apiService", FLASK_HEALTH_URL, "Flask");
-        await apply("sheets", sheets, setSheetStatus, setSheetHint, setSheetLatency, "googleSheets", GAS_HEALTH_URL, "GAS");
-        await apply("storage", storage, setStorageStatus, setStorageHint, setStorageLatency, "storage", GAS_HEALTH_URL, "GAS");
+        await apply("db", db, setDbStatus, setDbHint, setDbLatency, "supabaseDb", "supabase", "Supabase");
       } catch (err) {
         setApiStatus("DOWN");
-        setSheetStatus("DOWN");
-        setStorageStatus("DOWN");
+        setDbStatus("DOWN");
         setApiHint(String(err));
-        setSheetHint(String(err));
-        setStorageHint(String(err));
+        setDbHint(String(err));
         setApiLatency(null);
-        setSheetLatency(null);
-        setStorageLatency(null);
+        setDbLatency(null);
       } finally {
+        setHealthCheckedAt(new Date());
+        setHealthRefreshing(false);
         inFlightRef.current = false;
       }
     };
 
+    runHealthCheckRef.current = hydrate;
     hydrate();
     const t = setInterval(hydrate, HEALTH_POLL_MS);
 
@@ -516,6 +781,46 @@ function HomePage() {
     if (!emailSummary.error) return "";
     return String(emailSummary.error).slice(0, 160);
   }, [emailSummary.error]);
+
+  const apiHealthy = useMemo(() => isHealthUp(apiStatus), [apiStatus]);
+  const dbHealthy = useMemo(() => isHealthUp(dbStatus), [dbStatus]);
+  const platformHealthSummary = useMemo(() => {
+    if (apiHealthy && dbHealthy) {
+      return {
+        label: "All systems operational",
+        className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/50",
+      };
+    }
+
+    if (apiHealthy || dbHealthy) {
+      return {
+        label: "Partial outage",
+        className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900/50",
+      };
+    }
+
+    return {
+      label: "Services unavailable",
+      className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-900/50",
+    };
+  }, [apiHealthy, dbHealthy]);
+
+  const lastCheckedLabel = useMemo(() => {
+    if (!healthCheckedAt) return "Checking...";
+    return healthCheckedAt.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }, [healthCheckedAt]);
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      setLiveNow(new Date());
+    }, 1000);
+
+    return () => window.clearInterval(timerId);
+  }, []);
 
   return (
     <div className="w-full min-w-0 px-3 sm:px-5 pb-3">
@@ -575,22 +880,40 @@ function HomePage() {
         {/* Recons Progress (flip card) */}
         <FlipReconsCard />
 
-        {/* System Health */}
+        {/* Platform Health */}
         <DashCard
-          title="System Health"
+          title="Platform Health"
           icon={<ShieldCheck size={15} />}
           iconColor="text-emerald-600 dark:text-emerald-400"
           iconBg="bg-emerald-50 dark:bg-emerald-900/30"
           footer={
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 inline-flex items-center gap-1 mt-1">
-              <Info size={10} /> Auto-refresh every {Math.round(HEALTH_POLL_MS / 1000)}s
-            </p>
+            <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-gray-400 dark:text-gray-500">
+              <span className="inline-flex items-center gap-1">
+                <Clock3 size={10} /> Last checked {lastCheckedLabel}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Info size={10} /> Auto-refresh every {Math.round(HEALTH_POLL_MS / 1000)}s
+              </span>
+            </div>
           }
         >
           <div className="space-y-2.5 mt-3">
-            <HealthRowCompact label="API" status={apiStatus} hint={apiHint} latency={apiLatency} />
-            <HealthRowCompact label="Sheets" status={sheetStatus} hint={sheetHint} latency={sheetLatency} />
-            <HealthRowCompact label="Storage" status={storageStatus} hint={storageHint} latency={storageLatency} />
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50/80 px-3 py-2 dark:border-gray-700 dark:bg-gray-900/40">
+              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${platformHealthSummary.className}`}>
+                {platformHealthSummary.label}
+              </span>
+              <button
+                type="button"
+                onClick={() => runHealthCheckRef.current?.()}
+                disabled={healthRefreshing}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-600 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                <RefreshCw size={12} className={healthRefreshing ? "animate-spin" : ""} />
+                Refresh
+              </button>
+            </div>
+            <HealthRowCompact label="Python API" status={apiStatus} hint={apiHint} latency={apiLatency} />
+            <HealthRowCompact label="Supabase DB" status={dbStatus} hint={dbHint} latency={dbLatency} />
           </div>
         </DashCard>
       </div>
@@ -652,6 +975,11 @@ function normalizeHealthPayload(data, url) {
 }
 
 /* ─── SummaryCardCompact ─── */
+
+function isHealthUp(status) {
+  const normalized = String(status || "").toLowerCase();
+  return normalized === "up" || normalized.includes("operational");
+}
 
 function SummaryCardCompact({ title, subtitle, icon, accent = "blue", percent = 0, footer, hint, cta, className = "" }) {
   const accentMap = {

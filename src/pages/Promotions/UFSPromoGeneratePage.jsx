@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from "../../supabaseClient";
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -19,13 +19,132 @@ import {
   X,
   Plus,
   Check,
-  Loader2
+  Loader2,
+  Search
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { 
+  formatNumericDisplay, 
+  formatDisplayDate,
+  parseNumericToken, 
+  formatMechanicReward, 
+  deriveMechanicsProfile, 
+  parseMechanicsToSlabs, 
+  compareAlphaNumeric 
+} from './ufsPromoUtils';
 
 const GENERATED_PROMOTION_TABLE = 'ufs_promotion_blueprints';
 const GENERATED_PROMOTION_ROW_TABLE = 'ufs_promotion_blueprint_rows';
+
+// --- Sub-component: Searchable Select ---
+const SearchableSelect = ({ 
+  label, 
+  icon: Icon, 
+  value, 
+  onSelect, 
+  options, 
+  placeholder, 
+  searchTerm, 
+  onSearchChange,
+  displayCount,
+  totalCount,
+  renderOption
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find(opt => opt.value === value);
+
+  return (
+    <div className="min-w-0 flex flex-col gap-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/70 p-2.5 shadow-sm relative" ref={containerRef}>
+      <div className="flex items-center justify-between">
+        <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em]">
+          <Icon size={10} /> {label}
+        </label>
+        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-md">
+          {displayCount}/{totalCount}
+        </span>
+      </div>
+      
+      <div className="relative">
+        <div 
+          onClick={() => setIsOpen(!isOpen)}
+          className={`w-full h-[36px] bg-white dark:bg-slate-900/80 border ${isOpen ? 'border-rose-500 ring-4 ring-rose-500/10' : 'border-slate-200 dark:border-slate-800'} rounded-lg px-3 flex items-center justify-between cursor-pointer transition-all shadow-sm`}
+        >
+          <span className={`text-[11px] font-bold truncate ${selectedOption ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400'}`}>
+            {selectedOption ? selectedOption.label : placeholder}
+          </span>
+          <Search size={12} className="text-slate-400 shrink-0" />
+        </div>
+
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="absolute top-full left-0 right-0 mt-2 z-[60] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[280px]"
+            >
+              <div className="p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={10} />
+                  <input
+                    autoFocus
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => onSearchChange(e.target.value)}
+                    placeholder="Type to filter..."
+                    className="w-full h-[28px] bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/5 rounded-md pl-7 pr-2 text-[10px] font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-rose-500/50 transition-all"
+                  />
+                </div>
+              </div>
+              <div className="overflow-auto custom-scrollbar p-1">
+                {options.length > 0 ? (
+                  options.map((opt) => (
+                    <div
+                      key={opt.value}
+                      onClick={() => {
+                        onSelect(opt.value);
+                        setIsOpen(false);
+                      }}
+                      className={`group px-3 py-2 rounded-lg cursor-pointer transition-colors flex flex-col gap-0.5 ${value === opt.value ? 'bg-rose-50 dark:bg-rose-500/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                    >
+                      {renderOption ? renderOption(opt) : (
+                        <>
+                          <div className={`text-[10px] font-black uppercase tracking-tight ${value === opt.value ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                            {opt.code}
+                          </div>
+                          <div className="text-[9px] font-bold text-slate-400 group-hover:text-slate-500 transition-colors">
+                            {opt.name}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-3 py-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
+                    No results found
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+};
 
 export default function UFSPromoGeneratePage() {
   const navigate = useNavigate();
@@ -35,7 +154,9 @@ export default function UFSPromoGeneratePage() {
   const defaultPurchaseLimit = 9999999999999;
   
   // Data lists
+  const [allRegions, setAllRegions] = useState([]);
   const [regions, setRegions] = useState([]);
+  const [allItems, setAllItems] = useState([]);
   const [items, setItems] = useState([]);
   const [periods, setPeriods] = useState([]);
   const [previewData, setPreviewData] = useState([]); // New state for preview
@@ -43,6 +164,8 @@ export default function UFSPromoGeneratePage() {
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [savingSchemeIds, setSavingSchemeIds] = useState([]);
   const [savedSchemeIds, setSavedSchemeIds] = useState([]);
+  const [regionSearchTerm, setRegionSearchTerm] = useState('');
+  const [itemSearchTerm, setItemSearchTerm] = useState('');
   
   // Form State
   const [formData, setFormData] = useState({
@@ -54,171 +177,117 @@ export default function UFSPromoGeneratePage() {
   });
 
   const promoNumbers = Array.from({ length: 5 }, (_, i) => (i + 1).toString().padStart(2, '0'));
-  const formatDisplayDate = (value) => (value ? new Date(value).toLocaleDateString('en-GB') : '-');
-  const formatNumericDisplay = (value, decimals = 0) => (
-    typeof value === 'number' && !Number.isNaN(value)
-      ? value.toLocaleString('en-US', {
-          minimumFractionDigits: decimals,
-          maximumFractionDigits: decimals
-        })
-      : '-'
-  );
-  const parseNumericToken = (value) => {
-    const normalizedValue = String(value || '').replace(/,/g, '');
-    const match = normalizedValue.match(/-?\d+(?:\.\d+)?/);
-    return match ? Number(match[0]) : null;
-  };
-  const deriveMechanicsProfile = (mechanics) => {
-    const segments = String(mechanics || '')
-      .split(',')
-      .map(segment => segment.trim())
-      .filter(Boolean);
-    const [firstBuyToken = '', firstRewardToken = ''] = (segments[0] || '').split('+').map(token => token.trim());
-
-    return {
-      segments,
-      promoType: firstRewardToken ? (/rm/i.test(firstRewardToken) ? 'DISC' : 'FOC') : null,
-      uom: firstBuyToken ? (/pcs?/i.test(firstBuyToken) ? 'PC' : 'CS') : null
-    };
-  };
-  const formatMechanicReward = (value, promoType) => (
-    formatNumericDisplay(value, promoType === 'DISC' ? 2 : 0)
-  );
-  const parseMechanicsToSlabs = (mechanics, promoType, pcsPerCase) => {
-    const segments = String(mechanics || '')
-      .split(',')
-      .map(segment => segment.trim())
-      .filter(Boolean);
-
-    const parsedSegments = segments.map((segment) => {
-      const [buyToken = '', rewardToken = ''] = segment.split('+').map(token => token.trim());
-      const quantityFrom = parseNumericToken(buyToken);
-      const rewardQty = parseNumericToken(rewardToken);
-      const rewardHasRm = /rm/i.test(rewardToken);
-      const rewardIsPc = /pcs?/i.test(rewardToken);
-      const isDiscPromo = promoType === 'DISC';
-      const isFocPromo = promoType === 'FOC';
-      const needsCaseConversion = isFocPromo && !rewardIsPc;
-
-      if (quantityFrom === null || rewardQty === null) {
-        return { raw: segment, valid: false };
-      }
-
-      if (isDiscPromo && !rewardHasRm) {
-        return { raw: segment, valid: false, missingRmToken: true };
-      }
-
-      if (isFocPromo && rewardHasRm) {
-        return { raw: segment, valid: false, invalidRmToken: true };
-      }
-
-      if (needsCaseConversion && (typeof pcsPerCase !== 'number' || Number.isNaN(pcsPerCase) || pcsPerCase <= 0)) {
-        return { raw: segment, valid: false, missingPcsPerCase: true };
-      }
-
-      const discountQty = isDiscPromo
-        ? rewardQty
-        : needsCaseConversion
-          ? rewardQty * pcsPerCase
-          : rewardQty;
-
-      return {
-        raw: segment,
-        valid: true,
-        quantityFrom,
-        discountQty,
-        discountDisplay: formatMechanicReward(discountQty, promoType)
-      };
-    });
-
-    const invalidSegments = parsedSegments
-      .filter(segment => !segment.valid)
-      .map(segment => segment.raw);
-    const requiresPcsPerCase = parsedSegments.some(segment => segment.missingPcsPerCase);
-    const requiresRmToken = parsedSegments.some(segment => segment.missingRmToken);
-    const containsInvalidRmToken = parsedSegments.some(segment => segment.invalidRmToken);
-
-    const sortedSegments = parsedSegments
-      .filter(segment => segment.valid)
-      .sort((left, right) => left.quantityFrom - right.quantityFrom);
-
-    const slabs = sortedSegments.map((segment, index) => {
-      const nextSegment = sortedSegments[index + 1];
-      const quantityTo = nextSegment && nextSegment.quantityFrom > segment.quantityFrom
-        ? nextSegment.quantityFrom - 1
-        : 99999;
-
-      return {
-        serialNo: index + 1,
-        raw: segment.raw,
-        quantityFrom: segment.quantityFrom,
-        quantityTo,
-        discountQty: segment.discountQty,
-        discountDisplay: segment.discountDisplay,
-        forEvery: segment.quantityFrom,
-        purchaseLimit: defaultPurchaseLimit
-      };
-    });
-
-    return {
-      totalSegments: segments.length,
-      invalidSegments,
-      requiresPcsPerCase,
-      requiresRmToken,
-      containsInvalidRmToken,
-      slabs
-    };
-  };
 
   useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+      try {
+        const { data: mappingData } = await supabase
+          .from('promo_region_criteria_mapping')
+          .select(`
+            region_dt_code,
+            promo_region_distributors(dt_name, dt_shortform, dt_alias)
+          `)
+          .order('region_dt_code', { ascending: true });
+        
+        const uniqueRegions = Array.from(new Set((mappingData || []).map(m => m.region_dt_code)))
+          .map(code => {
+            const match = mappingData.find(m => m.region_dt_code === code);
+            return {
+              code,
+              name: match?.promo_region_distributors?.dt_name || code,
+              shortform: match?.promo_region_distributors?.dt_shortform || '',
+              dt_alias: match?.promo_region_distributors?.dt_alias || ''
+            };
+          })
+          .sort((leftRegion, rightRegion) => compareAlphaNumeric(leftRegion.code, rightRegion.code));
+        setAllRegions(uniqueRegions);
+        setRegions(uniqueRegions);
+
+        const { data: itemData } = await supabase
+          .from('promo_items_config')
+          .select('id, item_code, item_name, item_shortform, item_dimension, mapped_skus, pcs_per_case')
+          .eq('active', true);
+        const sortedItems = (itemData || []).sort((leftItem, rightItem) =>
+          compareAlphaNumeric(leftItem.id || leftItem.item_code, rightItem.id || rightItem.item_code)
+          || compareAlphaNumeric(leftItem.item_name, rightItem.item_name)
+        );
+        setAllItems(sortedItems);
+        setItems(sortedItems);
+
+        const { data: periodData } = await supabase
+          .from('promo_periods')
+          .select('promo_period, period_id, start_date, end_date')
+          .eq('active', true)
+          .order('year', { ascending: false });
+        setPeriods(periodData || []);
+
+      } catch (error) {
+        console.error("Error fetching form data:", error);
+        toast.error("Failed to load configuration data.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
     fetchData();
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const { data: mappingData } = await supabase
-        .from('promo_region_criteria_mapping')
-        .select(`
-          region_dt_code,
-          promo_region_distributors(dt_name, dt_shortform, dt_alias)
-        `);
-      
-      const uniqueRegions = Array.from(new Set((mappingData || []).map(m => m.region_dt_code)))
-        .map(code => {
-          const match = mappingData.find(m => m.region_dt_code === code);
-          return {
-            code,
-            name: match?.promo_region_distributors?.dt_name || code,
-            shortform: match?.promo_region_distributors?.dt_shortform || '',
-            dt_alias: match?.promo_region_distributors?.dt_alias || ''
-          };
-        });
-      setRegions(uniqueRegions);
+  useEffect(() => {
+    const selectedRegionOption = allRegions.find((region) => region.code === formData.region) || null;
+    const normalizedSearch = regionSearchTerm.trim().toLowerCase();
+    const filteredRegionList = allRegions.filter((region) => {
+      if (!normalizedSearch) return true;
 
-      const { data: itemData } = await supabase
-        .from('promo_items_config')
-        .select('item_code, item_name, item_shortform, item_dimension, mapped_skus, pcs_per_case')
-        .eq('active', true);
-      setItems(itemData || []);
+      return [
+        region.code,
+        region.name,
+        region.shortform,
+        region.dt_alias
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch));
+    });
 
-      const { data: periodData } = await supabase
-        .from('promo_periods')
-        .select('promo_period, period_id, start_date, end_date')
-        .eq('active', true)
-        .order('year', { ascending: false });
-      setPeriods(periodData || []);
+    setRegions(
+      selectedRegionOption && !filteredRegionList.some((region) => region.code === selectedRegionOption.code)
+        ? [selectedRegionOption, ...filteredRegionList]
+        : filteredRegionList
+    );
+  }, [allRegions, formData.region, regionSearchTerm]);
 
-    } catch (error) {
-      console.error("Error fetching form data:", error);
-      toast.error("Failed to load configuration data.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    const selectedItemOption = allItems.find((item) => item.item_code === formData.promoItem) || null;
+    const normalizedSearch = itemSearchTerm.trim().toLowerCase();
+    const filteredItemList = allItems.filter((item) => {
+      if (!normalizedSearch) return true;
+
+      return [
+        item.id,
+        item.item_code,
+        item.item_name,
+        item.item_shortform,
+        item.item_dimension
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch));
+    });
+
+    setItems(
+      selectedItemOption && !filteredItemList.some((item) => item.item_code === selectedItemOption.item_code)
+        ? [selectedItemOption, ...filteredItemList]
+        : filteredItemList
+    );
+  }, [allItems, formData.promoItem, itemSearchTerm]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'region') {
+      setRegionSearchTerm('');
+    }
+    if (name === 'promoItem') {
+      setItemSearchTerm('');
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -230,6 +299,8 @@ export default function UFSPromoGeneratePage() {
       promoPeriod: '',
       promoMechanics: ''
     });
+    setRegionSearchTerm('');
+    setItemSearchTerm('');
     toast.success("Form cleared");
   };
 
@@ -323,6 +394,19 @@ export default function UFSPromoGeneratePage() {
     setSavingSchemeIds((current) => [...new Set([...current, row.schemeId])]);
 
     try {
+      // Duplicate Check
+      const { data: existing, error: checkError } = await supabase
+        .from(GENERATED_PROMOTION_TABLE)
+        .select('scheme_id')
+        .eq('scheme_id', row.schemeId)
+        .maybeSingle();
+      
+      if (checkError) throw checkError;
+      if (existing) {
+        toast.error(`Scheme ID ${row.schemeId} already exists in registry. Cannot overwrite.`);
+        return;
+      }
+
       const { error: promotionError } = await supabase.from(GENERATED_PROMOTION_TABLE).upsert(
         buildPromotionPayload(row),
         { onConflict: 'scheme_id' }
@@ -365,8 +449,8 @@ export default function UFSPromoGeneratePage() {
 
     setLoading(true);
     try {
-      const selectedRegion = regions.find(r => r.code === formData.region);
-      const selectedItem = items.find(i => i.item_code === formData.promoItem);
+      const selectedRegion = allRegions.find(r => r.code === formData.region);
+      const selectedItem = allItems.find(i => i.item_code === formData.promoItem);
       const selectedPeriod = periods.find(p => p.promo_period === formData.promoPeriod);
       const mechanicsProfile = deriveMechanicsProfile(formData.promoMechanics);
       const derivedPromoType = mechanicsProfile.promoType;
@@ -559,6 +643,8 @@ export default function UFSPromoGeneratePage() {
   const mechanicsProfile = deriveMechanicsProfile(formData.promoMechanics);
   const showFreeSkuColumn = selectedDetail?.promoType !== 'DISC';
 
+
+
   return (
     <div className="w-full h-[calc(100vh-140px)] flex flex-col gap-6 p-2">
       {/* ── Premium Header ── */}
@@ -610,10 +696,10 @@ export default function UFSPromoGeneratePage() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex-1 flex flex-col gap-6 overflow-hidden"
+        className="flex-1 flex flex-col gap-6"
       >
         {/* ── Configuration Dashboard ── */}
-        <MotionDiv variants={itemVariants} className="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 p-4 shadow-xl relative overflow-hidden shrink-0">
+        <MotionDiv variants={itemVariants} className="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 p-4 shadow-xl relative shrink-0">
           <div className="absolute top-0 right-0 p-3 opacity-[0.03] pointer-events-none">
             <Sparkles size={96} />
           </div>
@@ -650,64 +736,60 @@ export default function UFSPromoGeneratePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[0.7fr_1.35fr_1.35fr_1fr_1.7fr_auto] items-end gap-2 rounded-[18px] border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-slate-50 via-white to-slate-50/80 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 p-2.5 shadow-inner">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[0.6fr_1.3fr_1.3fr_0.9fr_1.6fr_auto] gap-2.5 rounded-[22px] border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-slate-50 via-white to-slate-50/80 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 p-2.5 shadow-inner">
               {/* Promo # */}
-              <div className="min-w-0 flex flex-col gap-1">
-                <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em] mb-1 ml-1">
+              <div className="min-w-0 flex flex-col gap-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/70 p-2.5 shadow-sm">
+                <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em]">
                   <Hash size={10} /> Seq #
                 </label>
                 <select 
                   name="promoNumber"
                   value={formData.promoNumber}
                   onChange={handleInputChange}
-                  className="w-full h-[38px] bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-[12px] font-black text-slate-800 dark:text-slate-100 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all cursor-pointer appearance-none shadow-sm"
+                  className="w-full h-[36px] bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-2 text-[12px] font-black text-slate-800 dark:text-slate-100 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all cursor-pointer appearance-none shadow-sm"
                 >
                   {promoNumbers.map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
 
               {/* Region */}
-              <div className="min-w-0 flex flex-col gap-1">
-                <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em] mb-1 ml-1">
-                  <MapPin size={10} /> Target Region
-                </label>
-                <select 
-                  name="region"
-                  value={formData.region}
-                  onChange={handleInputChange}
-                  className="w-full h-[38px] bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-[12px] font-bold text-slate-800 dark:text-slate-100 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all cursor-pointer shadow-sm"
-                >
-                  <option value="">Choose Territory...</option>
-                  {regions.map(r => <option key={r.code} value={r.code}>{r.code} — {r.name}</option>)}
-                </select>
-              </div>
+              <SearchableSelect
+                label="Target Region"
+                icon={MapPin}
+                value={formData.region}
+                onSelect={(val) => setFormData(prev => ({ ...prev, region: val }))}
+                placeholder="Territory..."
+                searchTerm={regionSearchTerm}
+                onSearchChange={setRegionSearchTerm}
+                displayCount={regions.length}
+                totalCount={allRegions.length}
+                options={regions.map(r => ({ value: r.code, code: r.code, name: r.name, label: `${r.code} — ${r.name}` }))}
+              />
 
               {/* Item */}
-              <div className="min-w-0 flex flex-col gap-1">
-                <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em] mb-1 ml-1">
-                  <PackageOpen size={10} /> Asset / Item
-                </label>
-                <select 
-                  name="promoItem"
-                  value={formData.promoItem}
-                  onChange={handleInputChange}
-                  className="w-full h-[38px] bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-[12px] font-bold text-slate-800 dark:text-slate-100 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all cursor-pointer shadow-sm"
-                >
-                  <option value="">Select SKU Group...</option>
-                  {items.map(i => <option key={i.item_code} value={i.item_code}>{i.item_code} — {i.item_name}</option>)}
-                </select>
-              </div>
+              <SearchableSelect
+                label="Asset / Item"
+                icon={PackageOpen}
+                value={formData.promoItem}
+                onSelect={(val) => setFormData(prev => ({ ...prev, promoItem: val }))}
+                placeholder="SKU Group..."
+                searchTerm={itemSearchTerm}
+                onSearchChange={setItemSearchTerm}
+                displayCount={items.length}
+                totalCount={allItems.length}
+                options={items.map(i => ({ value: i.item_code, code: i.item_code, name: i.item_name, label: `${i.item_code} — ${i.item_name}` }))}
+              />
 
               {/* Period */}
-              <div className="min-w-0 flex flex-col gap-1">
-                <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em] mb-1 ml-1">
+              <div className="min-w-0 flex flex-col gap-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/70 p-2.5 shadow-sm">
+                <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em]">
                   <CalendarClock size={10} /> Timeline
                 </label>
                 <select 
                   name="promoPeriod"
                   value={formData.promoPeriod}
                   onChange={handleInputChange}
-                  className="w-full h-[38px] bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-[12px] font-bold text-slate-800 dark:text-slate-100 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all cursor-pointer shadow-sm"
+                  className="w-full h-[36px] bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-2 text-[11px] font-bold text-slate-800 dark:text-slate-100 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all cursor-pointer shadow-sm"
                 >
                   <option value="">Fiscal Period...</option>
                   {periods.map(p => <option key={p.promo_period} value={p.promo_period}>{p.promo_period}</option>)}
@@ -715,32 +797,37 @@ export default function UFSPromoGeneratePage() {
               </div>
 
               {/* Mechanics */}
-              <div className="min-w-0 xl:col-auto flex flex-col gap-1">
-                <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em] mb-1 ml-1">
+              <div className="min-w-0 xl:col-auto flex flex-col gap-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/70 p-2.5 shadow-sm">
+                <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em]">
                   <FileText size={10} /> Logic & Mechanics
                 </label>
                 <textarea 
                   name="promoMechanics"
                   value={formData.promoMechanics}
                   onChange={handleInputChange}
-                  placeholder="e.g. 100+20, 20+1, 3+1pcs or 100+RM20"
-                  rows={1}
-                  className="w-full h-[38px] bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-[12px] font-medium text-slate-700 dark:text-slate-200 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all resize-none shadow-sm"
+                  placeholder="e.g. 100+20, 3+1pcs"
+                  rows={2}
+                  className="w-full h-[36px] bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-200 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all resize-none shadow-sm"
                 />
+                <div className="text-[7px] font-black text-slate-400/80 uppercase tracking-widest text-center mt-0.5">
+                  Comma-separated slabs
+                </div>
               </div>
 
               {/* Generate Button */}
-              <button
-                onClick={handleGenerate}
-                disabled={loading}
-                className="group relative overflow-hidden px-4 h-[38px] bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg font-black text-[10px] uppercase tracking-[0.18em] hover:scale-[1.02] active:scale-95 transition-all shadow-lg flex items-center justify-center gap-2 shrink-0 self-end disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-rose-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <span className="relative flex items-center gap-2 group-hover:text-white transition-colors">
+              <div className="flex flex-col justify-center gap-2 rounded-xl border border-white/5 bg-slate-900 text-white dark:bg-white dark:text-slate-900 p-3 shadow-lg min-w-[120px]">
+                <button
+                  onClick={handleGenerate}
+                  disabled={loading}
+                  className="group relative h-[44px] w-full bg-rose-500 hover:bg-rose-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-white rounded-lg font-black text-[11px] uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-95 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
                   {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                   {loading ? 'Building...' : 'Build'}
-                </span>
-              </button>
+                </button>
+                <div className="text-[7px] font-black text-center uppercase tracking-[0.2em] opacity-40">
+                  Ready to Project
+                </div>
+              </div>
             </div>
           </div>
         </MotionDiv>

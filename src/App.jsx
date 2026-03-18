@@ -28,6 +28,7 @@ const ToolSelection = lazy(() => import("./pages/ToolsSelectionPage"));
 // Tools - Promotions
 const PromoMainPage = lazy(() => import("./pages/PromoMainPage"));
 const PromoConfigPage = lazy(() => import("./pages/Promotions/PromoConfigPage.jsx"));
+const PromoManualEntryPage = lazy(() => import("./pages/Promotions/PromoManualEntryPage.jsx"));
 const PromoAutoIC = lazy(() => import("./pages/promo_auto_IC"));
 const UFSPromoListPage = lazy(() => import("./pages/Promotions/UFSPromoListPage.jsx"));
 const UFSPromoGeneratePage = lazy(() => import("./pages/Promotions/UFSPromoGeneratePage.jsx"));
@@ -219,6 +220,7 @@ export default function App() {
           <Route element={<RequirePermission perm="tools.promotions.view" fallback={<UnauthorizedPage />} />}>
             <Route path="/promotions" element={<PromoMainPage />} />
             <Route path="/promotions/config" element={<PromoConfigPage />} />
+            <Route path="/promotions/manual-entry" element={<PromoManualEntryPage />} />
             <Route path="/promotions/auto-IC" element={<PromoAutoIC />} />
             <Route path="/promotions/auto-ufs" element={<UFSPromoListPage />} />
             <Route path="/promotions/auto-ufs/add" element={<UFSPromoGeneratePage />} />

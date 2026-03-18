@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from "../../supabaseClient";
 import {
-  Search, Plus, Save, X, Edit2, AlertCircle, ListFilter, Trash2, Info, ChevronRight
+  Plus, Search, Edit2, Trash2, X, AlertCircle, Save, Filter, Undo2, Layout, Sparkles, ListFilter, Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useUser } from "../../context/UserContext";
@@ -42,15 +43,17 @@ function mapValueRow(row = {}) {
 }
 
 export default function PromoCriteriaPage() {
+  const navigate = useNavigate();
   const { user } = useUser();
   const actor = user?.email || user?.name || '';
   
   const { can } = usePermissions();
   const canEdit = can('promotions.promoCriteria.edit');
 
-  const [activeTab, setActiveTab] = useState('TYPE'); // 'TYPE' or 'VALUE'
+  const [activeTab, setActiveTab] = useState('types'); // 'types' or 'values'
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [typeSearch, setTypeSearch] = useState('');
+  const [valueSearch, setValueSearch] = useState('');
   
   const [typeList, setTypeList] = useState([]);
   const [valueList, setValueList] = useState([]);
@@ -74,7 +77,7 @@ export default function PromoCriteriaPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      if (activeTab === 'TYPE') {
+      if (activeTab === 'types') {
         const { data, error } = await supabase
           .from(TYPE_TABLE)
           .select('*')
@@ -109,7 +112,8 @@ export default function PromoCriteriaPage() {
 
   // Filter Data
   const filteredData = useMemo(() => {
-    const list = activeTab === 'TYPE' ? typeList : valueList;
+    const searchTerm = activeTab === 'types' ? typeSearch : valueSearch;
+    const list = activeTab === 'types' ? typeList : valueList;
     if (!searchTerm) return list;
     const lowerSearch = searchTerm.toLowerCase();
     return list.filter(item => 
@@ -118,10 +122,10 @@ export default function PromoCriteriaPage() {
       (item.typeCode || '').toLowerCase().includes(lowerSearch) ||
       (item.typeName || '').toLowerCase().includes(lowerSearch)
     );
-  }, [typeList, valueList, activeTab, searchTerm]);
+  }, [typeList, valueList, activeTab, typeSearch, valueSearch]);
 
   // Handlers
-  const handleOpenModal = (item = null) => {
+  const handleAddItem = (item = null) => {
     if (item) {
       setEditingId(item.id);
       setFormData({
@@ -135,7 +139,7 @@ export default function PromoCriteriaPage() {
       setFormData({
         code: '',
         description: '',
-        typeCode: activeTab === 'VALUE' && typeList.length > 0 ? typeList[0].code : '',
+        typeCode: activeTab === 'values' && typeList.length > 0 ? typeList[0].code : '',
         active: true,
       });
     }
@@ -167,7 +171,7 @@ export default function PromoCriteriaPage() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!formData.code || !formData.description || (activeTab === 'VALUE' && !formData.typeCode)) {
+    if (!formData.code || !formData.description || (activeTab === 'values' && !formData.typeCode)) {
       toast.error("Please fill in all required fields.");
       return;
     }
@@ -175,8 +179,8 @@ export default function PromoCriteriaPage() {
     setSaving(true);
     try {
       const now = new Date().toISOString();
-      const table = activeTab === 'TYPE' ? TYPE_TABLE : VALUE_TABLE;
-      const codeField = activeTab === 'TYPE' ? 'criteria_type_code' : 'criteria_value_code';
+      const table = activeTab === 'types' ? TYPE_TABLE : VALUE_TABLE;
+      const codeField = activeTab === 'types' ? 'criteria_type_code' : 'criteria_value_code';
       
       const payload = {
         description: formData.description,
@@ -185,7 +189,7 @@ export default function PromoCriteriaPage() {
         updated_by: actor,
       };
 
-      if (activeTab === 'TYPE') {
+      if (activeTab === 'types') {
         payload.criteria_type_description = formData.description;
         delete payload.description;
       } else {
@@ -203,7 +207,7 @@ export default function PromoCriteriaPage() {
           .maybeSingle();
         
         if (existing) {
-          toast.error(`${activeTab === 'TYPE' ? 'Type' : 'Value'} code "${formData.code}" already exists.`);
+          toast.error(`${activeTab === 'types' ? 'Type' : 'Value'} code "${formData.code}" already exists.`);
           setSaving(false);
           return;
         }
@@ -231,10 +235,10 @@ export default function PromoCriteriaPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm(`Are you sure you want to delete this ${activeTab === 'TYPE' ? 'Type' : 'Value'}?`)) return;
+    if (!window.confirm(`Are you sure you want to delete this ${activeTab === 'types' ? 'Type' : 'Value'}?`)) return;
     try {
-      const table = activeTab === 'TYPE' ? TYPE_TABLE : VALUE_TABLE;
-      const codeField = activeTab === 'TYPE' ? 'criteria_type_code' : 'criteria_value_code';
+      const table = activeTab === 'types' ? TYPE_TABLE : VALUE_TABLE;
+      const codeField = activeTab === 'types' ? 'criteria_type_code' : 'criteria_value_code';
       const { error } = await supabase.from(table).delete().eq(codeField, id);
       if (error) throw error;
       toast.success("Deleted successfully.");
@@ -247,38 +251,60 @@ export default function PromoCriteriaPage() {
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-900/50 overflow-hidden">
-      {/* Header */}
-      <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm z-10">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 rounded-xl">
-            <ListFilter size={24} />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Promo Criteria Config</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Manage promotion criteria types and their corresponding values.</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 w-full sm:w-64 bg-slate-100 dark:bg-slate-800/50 border-none rounded-xl text-sm focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 transition-all"
-            />
-          </div>
-          {canEdit && (
-            <button
-              onClick={() => handleOpenModal()}
-              className="flex items-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-800 dark:hover:bg-slate-100 transition-all shadow-sm active:scale-95"
+      {/* ── Premium Header ── */}
+      <div className="relative overflow-hidden bg-slate-900 mx-6 mt-6 rounded-[32px] px-8 py-5 shadow-2xl border border-white/5 shrink-0">
+        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-violet-500/10 blur-[100px] rounded-full translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-purple-500/10 blur-[80px] rounded-full -translate-x-1/2 translate-y-1/2" />
+        
+        <div className="relative flex flex-wrap items-center justify-between gap-6">
+          <div className="flex items-center gap-6">
+            <button 
+              onClick={() => navigate('/promotions/config')}
+              className="p-3 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-white group"
+              title="Back to Config"
             >
-              <Plus size={16} />
-              <span className="hidden sm:inline">Add {activeTab === 'TYPE' ? 'Type' : 'Value'}</span>
+              <Undo2 size={20} className="group-hover:-translate-x-0.5 transition-transform" />
             </button>
-          )}
+            <div className="h-10 w-px bg-white/10 mx-1" />
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-violet-500/20 text-violet-400 rounded-2xl border border-violet-500/20">
+                <ListFilter size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h1 className="text-xl font-black text-white tracking-tight uppercase italic">
+                    Promotion <span className="text-violet-500 font-extrabold not-italic">Criteria</span>
+                  </h1>
+                </div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em]">Target Attributes & Values</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="relative group/search">
+               <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                  <Search className="w-4 h-4 text-slate-500 group-focus-within/search:text-violet-400 transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Filter attributes..."
+                  value={activeTab === 'types' ? typeSearch : valueSearch}
+                  onChange={(e) => activeTab === 'types' ? setTypeSearch(e.target.value) : setValueSearch(e.target.value)}
+                  className="pl-10 pr-4 py-2.5 w-full sm:w-64 bg-white/5 border border-white/10 rounded-2xl text-[11px] font-bold text-white placeholder:text-slate-500 focus:outline-none focus:ring-4 focus:ring-violet-500/10 focus:border-violet-500/50 transition-all shadow-sm"
+                />
+            </div>
+
+            {canEdit && (
+              <button
+                onClick={() => handleAddItem()}
+                className="flex items-center gap-2 bg-violet-500 hover:bg-violet-600 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-violet-500/20 active:scale-95"
+              >
+                <Plus size={16} />
+                Add {activeTab === 'types' ? 'Type' : 'Value'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -286,9 +312,9 @@ export default function PromoCriteriaPage() {
       <div className="shrink-0 px-6 py-4 bg-white/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
         <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-full max-w-md">
           <button
-            onClick={() => { setActiveTab('TYPE'); setSearchTerm(''); }}
+            onClick={() => { setActiveTab('types'); setTypeSearch(''); }}
             className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-bold rounded-lg transition-all ${
-              activeTab === 'TYPE' 
+              activeTab === 'types' 
                 ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-sm' 
                 : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
             }`}
@@ -296,9 +322,9 @@ export default function PromoCriteriaPage() {
             Criteria Type
           </button>
           <button
-            onClick={() => { setActiveTab('VALUE'); setSearchTerm(''); }}
+            onClick={() => { setActiveTab('values'); setValueSearch(''); }}
             className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-bold rounded-lg transition-all ${
-              activeTab === 'VALUE' 
+              activeTab === 'values' 
                 ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-sm' 
                 : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
             }`}
@@ -321,7 +347,7 @@ export default function PromoCriteriaPage() {
                 <AlertCircle className="w-8 h-8 text-slate-400" />
               </div>
               <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-1">No Records Found</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">No criteria {activeTab === 'TYPE' ? 'types' : 'values'} match your search.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">No criteria {activeTab === 'types' ? 'types' : 'values'} match your search.</p>
             </div>
           ) : (
             <div className="overflow-x-auto min-h-[400px]">

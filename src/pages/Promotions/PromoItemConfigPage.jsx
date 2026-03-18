@@ -2,9 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 
 import { supabase } from "../../supabaseClient";
 import {
-  Search, Plus, Save, X, Edit2, AlertCircle, PackageOpen, Tag
+  Plus, Search, Edit2, Trash2, X, AlertCircle, Save, PackageOpen, Undo2, Layout, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { usePermissions } from '../../hooks/usePermissions';
 
@@ -33,6 +34,7 @@ function mapSku(row = {}) {
 }
 
 export default function PromoItemConfigPage() {
+  const navigate = useNavigate();
   const { can } = usePermissions();
   const canEdit = can('promotions.promoItem.edit');
 
@@ -139,6 +141,8 @@ export default function PromoItemConfigPage() {
     setIsModalOpen(true);
   };
 
+  const handleAddItem = () => handleOpenModal(null);
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingId(null);
@@ -242,37 +246,60 @@ export default function PromoItemConfigPage() {
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-900/50">
-      <div className="shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm z-10">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-xl">
-            <PackageOpen size={24} />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Promo Item Config</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Map promotion items and link them to Master SKUs.</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by code or name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 w-full sm:w-64 bg-slate-100 dark:bg-slate-800/50 border-none rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 transition-all"
-            />
-          </div>
-          {canEdit && (
-            <button
-              onClick={() => handleOpenModal()}
-              className="flex items-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-800 dark:hover:bg-slate-100 transition-all shadow-sm active:scale-95"
+      {/* ── Premium Header ── */}
+      <div className="relative overflow-hidden bg-slate-900 mx-6 mt-6 rounded-[32px] px-8 py-5 shadow-2xl border border-white/5 shrink-0">
+        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-orange-500/10 blur-[100px] rounded-full translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-amber-500/10 blur-[80px] rounded-full -translate-x-1/2 translate-y-1/2" />
+        
+        <div className="relative flex flex-wrap items-center justify-between gap-6">
+          <div className="flex items-center gap-6">
+            <button 
+              onClick={() => navigate('/promotions/config')}
+              className="p-3 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-white group"
+              title="Back to Config"
             >
-              <Plus size={16} />
-              <span className="hidden sm:inline">Add Item</span>
+              <Undo2 size={20} className="group-hover:-translate-x-0.5 transition-transform" />
             </button>
-          )}
+            <div className="h-10 w-px bg-white/10 mx-1" />
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-orange-500/20 text-orange-400 rounded-2xl border border-orange-500/20">
+                <PackageOpen size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h1 className="text-xl font-black text-white tracking-tight uppercase italic">
+                    Promotion <span className="text-orange-500 font-extrabold not-italic">Items</span>
+                  </h1>
+                </div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em]">SKU Groups & Item Shortforms</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="relative group/search">
+               <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                  <Search className="w-4 h-4 text-slate-500 group-focus-within/search:text-orange-400 transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search items..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2.5 w-full sm:w-64 bg-white/5 border border-white/10 rounded-2xl text-[11px] font-bold text-white placeholder:text-slate-500 focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500/50 transition-all shadow-sm"
+                />
+            </div>
+
+            {canEdit && (
+              <button
+                onClick={() => handleAddItem()}
+                className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-orange-500/20 active:scale-95"
+              >
+                <Plus size={16} />
+                Add Item
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

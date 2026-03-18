@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Database, Download, Eye, Info, Plus, RefreshCcw, Save, Search, Trash2, Undo2 } from 'lucide-react';
+import { Database, Download, Eye, Info, Plus, RefreshCcw, Save, Search, Trash2, Undo2, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { supabase } from '../../supabaseClient';
 import UfsPromoBlueprintDetailModal from './UfsPromoBlueprintDetailModal';
+import UfsBulkUploadModal from './UfsBulkUploadModal';
 import {
   DEFAULT_PROMOTION_CONTROL_SCHEME_ID,
   PROMOTION_CONTROL_DEFAULTS,
@@ -232,6 +233,7 @@ export default function UFSPromoListPage() {
   const [selectedDetail, setSelectedDetail] = useState(null);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
 
   useEffect(() => {
     loadPromotions();
@@ -291,6 +293,39 @@ export default function UFSPromoListPage() {
       toast.error('Delete failed. Please check the saved blueprint tables.');
     } finally {
       setDeletingSchemeIds((current) => current.filter((schemeId) => schemeId !== row.schemeId));
+    }
+  }
+
+  async function handleResetRegistry() {
+    const confirmed = window.confirm('Are you sure you want to RESET the entire registry? This will permanently DELETE ALL saved blueprints and their slab rows from the database.');
+    if (!confirmed) return;
+
+    setLoading(true);
+    try {
+      // Delete all rows first (due to potential FK or just cleaner logic)
+      const { error: rowDeleteError } = await supabase
+        .from(GENERATED_PROMOTION_ROW_TABLE)
+        .delete()
+        .neq('OPSOID', 'DUMMY_NON_EXISTENT_VALUE'); // Hack to delete all rows as Supabase requires a filter
+
+      if (rowDeleteError) throw rowDeleteError;
+
+      // Delete all blueprints
+      const { error: promotionDeleteError } = await supabase
+        .from(GENERATED_PROMOTION_TABLE)
+        .delete()
+        .neq('scheme_id', 'DUMMY_NON_EXISTENT_VALUE');
+
+      if (promotionDeleteError) throw promotionDeleteError;
+
+      setRows([]);
+      setSearchTerm('');
+      toast.success('Registry has been completely reset.');
+    } catch (error) {
+      console.error('Failed to reset UFS promotion registry:', error);
+      toast.error('Reset failed. Please check the database connection.');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -440,49 +475,89 @@ export default function UFSPromoListPage() {
       >
         <div className="absolute inset-0 opacity-[0.015] pointer-events-none bg-[radial-gradient(#000_1px,transparent_1px)] dark:bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:20px_20px]" />
 
-          <div className="px-10 py-5 border-b border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between bg-white/50 dark:bg-slate-900/50 backdrop-blur-md shrink-0 z-10">
-            <h3 className="text-xs font-black text-slate-600 dark:text-slate-300 flex items-center gap-3 uppercase tracking-widest">
-              <Eye className="w-5 h-5 text-rose-500" />
-              Promotion Blueprint List
-            </h3>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <div className="px-10 py-5 border-b border-slate-200/50 dark:border-slate-800/50 flex flex-wrap items-center justify-between gap-6 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md shrink-0 z-10">
+            {/* Left: Branding & Status */}
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col">
+                <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-3 uppercase tracking-widest mb-1">
+                  <Eye className="w-5 h-5 text-rose-500" />
+                  Blueprint Registry
+                </h3>
+                <div className="flex items-center gap-2">
+                  <div className="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 text-[9px] font-black text-slate-500 uppercase tracking-tighter">
+                    {filteredRows.length} / {rows.length} Records
+                  </div>
+                  <button
+                    onClick={loadPromotions}
+                    disabled={loading}
+                    className="p-1.5 rounded-lg bg-white dark:bg-slate-800 text-slate-400 hover:text-blue-500 hover:border-blue-200 border border-slate-200 dark:border-slate-700 transition-all shadow-sm disabled:opacity-60"
+                    title="Refresh data from registry"
+                  >
+                    <RefreshCcw size={12} className={loading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Center: Search / Filter */}
+            <div className="flex-1 max-w-xl mx-auto">
+              <div className="relative group/search">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                  <Search className="w-4 h-4 text-slate-400 group-focus-within/search:text-rose-500 transition-colors" />
+                  <span className="h-3 w-px bg-slate-200 dark:bg-slate-700" />
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Filter</span>
+                </div>
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search scheme, promo, description..."
-                  className="w-[280px] pl-9 pr-4 py-2 rounded-xl border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-300"
+                  placeholder="Scheme ID, Promo #, Region, Item..."
+                  className="w-full pl-24 pr-10 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-[11px] font-bold text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-rose-500/5 focus:border-rose-500 transition-all shadow-sm"
                 />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-rose-500 transition-all"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
               </div>
-              <button
-                onClick={() => setSearchTerm('')}
-                disabled={!searchTerm}
-                className="px-3 py-2 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all text-[10px] font-black uppercase tracking-[0.2em] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Reset
-              </button>
-              <button
-                onClick={handleExportExcel}
-                disabled={loading || exporting || filteredRows.length === 0}
-                className="px-4 py-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 transition-all text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                title={normalizedSearch ? 'Export current filtered blueprint rows' : 'Export all saved blueprint rows'}
-              >
-                <Download size={14} className={exporting ? 'animate-bounce' : ''} />
-                {exporting ? 'Exporting...' : 'Export Excel'}
-              </button>
-              <div className="px-3 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-[10px] font-black text-slate-500 uppercase tracking-tighter">
-                {filteredRows.length} / {rows.length} Saved
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 backdrop-blur-sm shadow-sm">
+                <button
+                  onClick={handleExportExcel}
+                  disabled={loading || exporting || filteredRows.length === 0}
+                  className="px-4 py-2 rounded-xl bg-white dark:bg-slate-900 text-emerald-600 hover:bg-emerald-600 hover:text-white border border-slate-200 dark:border-slate-700 transition-all text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={normalizedSearch ? 'Export current filtered blueprint rows' : 'Export all saved blueprint rows'}
+                >
+                  <Download size={14} className={exporting ? 'animate-bounce' : ''} />
+                  {exporting ? 'Exporting...' : 'Export Template'}
+                </button>
+                
+                <button
+                  onClick={() => setIsBulkUploadOpen(true)}
+                  className="px-4 py-2 rounded-xl bg-white dark:bg-slate-900 text-rose-600 hover:bg-rose-600 hover:text-white border border-slate-200 dark:border-slate-700 transition-all text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-sm"
+                  title="Bulk upload promotions via Excel"
+                >
+                  <Upload size={14} />
+                  Bulk Upload
+                </button>
+
+                <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+
+                <button
+                  onClick={handleResetRegistry}
+                  disabled={loading || rows.length === 0}
+                  className="px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-100 dark:border-rose-900/30 transition-all text-[10px] font-black uppercase tracking-[0.2em] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                  title="Permanently wipe entire registry data"
+                >
+                  Reset Registry
+                </button>
               </div>
-              <button
-                onClick={loadPromotions}
-                disabled={loading}
-                className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-blue-500 hover:text-white transition-all shadow-sm disabled:opacity-60"
-                title="Reload list"
-              >
-                <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} />
-              </button>
             </div>
           </div>
 
@@ -618,6 +693,12 @@ export default function UFSPromoListPage() {
         isOpen={isInfoModalOpen}
         selectedDetail={selectedDetail}
         onClose={() => setIsInfoModalOpen(false)}
+      />
+
+      <UfsBulkUploadModal
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+        onSuccess={loadPromotions}
       />
     </div>
   );

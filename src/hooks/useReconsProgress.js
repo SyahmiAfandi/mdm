@@ -1,5 +1,5 @@
 // src/hooks/useReconsProgress.js
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../supabaseClient";
 
 const COL = "recon_cells";
@@ -43,8 +43,10 @@ export default function useReconsProgress(params = {}) {
   const now = new Date();
   const year = Number(params.year ?? now.getFullYear());
   const monthNum = normalizeMonthToNumber(params.month);
+  const hasLoadedOnceRef = useRef(false);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [lastRunAt, setLastRunAt] = useState(null);
 
@@ -57,7 +59,12 @@ export default function useReconsProgress(params = {}) {
     let alive = true;
 
     async function load() {
-      setLoading(true);
+      if (hasLoadedOnceRef.current) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
       try {
         // Build base queries for counts
         const getBase = () => baseQuery(supabase.from(COL).select('*', { count: 'exact', head: true }), year, monthNum);
@@ -97,6 +104,7 @@ export default function useReconsProgress(params = {}) {
         setNoData(noDataCount);
         setLastRunAt(latest);
         setError("");
+        hasLoadedOnceRef.current = true;
       } catch (e) {
         if (!alive) return;
         setTotal(0);
@@ -105,8 +113,12 @@ export default function useReconsProgress(params = {}) {
         setNoData(0);
         setLastRunAt(null);
         setError(e?.message || "Failed to load recons progress.");
+        hasLoadedOnceRef.current = true;
       } finally {
-        if (alive) setLoading(false);
+        if (alive) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     }
 
@@ -132,6 +144,7 @@ export default function useReconsProgress(params = {}) {
 
   return {
     loading,
+    refreshing,
     hasData: total > 0 && !error,
     total,
     processed,

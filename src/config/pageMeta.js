@@ -249,6 +249,16 @@ export const PAGE_META = [
     ],
   },
   {
+    match: /^\/promotions\/manual-entry/,
+    title: "Manual Entry Promotion",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Tools", to: "/tools" },
+      { label: "Promotions", to: "/promotions" },
+      { label: "Manual Entry" },
+    ],
+  },
+  {
     match: /^\/promotions\/auto-ufs\/controls/,
     title: "UFS Promotion Controls",
     breadcrumbs: [

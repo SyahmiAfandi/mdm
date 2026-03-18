@@ -1,18 +1,10 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Database, Filter, Layout, X } from 'lucide-react';
+import { formatDisplayDate, formatNumericDisplay } from './ufsPromoUtils';
 
 export default function UfsPromoBlueprintDetailModal({ isOpen, selectedDetail, onClose }) {
   const MotionDiv = motion.div;
-  const formatDisplayDate = (value) => (value ? new Date(value).toLocaleDateString('en-GB') : '-');
-  const formatNumericDisplay = (value, decimals = 0) => (
-    typeof value === 'number' && !Number.isNaN(value)
-      ? value.toLocaleString('en-US', {
-          minimumFractionDigits: decimals,
-          maximumFractionDigits: decimals
-        })
-      : '-'
-  );
 
   const currentSchemeInfo = selectedDetail ? [
     { label: 'Project Code - Name', value: selectedDetail.description || '-' },
