@@ -540,18 +540,18 @@ export default function ReportExtractionTaskLists() {
                              onClick={() => handleDelete(task)}
                              title="Delete Task List"
                              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                           >
-                             <Trash2 className="w-4 h-4" />
-                           </button>
-                         </>
-                       )}
-                       <button 
-                         onClick={() => openEditModal(task)}
-                         title="Edit Task List"
-                         className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => openEditModal(task)}
+                              title="Edit Task List"
+                              className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                      </div>
                      
                      <Link 

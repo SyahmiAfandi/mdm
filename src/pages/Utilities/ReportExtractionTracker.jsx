@@ -8,8 +8,6 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock3,
-  Eye,
-  EyeOff,
   FileSpreadsheet,
   Info,
   Loader2,
@@ -287,6 +285,12 @@ export default function ReportExtractionTracker() {
     [currentUserName, currentUserEmail]
   );
   const isAdmin = role === "admin" || can("admin.*") || can("utilities.reportExtraction.assign");
+  const [taskListCreatedBy, setTaskListCreatedBy] = useState("");
+  const isTaskCreator = useMemo(
+    () => matchesAnyName(taskListCreatedBy, currentUserAliases),
+    [taskListCreatedBy, currentUserAliases]
+  );
+  const canManageAssignments = isAdmin || isTaskCreator;
 
   const defaultPeriod = useMemo(() => getDefaultPeriod(), []);
 
@@ -304,7 +308,6 @@ export default function ReportExtractionTracker() {
   const [monthFilter, setMonthFilter] = useState("All");
   const [businessFilter, setBusinessFilter] = useState("All");
   const [trackerStatusFilter, setTrackerStatusFilter] = useState("All");
-  const [showPasswords, setShowPasswords] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [listMode, setListMode] = useState("my");
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
@@ -559,11 +562,12 @@ export default function ReportExtractionTracker() {
       ] = await Promise.all([
         supabase.from(TRACKER_TABLE).select("*").eq("task_list_id", taskId),
         supabase.from(DISTRIBUTOR_TABLE).select("code,tvid,password"),
-        supabase.from("report_extraction_task_lists").select("assigned_to").eq("id", taskId).single(),
+        supabase.from("report_extraction_task_lists").select("assigned_to,created_by").eq("id", taskId).single(),
       ]);
 
       if (trackerError) throw trackerError;
       if (distributorError) throw distributorError;
+      if (taskListError) throw taskListError;
 
       const trackerData = allTracker || [];
       const trackerIds = trackerData.map((row) => safeStr(row?.id)).filter(Boolean);
@@ -587,6 +591,7 @@ export default function ReportExtractionTracker() {
       }
 
       setDistributorRows((distributors || []).map(mapDistributorRow));
+      setTaskListCreatedBy(safeStr(taskListData?.created_by));
       try {
         await loadAssignableUsers(taskListData?.assigned_to || "");
       } catch (err) {
@@ -605,7 +610,7 @@ export default function ReportExtractionTracker() {
   }
 
   async function assignVisibleRowsEqually() {
-    if (!isAdmin) return;
+    if (!canManageAssignments) return;
 
     const assignees = assigneeOptions.filter((option) => selectedAssigneeIds.includes(option.id));
     if (!assignees.length) {
@@ -885,10 +890,10 @@ export default function ReportExtractionTracker() {
       .on("postgres_changes", { event: "*", schema: "public", table: TRACKER_TABLE }, () => fetchData({ background: true }))
       .on("postgres_changes", { event: "*", schema: "public", table: DISTRIBUTOR_TABLE }, () => fetchData({ background: true }))
       .on("postgres_changes", { event: "*", schema: "public", table: PROFILE_TABLE }, () => {
-        if (isAdmin) fetchData({ background: true });
+        if (canManageAssignments) fetchData({ background: true });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: USER_ROLE_TABLE }, () => {
-        if (isAdmin) fetchData({ background: true });
+        if (canManageAssignments) fetchData({ background: true });
       })
       .subscribe();
 
@@ -896,7 +901,7 @@ export default function ReportExtractionTracker() {
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, currentUserId, currentUserName, currentUserEmail, userLoading, permissionsLoading]);
+  }, [canManageAssignments, currentUserId, currentUserName, currentUserEmail, userLoading, permissionsLoading]);
 
   const defaultMonthLabel = monthName(defaultPeriod.monthNum);
 
@@ -1007,7 +1012,7 @@ export default function ReportExtractionTracker() {
               </button>
             </div>
 
-            {isAdmin && (
+            {canManageAssignments && (
               <button
                 onClick={() => setAssignmentModalOpen(true)}
                 className="flex items-center gap-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 px-3 sm:px-4 py-2 text-sm font-bold text-white shadow-sm transition-all shadow-indigo-900/20 whitespace-nowrap"
@@ -1022,14 +1027,6 @@ export default function ReportExtractionTracker() {
             >
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Analytics</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowPasswords((value) => !value)}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-xs font-bold text-white hover:bg-white/15 transition"
-            >
-              {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              {showPasswords ? "Hide Secrets" : "Show Secrets"}
             </button>
             <button
               type="button"
@@ -1088,7 +1085,7 @@ export default function ReportExtractionTracker() {
         <div className="border-b border-gray-100 px-3 py-2.5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm font-semibold text-slate-800">
-              {isAdmin
+              {canManageAssignments
                 ? (listMode === "all" ? "Mismatch List with Assignment Control" : "My Assigned Extraction List")
                 : "Your Assigned Extraction List"}
             </div>
@@ -1124,7 +1121,7 @@ export default function ReportExtractionTracker() {
               ) : filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-500">
-                    {isAdmin
+                    {canManageAssignments
                       ? "No mismatches found for the selected filters."
                       : "No assigned report extraction rows found for the selected filters."}
                   </td>
@@ -1192,7 +1189,7 @@ export default function ReportExtractionTracker() {
                             >
                               <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 group-hover/pwd:text-sky-500">PWD</span>
                               <span className="font-mono text-[10px] text-slate-700 truncate group-hover/pwd:text-sky-700">
-                                {showPasswords ? (row.password || "-") : maskSecret(row.password)}
+                                {maskSecret(row.password)}
                               </span>
                             </button>
                           </div>
@@ -1504,7 +1501,7 @@ export default function ReportExtractionTracker() {
         </div>
       )}
 
-      {isAdmin && assignmentModalOpen ? (
+      {canManageAssignments && assignmentModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
           <div className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
