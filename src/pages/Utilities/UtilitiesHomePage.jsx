@@ -20,6 +20,13 @@ const utilities = [
     color: 'from-blue-500 to-indigo-600'
   },
   {
+    title: 'Report Extraction Tracker',
+    description: 'Track report extraction requests, deadlines, PIC ownership, and completion status in one place.',
+    path: '/utilities/report-extraction-tracker',
+    icon: DatabaseZap,
+    color: 'from-cyan-500 to-sky-600'
+  },
+  {
     title: 'Manual Recons Entry',
     description: 'Manually input reconciliation data for edge cases not covered by automated matching.',
     path: '/utilities/manualrecons',

@@ -116,7 +116,7 @@ export async function loginWithUsername(username, password) {
 
     // Step 1: Resolve username -> email via raw FETCH (Bypasses client hangs)
     if (!email.includes("@")) {
-      console.log(`[Login] Resolving username '${email}' via raw fetch...`);
+
       try {
         // Direct fetch is faster and won't hang the SDK connection pool
         const res = await fetch(`${url}/rest/v1/profiles?username=eq.${email}&select=email`, {
@@ -128,7 +128,7 @@ export async function loginWithUsername(username, password) {
           const data = await res.json();
           if (data?.[0]?.email) {
             email = data[0].email;
-            console.log(`[Login] Resolved email: ${email}`);
+
           }
         }
       } catch (err) {
@@ -137,7 +137,7 @@ export async function loginWithUsername(username, password) {
     }
 
     // Step 2: Authenticate via raw FETCH (Bypasses SDK HANG)
-    console.log(`[Login] B1: Authenticating via raw API...`);
+
     const authUrl = `${url}/auth/v1/token?grant_type=password`;
     
     // Explicit timeout helper to ensure B2 ALWAYS prints
@@ -162,7 +162,7 @@ export async function loginWithUsername(username, password) {
       throw new Error("Authentication timed out or network error.");
     }
     
-    console.log(`[Login] B2: Auth response received status=${authRes?.status} (${Date.now() - authStart}ms)`);
+
     const authData = await authRes.json();
     if (!authRes.ok) {
       console.error("[Login] B2 FAILED (API error):", authData);
@@ -175,7 +175,7 @@ export async function loginWithUsername(username, password) {
     // Step 3: Sync SDK state (NON-BLOCKING)
     // We fire and forget this so the "stupid" SDK can take its time to sync locally
     // while we already proceed with the login.
-    console.log(`[Login] B3: Syncing SDK session (Fire-and-forget)...`);
+
     const syncStart = Date.now();
     supabase.auth.setSession({
       access_token: authData.access_token,
@@ -184,14 +184,14 @@ export async function loginWithUsername(username, password) {
     
     const uid = user.id;
     const syncElapsed = Date.now() - syncStart;
-    console.log(`[Login] B4: Auth OK (${syncElapsed}ms). Fetching metadata (NON-BLOCKING)...`);
+
 
     // Step 4: Fetch profiles, user_roles, and licenses in PARALLEL via RAW FETCH.
     // This is the "Total Raw Bypass" - we don't trust the SDK client for critical login path.
     let profile = null, role = null, license = null, permissions = null;
     
     try {
-      console.log(`[Login] B5: Fetching metadata via high-speed raw API...`);
+
       const headers = {
         apikey: key,
         Authorization: `Bearer ${authData.access_token}`
@@ -206,7 +206,7 @@ export async function loginWithUsername(username, password) {
       profile = profRes?.[0] || null;
       role = roleRes?.[0]?.role || null;
       license = licRes?.[0] || null;
-      console.log(`[Login] B6: Metadata received (role=${role})`);
+
 
       if (role) {
         // We can still use the SDK helper for permissions as it's less likely to deadlock, 
@@ -223,7 +223,7 @@ export async function loginWithUsername(username, password) {
       licenseValid = new Date() < new Date(validUntil);
     }
 
-    console.log(`[Login] TOTAL SUCCESS: ${(performance.now() - t0).toFixed(0)}ms (redirecting...)`);
+
     return { user, role, profile, license, licenseValid, permissions };
   } catch (err) {
     console.error(`[Login] CRITICAL FAILURE:`, err.message);

@@ -16,6 +16,25 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
+async function restoreSession(session) {
+  if (!session?.access_token || !session?.refresh_token) return;
+
+  const { error } = await supabase.auth.setSession({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+  });
+
+  if (error) throw error;
+}
+
+function licenseDateToValidUntil(ymd) {
+  if (!ymd) return null;
+
+  const base = new Date(`${ymd}T00:00:00`);
+  const next = new Date(base.getTime() + 24 * 60 * 60 * 1000);
+  return next.toISOString();
+}
+
 function RegisterPICPage() {
   const navigate = useNavigate();
 
@@ -42,8 +61,19 @@ function RegisterPICPage() {
       return;
     }
 
+    let previousSession = null;
+
     try {
       setLoading(true);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      previousSession = session;
+
+      if (!previousSession?.user?.id) {
+        throw new Error("Your current admin session expired. Please sign in again and retry.");
+      }
 
       const { data: authData, error: authErr } = await supabase.auth.signUp({
         email: form.email,
@@ -55,25 +85,28 @@ function RegisterPICPage() {
       const uid = authData.user?.id;
       if (!uid) throw new Error("Failed to get user ID after auth registration.");
 
-      const { error: profErr } = await supabase.from("profiles").insert({
+      await restoreSession(previousSession);
+
+      const { error: profErr } = await supabase.from("profiles").upsert({
         id: uid,
         display_name: form.name,
+        name: form.name,
         email: form.email,
         username: form.username,
-      });
+      }, { onConflict: "id" });
       if (profErr) throw profErr;
 
-      const { error: roleErr } = await supabase.from("user_roles").insert({
+      const { error: roleErr } = await supabase.from("user_roles").upsert({
         id: uid,
         role: form.role,
-      });
+      }, { onConflict: "id" });
       if (roleErr) throw roleErr;
 
       if (form.validUntil) {
-        const { error: licErr } = await supabase.from("licenses").insert({
+        const { error: licErr } = await supabase.from("licenses").upsert({
           id: uid,
-          valid_until: new Date(form.validUntil).toISOString(),
-        });
+          valid_until: licenseDateToValidUntil(form.validUntil),
+        }, { onConflict: "id" });
         if (licErr) throw licErr;
       }
 
@@ -87,6 +120,18 @@ function RegisterPICPage() {
       console.error(err);
       toast.error(err.message || "An error occurred during registration.");
     } finally {
+      try {
+        const {
+          data: { session: currentSession },
+        } = await supabase.auth.getSession();
+
+        if (previousSession?.user?.id && currentSession?.user?.id !== previousSession.user.id) {
+          await restoreSession(previousSession);
+        }
+      } catch (restoreErr) {
+        console.error("Failed to restore the admin session after registration.", restoreErr);
+      }
+
       setLoading(false);
     }
   }

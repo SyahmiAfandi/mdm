@@ -67,26 +67,17 @@ const SearchableSelect = ({
   const selectedOption = options.find(opt => opt.value === value);
 
   return (
-    <div className="min-w-0 flex flex-col gap-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/70 p-2.5 shadow-sm relative" ref={containerRef}>
-      <div className="flex items-center justify-between">
-        <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em]">
-          <Icon size={10} /> {label}
-        </label>
-        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-md">
-          {displayCount}/{totalCount}
+    <div className="min-w-0 relative" ref={containerRef}>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full h-8 bg-white dark:bg-slate-900 border ${isOpen ? 'border-rose-500 ring-4 ring-rose-500/10' : 'border-slate-200 dark:border-slate-800'} rounded-lg pl-8 pr-2 flex items-center justify-between cursor-pointer transition-all shadow-sm`}
+      >
+        <Icon size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+        <span className={`text-[11px] font-bold truncate ${selectedOption ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400'}`}>
+          {selectedOption ? selectedOption.label : `${label} (${displayCount}/${totalCount})`}
         </span>
+        <Search size={12} className="text-slate-400 shrink-0 ml-2" />
       </div>
-      
-      <div className="relative">
-        <div 
-          onClick={() => setIsOpen(!isOpen)}
-          className={`w-full h-[36px] bg-white dark:bg-slate-900/80 border ${isOpen ? 'border-rose-500 ring-4 ring-rose-500/10' : 'border-slate-200 dark:border-slate-800'} rounded-lg px-3 flex items-center justify-between cursor-pointer transition-all shadow-sm`}
-        >
-          <span className={`text-[11px] font-bold truncate ${selectedOption ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400'}`}>
-            {selectedOption ? selectedOption.label : placeholder}
-          </span>
-          <Search size={12} className="text-slate-400 shrink-0" />
-        </div>
 
         <AnimatePresence>
           {isOpen && (
@@ -141,7 +132,6 @@ const SearchableSelect = ({
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
     </div>
   );
 };
@@ -646,9 +636,9 @@ export default function UFSPromoGeneratePage() {
 
 
   return (
-    <div className="w-full h-[calc(100vh-140px)] flex flex-col gap-6 p-2">
+    <div className="w-full h-[calc(100vh-140px)] flex flex-col gap-3 px-2 pb-2">
       {/* ── Premium Header ── */}
-      <div className="relative overflow-hidden bg-slate-900 rounded-[32px] px-8 py-5 shadow-2xl border border-white/5 shrink-0">
+      <div className="relative overflow-hidden bg-slate-900 rounded-[28px] px-6 py-3 md:py-4 shadow-xl border border-white/5 shrink-0">
         <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-rose-500/10 blur-[100px] rounded-full translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-pink-500/10 blur-[80px] rounded-full -translate-x-1/2 translate-y-1/2" />
         
@@ -656,27 +646,27 @@ export default function UFSPromoGeneratePage() {
           <div className="flex items-center gap-6">
             <button 
               onClick={() => navigate('/promotions/auto-ufs')}
-              className="p-3 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-white group"
+              className="p-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-white group"
             >
-              <Undo2 size={20} className="group-hover:-translate-x-0.5 transition-transform" />
+              <Undo2 size={18} className="group-hover:-translate-x-0.5 transition-transform" />
             </button>
             <div className="h-10 w-px bg-white/10 mx-1" />
             <div>
               <div className="flex items-center gap-2 mb-0.5">
                 <Layout className="w-5 h-5 text-rose-400" />
                 <h1 className="text-xl font-black text-white tracking-tight uppercase italic">
-                  UFS <span className="text-rose-500 font-extrabold not-italic">Engine</span>
+                  UFS <span className="text-rose-500 font-extrabold not-italic">Blueprint Builder</span>
                 </h1>
-                <div className="px-2 py-0.5 rounded-md bg-rose-500/20 border border-rose-500/30 text-[10px] font-black text-rose-400 uppercase tracking-tighter">BETA</div>
+                <div className="px-2 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-[10px] font-black text-blue-400 uppercase tracking-tighter">AUTO</div>
               </div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em]">Auto-Generation Pipeline</p>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em]">Create New Promotion Blueprint</p>
             </div>
           </div>
           
            <div className="flex items-center gap-4">
              <button
                onClick={() => navigate('/promotions/auto-ufs/controls')}
-               className="px-4 py-2 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-white text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2"
+               className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-white text-[9px] font-black uppercase tracking-[0.2em] flex items-center gap-2"
              >
                <Save size={14} />
                Control Defaults
@@ -699,135 +689,114 @@ export default function UFSPromoGeneratePage() {
         className="flex-1 flex flex-col gap-6"
       >
         {/* ── Configuration Dashboard ── */}
-        <MotionDiv variants={itemVariants} className="bg-white dark:bg-slate-900 rounded-[28px] border border-slate-200 dark:border-slate-800 p-4 shadow-xl relative shrink-0">
-          <div className="absolute top-0 right-0 p-3 opacity-[0.03] pointer-events-none">
-            <Sparkles size={96} />
+        <MotionDiv variants={itemVariants} className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-[24px] border border-slate-200/80 dark:border-slate-800 p-2 md:p-3 shadow-lg relative shrink-0 z-20">
+          <div className="absolute top-0 right-0 p-2 opacity-[0.03] pointer-events-none">
+            <Sparkles size={64} />
           </div>
           
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-rose-500" />
-                <h2 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest">Campaign Parameters</h2>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-2 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 px-2.5 py-1.5 shadow-sm">
-                  <div className="text-[8px] font-black text-slate-400 uppercase tracking-[0.18em] whitespace-nowrap">
-                    Auto From Mechanics
-                  </div>
-                  <div className="inline-flex items-center gap-1.5">
-                    <span className="rounded-md bg-white dark:bg-slate-900 px-2 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-slate-700 dark:text-slate-100 shadow-sm">
-                      {mechanicsProfile.promoType || 'Promo Type'}
-                    </span>
-                    <span className="rounded-md bg-white dark:bg-slate-900 px-2 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-slate-700 dark:text-slate-100 shadow-sm">
-                      {mechanicsProfile.uom || 'UOM'}
-                    </span>
-                  </div>
-                </div>
-
-                <button 
-                  onClick={clearForm}
-                  className="flex items-center gap-2 text-[10px] font-black text-slate-400 hover:text-rose-500 uppercase tracking-widest transition-colors px-2 py-1 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-500/10"
-                >
-                  <Trash2 size={12} />
-                  Reset
-                </button>
-              </div>
+          <div className="flex flex-col xl:flex-row items-center gap-3 relative z-10 w-full pl-2 pr-1">
+            {/* Seq # */}
+            <div className="w-[80px] flex-shrink-0 relative">
+              <Hash size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 z-10 pointer-events-none" />
+              <select 
+                name="promoNumber"
+                value={formData.promoNumber}
+                onChange={handleInputChange}
+                className="w-full h-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg pl-7 pr-2 text-[11px] font-black text-slate-800 dark:text-slate-100 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all cursor-pointer shadow-sm appearance-none"
+              >
+                {promoNumbers.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[0.6fr_1.3fr_1.3fr_0.9fr_1.6fr_auto] gap-2.5 rounded-[22px] border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-slate-50 via-white to-slate-50/80 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 p-2.5 shadow-inner">
-              {/* Promo # */}
-              <div className="min-w-0 flex flex-col gap-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/70 p-2.5 shadow-sm">
-                <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em]">
-                  <Hash size={10} /> Seq #
-                </label>
-                <select 
-                  name="promoNumber"
-                  value={formData.promoNumber}
-                  onChange={handleInputChange}
-                  className="w-full h-[36px] bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-2 text-[12px] font-black text-slate-800 dark:text-slate-100 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all cursor-pointer appearance-none shadow-sm"
-                >
-                  {promoNumbers.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-
-              {/* Region */}
+            {/* Region */}
+            <div className="w-[180px] flex-shrink-0">
               <SearchableSelect
-                label="Target Region"
+                label="Region"
                 icon={MapPin}
                 value={formData.region}
                 onSelect={(val) => setFormData(prev => ({ ...prev, region: val }))}
-                placeholder="Territory..."
+                placeholder="Region..."
                 searchTerm={regionSearchTerm}
                 onSearchChange={setRegionSearchTerm}
                 displayCount={regions.length}
                 totalCount={allRegions.length}
                 options={regions.map(r => ({ value: r.code, code: r.code, name: r.name, label: `${r.code} — ${r.name}` }))}
               />
+            </div>
 
-              {/* Item */}
+            {/* Item */}
+            <div className="w-[180px] flex-shrink-0">
               <SearchableSelect
-                label="Asset / Item"
+                label="Asset"
                 icon={PackageOpen}
                 value={formData.promoItem}
                 onSelect={(val) => setFormData(prev => ({ ...prev, promoItem: val }))}
-                placeholder="SKU Group..."
+                placeholder="SKU Target..."
                 searchTerm={itemSearchTerm}
                 onSearchChange={setItemSearchTerm}
                 displayCount={items.length}
                 totalCount={allItems.length}
                 options={items.map(i => ({ value: i.item_code, code: i.item_code, name: i.item_name, label: `${i.item_code} — ${i.item_name}` }))}
               />
+            </div>
 
-              {/* Period */}
-              <div className="min-w-0 flex flex-col gap-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/70 p-2.5 shadow-sm">
-                <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em]">
-                  <CalendarClock size={10} /> Timeline
-                </label>
-                <select 
-                  name="promoPeriod"
-                  value={formData.promoPeriod}
-                  onChange={handleInputChange}
-                  className="w-full h-[36px] bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-2 text-[11px] font-bold text-slate-800 dark:text-slate-100 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all cursor-pointer shadow-sm"
-                >
-                  <option value="">Fiscal Period...</option>
-                  {periods.map(p => <option key={p.promo_period} value={p.promo_period}>{p.promo_period}</option>)}
-                </select>
-              </div>
+            {/* Period */}
+            <div className="w-[130px] flex-shrink-0 relative">
+              <CalendarClock size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 z-10 pointer-events-none" />
+              <select 
+                name="promoPeriod"
+                value={formData.promoPeriod}
+                onChange={handleInputChange}
+                className="w-full h-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg pl-7 pr-3 text-[10px] font-bold text-slate-800 dark:text-slate-100 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all cursor-pointer shadow-sm appearance-none"
+              >
+                <option value="">Timeline...</option>
+                {periods.map(p => <option key={p.promo_period} value={p.promo_period}>{p.promo_period}</option>)}
+              </select>
+            </div>
 
-              {/* Mechanics */}
-              <div className="min-w-0 xl:col-auto flex flex-col gap-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/70 p-2.5 shadow-sm">
-                <label className="flex items-center gap-1 text-[8px] font-black text-slate-400 uppercase tracking-[0.18em]">
-                  <FileText size={10} /> Logic & Mechanics
-                </label>
-                <textarea 
+            {/* Mechanics */}
+            <div className="flex-1 min-w-[200px] flex items-center gap-2">
+              <div className="relative flex-1">
+                <FileText size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 z-10 pointer-events-none" />
+                <input 
+                  type="text"
                   name="promoMechanics"
                   value={formData.promoMechanics}
                   onChange={handleInputChange}
-                  placeholder="e.g. 100+20, 3+1pcs"
-                  rows={2}
-                  className="w-full h-[36px] bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-200 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all resize-none shadow-sm"
+                  placeholder="Logic..."
+                  className="w-full h-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg pl-7 pr-3 text-[11px] font-medium text-slate-700 dark:text-slate-200 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all shadow-sm"
                 />
-                <div className="text-[7px] font-black text-slate-400/80 uppercase tracking-widest text-center mt-0.5">
-                  Comma-separated slabs
-                </div>
               </div>
 
-              {/* Generate Button */}
-              <div className="flex flex-col justify-center gap-2 rounded-xl border border-white/5 bg-slate-900 text-white dark:bg-white dark:text-slate-900 p-3 shadow-lg min-w-[120px]">
-                <button
-                  onClick={handleGenerate}
-                  disabled={loading}
-                  className="group relative h-[44px] w-full bg-rose-500 hover:bg-rose-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-white rounded-lg font-black text-[11px] uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-95 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                  {loading ? 'Building...' : 'Build'}
-                </button>
-                <div className="text-[7px] font-black text-center uppercase tracking-[0.2em] opacity-40">
-                  Ready to Project
-                </div>
+              {/* Status Chips */}
+              <div className="hidden 2xl:flex items-center gap-1.5 shrink-0">
+                <span className="rounded-md bg-white dark:bg-slate-900 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500 shadow-sm border border-slate-100 dark:border-slate-800">
+                  {mechanicsProfile.promoType || 'Type'}
+                </span>
+                <span className="rounded-md bg-white dark:bg-slate-900 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500 shadow-sm border border-slate-100 dark:border-slate-800">
+                  {mechanicsProfile.uom || 'UOM'}
+                </span>
               </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 flex-shrink-0 pl-1 border-l border-slate-200 dark:border-slate-800">
+              <button 
+                onClick={clearForm}
+                className="h-8 px-2 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-400 hover:text-rose-500 transition-colors shadow-sm"
+                title="Reset Parameters"
+              >
+                <Trash2 size={12} />
+              </button>
+              
+              <button
+                onClick={handleGenerate}
+                disabled={loading}
+                className="relative h-8 px-4 bg-rose-500 hover:bg-rose-600 dark:bg-slate-900 dark:hover:bg-slate-800 text-white rounded-lg font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                {loading ? 'WAIT' : 'BUILD'}
+              </button>
             </div>
           </div>
         </MotionDiv>
@@ -841,10 +810,10 @@ export default function UFSPromoGeneratePage() {
           <div className="px-10 py-5 border-b border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between bg-white/50 dark:bg-slate-900/50 backdrop-blur-md shrink-0 z-10">
             <h3 className="text-xs font-black text-slate-600 dark:text-slate-300 flex items-center gap-3 uppercase tracking-widest">
               <Eye className="w-5 h-5 text-rose-500" />
-              Promotion Blueprint Preview
+              Generated Blueprint Preview
             </h3>
             <div className="flex items-center gap-2">
-               <div className="px-3 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-[10px] font-black text-slate-500 uppercase tracking-tighter">Draft Mode</div>
+               <div className="px-3 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-[10px] font-black text-slate-500 uppercase tracking-tighter">Preview</div>
             </div>
           </div>
           
@@ -855,9 +824,9 @@ export default function UFSPromoGeneratePage() {
                   <div className="absolute inset-0 bg-rose-500/10 blur-3xl rounded-full" />
                   <Database size={64} className="relative opacity-20" />
                 </div>
-                <h4 className="text-sm font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-2">System Idling</h4>
-                <p className="text-[10px] font-bold text-slate-400/50 uppercase tracking-widest max-w-[250px]">
-                  Configure parameters and initiate build to see projection
+                <h4 className="text-sm font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-2">No Blueprint Generated</h4>
+                <p className="text-[10px] font-bold text-slate-400/50 uppercase tracking-widest max-w-[280px]">
+                  Fill in the parameters above and click "Generate" to preview your blueprint
                 </p>
               </div>
             ) : (
@@ -944,7 +913,7 @@ export default function UFSPromoGeneratePage() {
           </div>
 
           <div className="px-10 py-4 bg-white/50 dark:bg-slate-900/50 border-t border-slate-200/50 dark:border-slate-800/50 flex justify-center text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] z-10">
-            System Identifier: UFS-GEN-01-PROJECTOR
+            UFS Blueprint Builder
           </div>
         </MotionDiv>
       </MotionDiv>
@@ -973,7 +942,7 @@ export default function UFSPromoGeneratePage() {
                     <Database size={24} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Scheme Blueprint Protocol</h3>
+                    <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Blueprint Details</h3>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{selectedDetail?.schemeId}</p>
                   </div>
                 </div>
@@ -994,7 +963,7 @@ export default function UFSPromoGeneratePage() {
                       <div className="w-8 h-8 rounded-lg bg-slate-900/10 flex items-center justify-center">
                         <Database size={16} className="text-slate-700" />
                       </div>
-                      <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-[0.1em]">Current Scheme Information</h4>
+                      <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-[0.1em]">Promotion Overview</h4>
                     </div>
                     <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.16em]">
                       {selectedDetail?.regionName || 'UFS Blueprint'}
@@ -1026,7 +995,7 @@ export default function UFSPromoGeneratePage() {
                       <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
                         <Layout size={16} className="text-blue-500" />
                       </div>
-                      <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-[0.1em]">Scheme Multi-Slab Logic</h4>
+                      <h4 className="text-sm font-black text-slate-800 dark:text-slate-200 uppercase tracking-[0.1em]">Slab Configuration</h4>
                    </div>
 
                    <div className="rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
@@ -1146,14 +1115,14 @@ export default function UFSPromoGeneratePage() {
               <div className="shrink-0 px-10 py-6 bg-slate-50/50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center z-10">
                 <div className="flex items-center gap-4">
                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-500 font-black text-[9px] uppercase tracking-tighter">
-                      Reference: UFS-SYS-PK-01
+                       UFS Blueprint System
                    </div>
                 </div>
                 <button
                   onClick={() => setIsInfoModalOpen(false)}
                   className="px-8 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl"
                 >
-                  Close Blueprint
+                  Close
                 </button>
               </div>
             </motion.div>

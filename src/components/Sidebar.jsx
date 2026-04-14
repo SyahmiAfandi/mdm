@@ -78,12 +78,7 @@ const Sidebar = ({ isOpen }) => {
   // ✅ Permission debug logs
   useEffect(() => {
     if (permLoading) return;
-    console.log("[PERMISSIONS DEBUG]", {
-      uid: authUser?.uid,
-      role,
-      perms,
-      keysCount: perms ? Object.keys(perms).length : 0,
-    });
+
   }, [permLoading, role, perms, authUser?.uid]);
 
   // ✅ Determine which main menu items to show

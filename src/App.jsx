@@ -72,6 +72,7 @@ const MismatchTrackerReport = lazy(() => import("./pages/MismatchTrackerReport")
 const MismatchListReport = lazy(() => import("./pages/Reports/MismatchListReport"));
 const MatrixReconsReport = lazy(() => import("./pages/Reports/ReconciliationMatrix"));
 const DSSreport = lazy(() => import("./pages/DailySalesSummary"));
+const DssTemplateCountryConfigPage = lazy(() => import("./pages/Reports/DssTemplateCountryConfigPage.jsx"));
 const ReconScheduleReport = lazy(() => import("./pages/Reports/ReconScheduleReport"));
 
 // Settings
@@ -88,6 +89,8 @@ const UtilitiesSelection = lazy(() => import("./pages/Utilities/UtilitiesHomePag
 const EmailTracker = lazy(() => import("./pages/Utilities/EmailTracker.jsx"));
 const EmailBulkUpload = lazy(() => import("./pages/Utilities/EmailTrackerBulkImport.jsx"));
 const ManualReconsEntry = lazy(() => import("./pages/Utilities/ManualReconsEntry.jsx"));
+const ReportExtractionTaskLists = lazy(() => import("./pages/Utilities/ReportExtractionTaskLists.jsx"));
+const ReportExtractionTracker = lazy(() => import("./pages/Utilities/ReportExtractionTracker.jsx"));
 
 
 // About
@@ -247,6 +250,8 @@ export default function App() {
           {/* Utilities */}
           <Route element={<RequirePermission perm="utilities.view" fallback={<UnauthorizedPage />} />}>
             <Route path="/utilities" element={<UtilitiesSelection />} />
+            <Route path="/utilities/report-extraction-tracker" element={<ReportExtractionTaskLists />} />
+            <Route path="/utilities/report-extraction-tracker/:taskId" element={<ReportExtractionTracker />} />
           </Route>
           <Route element={<RequirePermission perm="mdmEmailTracker.view" fallback={<UnauthorizedPage />} />}>
             <Route path="/utilities/emailtracker" element={<EmailTracker />} />
@@ -277,6 +282,7 @@ export default function App() {
           </Route>
           <Route element={<RequirePermission perm="reports.dss.view" fallback={<UnauthorizedPage />} />}>
             <Route path="/reports/DSS" element={<DSSreport />} />
+            <Route path="/reports/DSS/template-config" element={<DssTemplateCountryConfigPage />} />
           </Route>
           <Route element={<RequirePermission perm="reports.reconSchedule.view" fallback={<UnauthorizedPage />} />}>
             <Route path="/reports/recon-schedule" element={<ReconScheduleReport />} />

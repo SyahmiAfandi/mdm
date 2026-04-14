@@ -52,9 +52,12 @@ function ReconciliationUploadPage() {
   };
 
   const mergeUniqueFiles = (existing, incoming) => {
-    const existingNames = new Set(existing.map(file => file.name));
-    const uniqueNew = Array.from(incoming).filter(file => !existingNames.has(file.name));
-    return [...existing, ...uniqueNew];
+    const merged = new Map();
+    [...existing, ...Array.from(incoming)].forEach((file) => {
+      const key = `${file.name}__${file.size}__${file.lastModified}`;
+      if (!merged.has(key)) merged.set(key, file);
+    });
+    return Array.from(merged.values());
   };
 
   const handleRemoveFile = (index, isPBI = false) => {

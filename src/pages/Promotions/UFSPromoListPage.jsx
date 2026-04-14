@@ -297,7 +297,7 @@ export default function UFSPromoListPage() {
   }
 
   async function handleResetRegistry() {
-    const confirmed = window.confirm('Are you sure you want to RESET the entire registry? This will permanently DELETE ALL saved blueprints and their slab rows from the database.');
+    const confirmed = window.confirm('Are you sure you want to CLEAR ALL saved blueprints? This will permanently delete every blueprint and its slab rows from the database.');
     if (!confirmed) return;
 
     setLoading(true);
@@ -441,11 +441,11 @@ export default function UFSPromoListPage() {
               <div className="flex items-center gap-2 mb-0.5">
                 <Database className="w-5 h-5 text-rose-400 shrink-0" />
                 <h1 className="text-xl font-black text-white tracking-tight uppercase italic truncate">
-                  UFS <span className="text-rose-500 font-extrabold not-italic">Blueprints</span>
+                  UFS <span className="text-rose-500 font-extrabold not-italic">Promotion Blueprints</span>
                 </h1>
-                <div className="px-2 py-0.5 rounded-md bg-rose-500/20 border border-rose-500/30 text-[10px] font-black text-rose-400 uppercase tracking-tighter">LIVE</div>
+                <div className="px-2 py-0.5 rounded-md bg-blue-500/20 border border-blue-500/30 text-[10px] font-black text-blue-400 uppercase tracking-tighter">AUTO</div>
               </div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em]">Saved Promotion Blueprint Registry</p>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em]">Saved Promotion Blueprints</p>
             </div>
           </div>
 
@@ -462,7 +462,7 @@ export default function UFSPromoListPage() {
               className="px-4 py-2 rounded-2xl bg-rose-500 hover:bg-rose-600 transition-all text-white text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg"
             >
               <Plus size={14} />
-              Add Promo
+              Create Blueprint
             </button>
           </div>
         </div>
@@ -481,7 +481,7 @@ export default function UFSPromoListPage() {
               <div className="flex flex-col">
                 <h3 className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-3 uppercase tracking-widest mb-1">
                   <Eye className="w-5 h-5 text-rose-500" />
-                  Blueprint Registry
+                  Saved Blueprints
                 </h3>
                 <div className="flex items-center gap-2">
                   <div className="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 text-[9px] font-black text-slate-500 uppercase tracking-tighter">
@@ -535,7 +535,7 @@ export default function UFSPromoListPage() {
                   title={normalizedSearch ? 'Export current filtered blueprint rows' : 'Export all saved blueprint rows'}
                 >
                   <Download size={14} className={exporting ? 'animate-bounce' : ''} />
-                  {exporting ? 'Exporting...' : 'Export Template'}
+                  {exporting ? 'Exporting...' : 'Export to Excel'}
                 </button>
                 
                 <button
@@ -555,7 +555,7 @@ export default function UFSPromoListPage() {
                   className="px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-100 dark:border-rose-900/30 transition-all text-[10px] font-black uppercase tracking-[0.2em] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                   title="Permanently wipe entire registry data"
                 >
-                  Reset Registry
+                  Clear All
                 </button>
               </div>
             </div>
@@ -579,16 +579,16 @@ export default function UFSPromoListPage() {
                 <div className="absolute inset-0 bg-rose-500/10 blur-3xl rounded-full" />
                 <Eye size={64} className="relative opacity-20" />
               </div>
-              <h4 className="text-sm font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-2">No Saved Blueprint</h4>
+              <h4 className="text-sm font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-2">No Blueprints Yet</h4>
               <p className="text-[10px] font-bold text-slate-400/60 uppercase tracking-widest max-w-[300px] mb-6">
-                Use Add Promo to build a new UFS blueprint and save it into the registry
+                Click "Create Blueprint" to generate your first UFS promotion blueprint
               </p>
               <button
                 onClick={() => navigate('/promotions/auto-ufs/add')}
                 className="px-4 py-2 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg"
               >
                 <Plus size={14} />
-                Add Promo
+                Create Blueprint
               </button>
             </div>
           ) : filteredRows.length === 0 ? (
@@ -597,7 +597,7 @@ export default function UFSPromoListPage() {
                 <div className="absolute inset-0 bg-rose-500/10 blur-3xl rounded-full" />
                 <Search size={64} className="relative opacity-20" />
               </div>
-              <h4 className="text-sm font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-2">No Matching Result</h4>
+              <h4 className="text-sm font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-2">No Matching Results</h4>
               <p className="text-[10px] font-bold text-slate-400/60 uppercase tracking-widest max-w-[320px] mb-6">
                 Try another keyword or reset the filter to see all saved blueprints again
               </p>
@@ -685,7 +685,7 @@ export default function UFSPromoListPage() {
         </div>
 
         <div className="px-10 py-4 bg-white/50 dark:bg-slate-900/50 border-t border-slate-200/50 dark:border-slate-800/50 flex justify-center text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] z-10">
-          System Identifier: UFS-GEN-01-REGISTRY
+          UFS Promotion Blueprint Manager
         </div>
       </MotionDiv>
 

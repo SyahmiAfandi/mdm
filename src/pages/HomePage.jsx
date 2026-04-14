@@ -25,6 +25,8 @@ import { supabase } from "../supabaseClient";
 
 import useReconsProgress from "../hooks/useReconsProgress";
 import useEmailTrackerSummaryCounts from "../hooks/useEmailTrackerSummaryCounts";
+import { usePermissions } from "../hooks/usePermissions";
+import { useUser } from "../context/UserContext";
 
 /**
  * HomePage — Responsive Dashboard (desktop + mobile)
@@ -36,6 +38,7 @@ import useEmailTrackerSummaryCounts from "../hooks/useEmailTrackerSummaryCounts"
 const GAS_HEALTH_URL = import.meta.env.VITE_GAS_HEALTH_URL;
 const FLASK_HEALTH_URL = import.meta.env.VITE_FLASK_HEALTH_URL;
 const HEALTH_POLL_MS = 60000;
+const HOME_RECENT_KEY = "home_recent_links_v1";
 const RECONS_MONTH_OPTIONS = [
   { value: "", label: "All months" },
   { value: "1", label: "January" },
@@ -72,6 +75,61 @@ function buildReconsHint(year, month) {
   if (!year) return "";
   const monthLabel = RECONS_MONTH_OPTIONS.find((m) => m.value === String(month))?.label || "";
   return `Filter: ${year}${month ? ` • ${monthLabel}` : ""}`;
+}
+
+function loadRecentLaunches() {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(HOME_RECENT_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((item) => item && typeof item.href === "string" && typeof item.title === "string")
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentLaunches(items) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(HOME_RECENT_KEY, JSON.stringify(items));
+  } catch {
+    // ignore local storage write issues
+  }
+}
+
+function formatRoleLabel(role) {
+  return String(role || "user")
+    .replace(/[._-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatRelativeTime(isoString) {
+  const timestamp = new Date(isoString).getTime();
+  if (!Number.isFinite(timestamp)) return "Just now";
+
+  const diffMs = Math.max(0, Date.now() - timestamp);
+  const diffMinutes = Math.floor(diffMs / 60000);
+
+  if (diffMinutes < 1) return "Just now";
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return new Date(timestamp).toLocaleDateString([], {
+    day: "2-digit",
+    month: "short",
+  });
 }
 
 function FlipReconsCard() {
@@ -295,7 +353,10 @@ function FlipReconsCard() {
 }
 
 function HomePage() {
+  const { can, loading: permissionsLoading, role: permissionRole } = usePermissions();
+  const { user, role: userRole } = useUser();
   const [liveNow, setLiveNow] = useState(() => new Date());
+  const [recentLaunches, setRecentLaunches] = useState(() => loadRecentLaunches());
   const lastSync = useMemo(
     () =>
       liveNow.toLocaleString([], {
@@ -782,6 +843,20 @@ function HomePage() {
     return String(emailSummary.error).slice(0, 160);
   }, [emailSummary.error]);
 
+  const pendingEmailCount = (emailSummary.counts?.new || 0) + (emailSummary.counts?.inProgress || 0);
+
+  const displayName = useMemo(() => {
+    const name = user?.name?.trim();
+    if (name) return name;
+    if (user?.email) return user.email.split("@")[0];
+    return "MDM Team";
+  }, [user]);
+
+  const roleLabel = useMemo(
+    () => formatRoleLabel(permissionRole || userRole || "user"),
+    [permissionRole, userRole]
+  );
+
   const apiHealthy = useMemo(() => isHealthUp(apiStatus), [apiStatus]);
   const dbHealthy = useMemo(() => isHealthUp(dbStatus), [dbStatus]);
   const platformHealthSummary = useMemo(() => {
@@ -814,6 +889,201 @@ function HomePage() {
     });
   }, [healthCheckedAt]);
 
+  const quickActions = useMemo(() => {
+    const items = [
+      {
+        href: "/recons/upload",
+        title: "Upload OSDP & PBI",
+        desc: "Start reconciliation intake",
+        icon: UploadCloud,
+        color: "blue",
+        perm: "tools.reconciliation.view",
+        section: "Reconciliation",
+      },
+      {
+        href: "/reports/summary_recons",
+        title: "Summary Reports",
+        desc: "Review matched vs mismatch totals",
+        icon: BarChart2,
+        color: "violet",
+        perm: "reports.view",
+        section: "Reports",
+      },
+      {
+        href: "/reports/matrix_recons",
+        title: "Recons Matrix",
+        desc: "Track by period and distributor",
+        icon: RefreshCw,
+        color: "emerald",
+        perm: "reports.matrixRecons.view",
+        section: "Reports",
+      },
+      {
+        href: "/promotions",
+        title: "Promotion Tools",
+        desc: "Manual entry, Auto IC and controls",
+        icon: FileText,
+        color: "amber",
+        perm: "tools.promotions.view",
+        section: "Promotions",
+      },
+      {
+        href: "/utilities/emailtracker",
+        title: "Email Tracker",
+        desc: "Follow up operational requests",
+        icon: Mail,
+        color: "blue",
+        perm: "mdmEmailTracker.view",
+        section: "Utilities",
+      },
+      {
+        href: "/utilities/date-converter",
+        title: "Date Converter",
+        desc: "Normalize document and Excel dates",
+        icon: Clock3,
+        color: "violet",
+        perm: "utilities.dateConverter.view",
+        section: "Utilities",
+      },
+    ];
+
+    return items.filter((item) => !item.perm || can(item.perm)).slice(0, 6);
+  }, [can]);
+
+  const focusItems = useMemo(() => {
+    const items = [];
+
+    if (!apiHealthy || !dbHealthy) {
+      const affectedSystems = [
+        !apiHealthy ? "Python API" : null,
+        !dbHealthy ? "Supabase DB" : null,
+      ]
+        .filter(Boolean)
+        .join(" and ");
+
+      items.push({
+        title: apiHealthy || dbHealthy ? "Investigate platform warning" : "Platform health needs attention",
+        desc: `${affectedSystems || "One or more services"} need monitoring from the health panel above.`,
+        icon: AlertTriangle,
+        tone: apiHealthy || dbHealthy ? "amber" : "rose",
+        badge: platformHealthSummary.label,
+      });
+    }
+
+    if (emailSummary.counts?.new > 0 && can("mdmEmailTracker.view")) {
+      items.push({
+        href: "/utilities/emailtracker",
+        title: "Triage new email tasks",
+        desc: `${emailSummary.counts.new} new item${emailSummary.counts.new === 1 ? "" : "s"} waiting for action.`,
+        icon: Mail,
+        tone: "rose",
+        perm: "mdmEmailTracker.view",
+        section: "Email Tracker",
+      });
+    }
+
+    if (emailSummary.counts?.inProgress > 0 && can("mdmEmailTracker.view")) {
+      items.push({
+        href: "/utilities/emailtracker",
+        title: "Close active requests",
+        desc: `${emailSummary.counts.inProgress} item${emailSummary.counts.inProgress === 1 ? "" : "s"} still in progress.`,
+        icon: Clock3,
+        tone: "blue",
+        perm: "mdmEmailTracker.view",
+        section: "Email Tracker",
+      });
+    }
+
+    if (can("tools.reconciliation.view")) {
+      items.push({
+        href: "/recons/upload",
+        title: "Upload this cycle's recon files",
+        desc: "Open the intake workspace for OSDP and PBI submissions.",
+        icon: UploadCloud,
+        tone: "blue",
+        perm: "tools.reconciliation.view",
+        section: "Reconciliation",
+      });
+    }
+
+    if (can("tools.promotions.view")) {
+      items.push({
+        href: "/promotions",
+        title: "Continue promotion setup",
+        desc: "Access manual entry, Auto IC generation and promo controls.",
+        icon: FileText,
+        tone: "emerald",
+        perm: "tools.promotions.view",
+        section: "Promotions",
+      });
+    }
+
+    if (!items.length) {
+      items.push({
+        href: can("tools.view") ? "/tools" : undefined,
+        title: "Everything looks steady",
+        desc: can("tools.view")
+          ? "Open the tools hub and pick the next module to work on."
+          : "Your live workspace is stable right now.",
+        icon: CheckCircle2,
+        tone: "emerald",
+        perm: can("tools.view") ? "tools.view" : undefined,
+        section: "Workspace",
+      });
+    }
+
+    return items.slice(0, 4);
+  }, [
+    apiHealthy,
+    dbHealthy,
+    emailSummary.counts,
+    can,
+    platformHealthSummary.label,
+  ]);
+
+  const recentFallbackAction = useMemo(() => {
+    if (quickActions[0]) return quickActions[0];
+    if (can("tools.view")) {
+      return {
+        href: "/tools",
+        title: "Browse Tools Hub",
+        desc: "Explore the modules available for your role.",
+        perm: "tools.view",
+        section: "Navigation",
+      };
+    }
+    return null;
+  }, [quickActions, can]);
+
+  const visibleRecentLaunches = useMemo(
+    () =>
+      recentLaunches
+        .filter((item) => !item?.perm || can(item.perm))
+        .slice(0, 4),
+    [recentLaunches, can]
+  );
+
+  function rememberLaunch(item) {
+    if (!item?.href) return;
+
+    setRecentLaunches((prev) => {
+      const next = [
+        {
+          href: item.href,
+          title: item.title,
+          desc: item.desc,
+          perm: item.perm,
+          section: item.section,
+          visitedAt: new Date().toISOString(),
+        },
+        ...prev.filter((entry) => entry.href !== item.href),
+      ].slice(0, 5);
+
+      saveRecentLaunches(next);
+      return next;
+    });
+  }
+
   useEffect(() => {
     const timerId = window.setInterval(() => {
       setLiveNow(new Date());
@@ -844,6 +1114,24 @@ function HomePage() {
             <p className="text-blue-100 text-xs sm:text-sm">
               Real-time visibility into email, reconciliation &amp; system health.
             </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[10px] font-semibold text-white/90">
+                <Info size={10} />
+                {displayName}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[10px] font-semibold text-white/90">
+                <ShieldCheck size={10} />
+                {roleLabel}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[10px] font-semibold text-white/90">
+                <ExternalLink size={10} />
+                {permissionsLoading ? "Loading shortcuts..." : `${quickActions.length} shortcuts ready`}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[10px] font-semibold text-white/90">
+                <Mail size={10} />
+                {pendingEmailCount > 0 ? `${pendingEmailCount} email tasks active` : "Inbox workflow clear"}
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-1.5 self-start sm:self-center bg-white/15 rounded-full px-3 py-1.5 border border-white/20 shrink-0">
             <span className="relative flex h-2 w-2">
@@ -928,28 +1216,122 @@ function HomePage() {
           icon={<ExternalLink size={15} />}
           iconColor="text-indigo-600 dark:text-indigo-400"
           iconBg="bg-indigo-50 dark:bg-indigo-900/30"
+          footer={
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-3 text-[11px] text-gray-500 dark:border-gray-700/60 dark:text-gray-400">
+              <span>
+                {permissionsLoading
+                  ? "Checking access to your modules..."
+                  : quickActions.length
+                    ? `${quickActions.length} shortcuts prepared for ${roleLabel}.`
+                    : "No quick actions are available for this role yet."}
+              </span>
+              {can("tools.view") && (
+                <Link
+                  to="/tools"
+                  onClick={() =>
+                    rememberLaunch({
+                      href: "/tools",
+                      title: "Tools Hub",
+                      desc: "Browse every operational module",
+                      perm: "tools.view",
+                      section: "Navigation",
+                    })
+                  }
+                  className="inline-flex items-center gap-1 font-semibold text-indigo-600 transition-colors hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                >
+                  Open tools hub <ArrowRight size={12} />
+                </Link>
+              )}
+            </div>
+          }
         >
-          <div className="grid grid-cols-2 gap-2.5 mt-3">
-            <ShortcutTile href="/upload" title="Upload OSDP & PBI" desc="Drag & drop reconciliation" icon={<UploadCloud size={18} />} color="blue" />
-            <ShortcutTile href="/result_summary" title="Summary Reports" desc="Matched vs mismatch" icon={<BarChart2 size={18} />} color="violet" />
-            <ShortcutTile href="/reports/matrix_recons" title="Recons Matrix" desc="Track by period" icon={<RefreshCw size={18} />} color="emerald" />
-            <ShortcutTile href="/about" title="Documentation" desc="Formats & FAQs" icon={<FileText size={18} />} color="amber" />
+          <div className="mt-3">
+            {permissionsLoading && !quickActions.length ? (
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 px-4 py-5 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/20 dark:text-gray-400">
+                Loading the best shortcuts for your role...
+              </div>
+            ) : quickActions.length ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+                {quickActions.map((item) => (
+                  <ShortcutTile
+                    key={item.href}
+                    href={item.href}
+                    title={item.title}
+                    desc={item.desc}
+                    icon={<item.icon size={18} />}
+                    color={item.color}
+                    onClick={() => rememberLaunch(item)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 px-4 py-5 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/20 dark:text-gray-400">
+                Your current access does not expose shortcut tiles yet.
+              </div>
+            )}
           </div>
         </DashCard>
 
-        {/* Helpful Links */}
-        <DashCard
-          title="Resources"
-          icon={<LinkIcon size={15} />}
-          iconColor="text-rose-500 dark:text-rose-400"
-          iconBg="bg-rose-50 dark:bg-rose-900/30"
-        >
-          <div className="space-y-2 mt-3">
-            <HelpLinkCompact href="/about#file-templates" title="File Templates" desc="Headers & valid examples" />
-            <HelpLinkCompact href="/about#common-errors" title="Common Errors" desc="Validation fixes" />
-            <HelpLinkCompact href="/about#best-practices" title="Best Practices" desc="Clean workflow" />
-          </div>
-        </DashCard>
+        <div className="space-y-2.5">
+          <DashCard
+            title="Focus Today"
+            icon={<AlertTriangle size={15} />}
+            iconColor="text-amber-600 dark:text-amber-400"
+            iconBg="bg-amber-50 dark:bg-amber-900/30"
+          >
+            <div className="space-y-2.5 mt-3">
+              {focusItems.map((item) => (
+                <FocusActionRow
+                  key={`${item.title}-${item.href || "static"}`}
+                  href={item.href}
+                  title={item.title}
+                  desc={item.desc}
+                  icon={item.icon}
+                  tone={item.tone}
+                  badge={item.badge}
+                  onClick={item.href ? () => rememberLaunch(item) : undefined}
+                />
+              ))}
+            </div>
+          </DashCard>
+
+          <DashCard
+            title="Recent Launches"
+            icon={<LinkIcon size={15} />}
+            iconColor="text-sky-600 dark:text-sky-400"
+            iconBg="bg-sky-50 dark:bg-sky-900/30"
+          >
+            <div className="space-y-2 mt-3">
+              {visibleRecentLaunches.length ? (
+                visibleRecentLaunches.map((item) => (
+                  <RecentLaunchRow
+                    key={`${item.href}-${item.visitedAt || "recent"}`}
+                    item={item}
+                    onClick={() => rememberLaunch(item)}
+                  />
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 px-3.5 py-4 dark:border-gray-700 dark:bg-gray-900/20">
+                  <div className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                    No recent launches yet
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    The tools you open from this homepage will appear here for faster access.
+                  </p>
+                  {recentFallbackAction?.href && (
+                    <Link
+                      to={recentFallbackAction.href}
+                      onClick={() => rememberLaunch(recentFallbackAction)}
+                      className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-sky-600 transition-colors hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
+                    >
+                      Start with {recentFallbackAction.title} <ArrowRight size={12} />
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
+          </DashCard>
+        </div>
 
       </div>
     </div>
@@ -1140,7 +1522,7 @@ function SectionTitleCompact({ icon, title }) {
 }
 
 /* ─── ShortcutTile ─── */
-function ShortcutTile({ href, title, desc, icon, color = "blue" }) {
+function ShortcutTile({ href, title, desc, icon, color = "blue", onClick }) {
   const colorMap = {
     blue: "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300",
     violet: "bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300",
@@ -1149,27 +1531,95 @@ function ShortcutTile({ href, title, desc, icon, color = "blue" }) {
   };
   const ic = colorMap[color] || colorMap.blue;
   return (
-    <a href={href} className="group flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/40 border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-700/60 hover:bg-white dark:hover:bg-gray-700/70 transition-all duration-150 active:scale-[0.98]">
+    <Link
+      to={href}
+      onClick={onClick}
+      className="group flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/40 border border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-700/60 hover:bg-white dark:hover:bg-gray-700/70 transition-all duration-150 active:scale-[0.98]"
+    >
       <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${ic}`}>{icon}</div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate leading-tight">{title}</div>
         <div className="text-xs text-gray-400 dark:text-gray-500 truncate">{desc}</div>
       </div>
       <ArrowRight size={14} className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
-    </a>
+    </Link>
   );
 }
 
 /* ─── HelpLinkCompact ─── */
-function HelpLinkCompact({ href, title, desc }) {
-  return (
-    <a href={href} className="group flex items-center justify-between gap-2 p-2.5 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-      <div>
-        <div className="text-sm font-semibold text-gray-700 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{title}</div>
-        <div className="text-xs text-gray-400 dark:text-gray-500">{desc}</div>
+function FocusActionRow({ href, title, desc, icon: Icon, tone = "blue", badge, onClick }) {
+  const toneMap = {
+    blue: "bg-blue-50 border-blue-100 text-blue-700 dark:bg-blue-950/30 dark:border-blue-900/50 dark:text-blue-300",
+    emerald: "bg-emerald-50 border-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:border-emerald-900/50 dark:text-emerald-300",
+    amber: "bg-amber-50 border-amber-100 text-amber-700 dark:bg-amber-950/30 dark:border-amber-900/50 dark:text-amber-300",
+    rose: "bg-rose-50 border-rose-100 text-rose-700 dark:bg-rose-950/30 dark:border-rose-900/50 dark:text-rose-300",
+  };
+  const accent = toneMap[tone] || toneMap.blue;
+  const body = (
+    <>
+      <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${accent}`}>
+        <Icon size={16} />
       </div>
-      <ArrowRight size={13} className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
-    </a>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">{title}</div>
+          {badge && (
+            <span className="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-gray-500 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700">
+              {badge}
+            </span>
+          )}
+        </div>
+        <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{desc}</div>
+      </div>
+      {href && (
+        <ArrowRight
+          size={13}
+          className="mt-1 shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-blue-400 dark:text-gray-600"
+        />
+      )}
+    </>
+  );
+
+  if (!href) {
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50/70 p-3 dark:border-gray-700 dark:bg-gray-900/30">
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={href}
+      onClick={onClick}
+      className="group flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50/70 p-3 transition-colors hover:border-blue-200 hover:bg-white dark:border-gray-700 dark:bg-gray-900/30 dark:hover:border-blue-700/60 dark:hover:bg-gray-800/70"
+    >
+      {body}
+    </Link>
+  );
+}
+
+function RecentLaunchRow({ item, onClick }) {
+  return (
+    <Link
+      to={item.href}
+      onClick={onClick}
+      className="group flex items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2.5 transition-colors hover:border-sky-200 hover:bg-white dark:border-gray-700 dark:bg-gray-900/30 dark:hover:border-sky-700/60 dark:hover:bg-gray-800/70"
+    >
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+          {item.title}
+        </div>
+        <div className="truncate text-xs text-gray-500 dark:text-gray-400">{item.desc}</div>
+        <div className="mt-1 text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+          {item.section || "Workspace"} • {formatRelativeTime(item.visitedAt)}
+        </div>
+      </div>
+      <ArrowRight
+        size={13}
+        className="shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-sky-400 dark:text-gray-600"
+      />
+    </Link>
   );
 }
 

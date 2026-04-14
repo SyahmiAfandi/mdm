@@ -36,6 +36,15 @@ export const PAGE_META = [
     ],
   },
   {
+    match: /^\/utilities\/report-extraction-tracker/,
+    title: "Report Extraction Tracker",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Utilities", to: "/utilities" },
+      { label: "Report Extraction Tracker" },
+    ],
+  },
+  {
     match: /^\/utilities\/date-converter/,
     title: "Date Converter",
     breadcrumbs: [
@@ -81,6 +90,16 @@ export const PAGE_META = [
     ],
   },
 
+  {
+    match: /^\/reports\/DSS\/template-config/,
+    title: "DSS Template Config",
+    breadcrumbs: [
+      { label: "Home", to: "/" },
+      { label: "Reports", to: "/reports" },
+      { label: "Daily Sales Summary", to: "/reports/DSS" },
+      { label: "Template Config" },
+    ],
+  },
   {
     match: /^\/reports\/DSS/,
     title: "Daily Sales Summary",
@@ -277,7 +296,7 @@ export const PAGE_META = [
       { label: "Tools", to: "/tools" },
       { label: "Promotions", to: "/promotions" },
       { label: "Auto-UFS Promo", to: "/promotions/auto-ufs" },
-      { label: "Add Promo" },
+      { label: "Create Blueprint" },
     ],
   },
   {

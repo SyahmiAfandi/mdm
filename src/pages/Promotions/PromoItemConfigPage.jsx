@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 
 import { supabase } from "../../supabaseClient";
 import {
-  Plus, Search, Edit2, Trash2, X, AlertCircle, Save, PackageOpen, Undo2, Layout, Sparkles
+  Plus, Search, Edit2, Trash2, X, AlertCircle, Save, PackageOpen, Undo2, Layout, Sparkles, Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';

@@ -12,6 +12,14 @@ import { usePermissions } from "../hooks/usePermissions";
 const OWNER_UID = import.meta.env.VITE_FIREBASE_OWNER_UID;
 const USERS_PER_PAGE = 10;
 
+function throwIfSupabaseError(response) {
+  if (response?.error) {
+    throw response.error;
+  }
+
+  return response?.data;
+}
+
 function formatYMD(d) {
   const yr = d.getFullYear();
   const mo = String(d.getMonth() + 1).padStart(2, "0");
@@ -92,6 +100,10 @@ export default function AdminUsersPage() {
     can("admin.manageUsers") || role === "admin" || (!!OWNER_UID && me?.id === OWNER_UID);
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setMe(data.session?.user || null);
+    });
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -117,19 +129,21 @@ export default function AdminUsersPage() {
         supabase.from("licenses").select("*"),
       ]);
 
-      if (profRes.error) throw profRes.error;
+      const profiles = throwIfSupabaseError(profRes) || [];
+      const roles = throwIfSupabaseError(roleRes) || [];
+      const licenses = throwIfSupabaseError(licRes) || [];
 
       const rolesMap = {};
-      (roleRes.data || []).forEach((r) => {
+      roles.forEach((r) => {
         rolesMap[r.id] = r.role;
       });
 
       const licsMap = {};
-      (licRes.data || []).forEach((l) => {
+      licenses.forEach((l) => {
         licsMap[l.id] = getLicenseValidUntil(l);
       });
 
-      const rows = (profRes.data || []).map((p) => ({
+      const rows = profiles.map((p) => ({
         uid: p.id,
         username: p.username || "",
         name: p.display_name || p.name || "",
@@ -141,7 +155,7 @@ export default function AdminUsersPage() {
       setUsers(rows);
     } catch (e) {
       console.error(e);
-      toast.error("Failed to load users");
+      toast.error(e?.message || "Failed to load users");
     } finally {
       setLoading(false);
       setSyncing(false);
@@ -211,7 +225,7 @@ export default function AdminUsersPage() {
     if (!d.name) return toast.error("Name is required");
 
     try {
-      await Promise.all([
+      const [profileRes, roleRes] = await Promise.all([
         supabase
           .from("profiles")
           .update({
@@ -227,34 +241,44 @@ export default function AdminUsersPage() {
         }),
       ]);
 
+      throwIfSupabaseError(profileRes);
+      throwIfSupabaseError(roleRes);
+
       const validUntil = licenseDateToValidUntil(d.licenseDate);
-      await supabase.from("licenses").upsert({
+      const licenseRes = await supabase.from("licenses").upsert({
         id: editingUid,
         valid_until: validUntil,
       });
+
+      throwIfSupabaseError(licenseRes);
 
       setUsers((prev) => prev.map((u) => (u.uid === editingUid ? { ...d } : u)));
       toast.success("User updated");
       cancelEdit();
     } catch (e) {
       console.error(e);
-      toast.error("Failed to save changes");
+      toast.error(e?.message || "Failed to save changes");
     }
   };
 
   const removeUser = async (u) => {
     if (!window.confirm(`Remove user docs for ${u.username}?`)) return;
     try {
-      await Promise.all([
+      const [profileRes, roleRes, licenseRes] = await Promise.all([
         supabase.from("profiles").delete().eq("id", u.uid),
         supabase.from("user_roles").delete().eq("id", u.uid),
         supabase.from("licenses").delete().eq("id", u.uid),
       ]);
+
+      throwIfSupabaseError(profileRes);
+      throwIfSupabaseError(roleRes);
+      throwIfSupabaseError(licenseRes);
+
       setUsers((prev) => prev.filter((x) => x.uid !== u.uid));
       toast.success("Removed user docs. (Auth account NOT deleted)");
     } catch (e) {
       console.error(e);
-      toast.error("Failed to remove");
+      toast.error(e?.message || "Failed to remove");
     }
   };
 

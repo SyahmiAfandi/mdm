@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import PostalMime from "postal-mime";
+import MsgReader from "msgreader";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUser } from "../../context/UserContext";
 import { usePermissions } from "../../hooks/usePermissions";
@@ -68,7 +69,7 @@ const SHOW_DOC_ID = false;
 
 // ====== Helpers ======
 function safeStr(v) {
-  return (v ?? "").toString().trim();
+  return (v ?? "").toString().replace(/\u0000/g, "").trim();
 }
 
 function isFsTimestamp(v) {
@@ -158,7 +159,7 @@ export default function EmailTracker() {
   const { can, role } = usePermissions();
   const canDelete = can("mdmEmailTracker.delete");
   const canEdit = can("mdmEmailTracker.edit") || role === "admin";
-  //console.log("canDelete:", canDelete);
+
 
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -298,6 +299,8 @@ export default function EmailTracker() {
             pic_assign: data.pic_assign,
             status: normalizeStatus(data.status),
             remark: data.remark,
+            remark_by: data.remark_by,
+            remark_at: data.remark_at,
             pic_create: data.pic_create,
             createdAt: data.created_at,
             pic_update: data.pic_update,
@@ -331,7 +334,7 @@ export default function EmailTracker() {
         "postgres_changes",
         { event: "*", schema: "public", table: "email_tasks" },
         (payload) => {
-          console.log("REALTIME UPDATE:", payload);
+
           // If a change happened, just trigger a background sync
           fetchTasks(); 
         }
@@ -443,6 +446,8 @@ export default function EmailTracker() {
     try {
       const { error } = await supabase.from("email_tasks").update({
         remark: safeStr(editRemark),
+        remark_by: CURRENT_USER,
+        remark_at: new Date().toISOString(),
         pic_update: CURRENT_USER,
         updated_at: new Date().toISOString(),
       }).eq("id", editRowId);
@@ -508,11 +513,47 @@ export default function EmailTracker() {
     return { subject, fromEmail, date, messageId };
   }
 
-  async function addEmlFiles(fileList) {
-    const files = Array.from(fileList || []).filter((f) => f.name.toLowerCase().endsWith(".eml"));
+  async function parseMsgFile(file) {
+    const raw = await file.arrayBuffer();
+    const reader = new MsgReader(raw);
+    const msg = reader.getFileData();
+
+    const subject = safeStr(msg.subject);
+    const sender = safeStr(msg.senderEmail || msg.senderName || "");
+    
+    let date = null;
+    let messageId = "";
+
+    if (msg.headers) {
+      const dateMatch = msg.headers.match(/^Date:\s*(.+)$/im);
+      if (dateMatch && dateMatch[1]) {
+        const parsed = new Date(dateMatch[1].trim());
+        if (!Number.isNaN(parsed.getTime())) {
+          date = parsed;
+        }
+      }
+
+      const idMatch = msg.headers.match(/^Message-ID:\s*(.+)$/im);
+      if (idMatch && idMatch[1]) {
+        messageId = safeStr(idMatch[1]);
+      }
+    }
+
+    if (!date) {
+      date = new Date(file.lastModified || Date.now());
+    }
+
+    return { subject, fromEmail: sender, date, messageId };
+  }
+
+  async function addEmailFiles(fileList) {
+    const files = Array.from(fileList || []).filter((f) => {
+      const name = f.name.toLowerCase();
+      return name.endsWith(".eml") || name.endsWith(".msg");
+    });
 
     if (files.length === 0) {
-      toast.error("Please select .eml files only");
+      toast.error("Please select .eml or .msg files only");
       return;
     }
 
@@ -541,13 +582,16 @@ export default function EmailTracker() {
         });
 
         try {
-          const meta = await parseEmlFile(file);
+          const ext = file.name.toLowerCase().split('.').pop();
+          const meta = ext === "msg" ? await parseMsgFile(file) : await parseEmlFile(file);
+          
           setEmlItems((prev) =>
             prev.map((x) => (x.id === id ? { ...x, ...meta, ok: true, error: "" } : x))
           );
         } catch (err) {
+          console.error("Parse error:", err);
           setEmlItems((prev) =>
-            prev.map((x) => (x.id === id ? { ...x, ok: false, error: "Failed to parse .eml" } : x))
+            prev.map((x) => (x.id === id ? { ...x, ok: false, error: "Failed to parse file" } : x))
           );
         }
       }
@@ -560,7 +604,7 @@ export default function EmailTracker() {
   function onPickFiles(e) {
     const files = e.target.files;
     if (!files?.length) return;
-    addEmlFiles(files);
+    addEmailFiles(files);
     e.target.value = "";
   }
 
@@ -569,7 +613,7 @@ export default function EmailTracker() {
     e.stopPropagation();
     const files = e.dataTransfer?.files;
     if (!files?.length) return;
-    addEmlFiles(files);
+    addEmailFiles(files);
   }
 
   function onDragOver(e) {
@@ -770,10 +814,10 @@ export default function EmailTracker() {
 
         {/* ── Stats — compact single row, equal width, match title height ── */}
         <div className="grid grid-cols-4 gap-2 shrink-0 self-stretch">
-          <StatCard label="Total" value={summary.total} color="slate" icon="📋" />
-          <StatCard label="New" value={summary.NEW} color="blue" icon="✨" />
-          <StatCard label="In Progress" value={summary.IN_PROGRESS} color="amber" icon="⚡" />
-          <StatCard label="Completed" value={summary.COMPLETE} color="emerald" icon="✅" />
+          <StatCard label="Total" value={summary.total} color="slate" icon="📋" onClick={() => { setStatusFilters([]); setNewOnly(false); setPage(1); }} />
+          <StatCard label="New" value={summary.NEW} color="blue" icon="✨" onClick={() => { setStatusFilters(["NEW"]); setNewOnly(false); setPage(1); }} />
+          <StatCard label="In Progress" value={summary.IN_PROGRESS} color="amber" icon="⚡" onClick={() => { setStatusFilters(["IN_PROGRESS"]); setNewOnly(false); setPage(1); }} />
+          <StatCard label="Completed" value={summary.COMPLETE} color="emerald" icon="✅" onClick={() => { setStatusFilters(["COMPLETE"]); setNewOnly(false); setPage(1); }} />
         </div>
 
         {/* ── Actions ── */}
@@ -1099,7 +1143,7 @@ export default function EmailTracker() {
               <div className="space-y-3">
                 <DetailItem label="Created By" value={getPicName(detailRow.pic_create)} sub={formatDateTime(detailRow.createdAt)} />
                 <DetailItem label="Last Updated By" value={getPicName(detailRow.pic_update)} sub={formatDateTime(detailRow.updatedAt)} />
-                <DetailItem label="Remark By" value={getPicName(detailRow.pic_remark)} sub={formatDateTime(detailRow.remarkAt)} />
+                <DetailItem label="Remark By" value={getPicName(detailRow.remark_by)} sub={formatDateTime(detailRow.remark_at)} />
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block">Status</span>
                   <StatusPill status={normalizeStatus(detailRow.status)} />
@@ -1180,7 +1224,7 @@ export default function EmailTracker() {
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-slate-900">Import Email Tasks</h3>
-                    <p className="text-[11px] text-slate-500">Drop .eml files to create new task records</p>
+                    <p className="text-[11px] text-slate-500">Drop email files (.eml, .msg) to create new task records</p>
                   </div>
                 </div>
                 <button onClick={closeEmailModal} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" disabled={emlBusy}><X size={18} /></button>
@@ -1196,14 +1240,14 @@ export default function EmailTracker() {
                     <Plus size={24} />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-700">Drop .eml files here</p>
+                    <p className="text-sm font-semibold text-slate-700">Drop email files (.eml, .msg) here</p>
                     <p className="text-xs text-slate-400">or click to browse your files</p>
                   </div>
                   <div className="flex gap-2 mt-1">
                     <button onClick={() => fileInputRef.current?.click()} disabled={emlBusy} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-all shadow shadow-indigo-200">Browse Files</button>
                     <button onClick={clearEmlItems} disabled={emlBusy || emlItems.length === 0} className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all disabled:opacity-40">Clear</button>
                   </div>
-                  <input ref={fileInputRef} type="file" accept=".eml,message/rfc822" multiple className="hidden" onChange={onPickFiles} />
+                  <input ref={fileInputRef} type="file" accept=".eml,.msg,message/rfc822,application/vnd.ms-outlook" multiple className="hidden" onChange={onPickFiles} />
                 </div>
               </div>
 
@@ -1263,7 +1307,7 @@ export default function EmailTracker() {
   );
 }
 
-function StatCard({ label, value, color = "slate", icon }) {
+function StatCard({ label, value, color = "slate", icon, onClick }) {
   const config = {
     slate: {
       bg: "bg-white",
@@ -1298,8 +1342,10 @@ function StatCard({ label, value, color = "slate", icon }) {
   return (
     <motion.div
       whileHover={{ scale: 1.04, y: -1 }}
+      whileTap={onClick ? { scale: 0.98 } : {}}
+      onClick={onClick}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className={`flex items-center gap-2 px-3 rounded-xl border shadow-sm cursor-default h-full w-[140px] ${c.bg} ${c.border} ${c.glow}`}
+      className={`flex items-center gap-2 px-3 rounded-xl border shadow-sm h-full w-[140px] ${onClick ? "cursor-pointer" : "cursor-default"} ${c.bg} ${c.border} ${c.glow}`}
     >
       <span className="text-base leading-none shrink-0">{icon}</span>
       <div className="flex flex-col min-w-0">

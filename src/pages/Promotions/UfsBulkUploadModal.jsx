@@ -360,30 +360,108 @@ export default function UfsBulkUploadModal({ isOpen, onClose, onSuccess }) {
     }
   };
 
-  const handleDownloadTemplate = () => {
-    const template = [
-      {
-        'Promo Number': '01',
-        'Region Code': 'REG01',
-        'Item Code': 'ITEM123',
-        'Promo Period': 'P3 2024',
-        'Mechanics': '100+RM20, 200+RM50'
-      },
-      {
-        'Promo Number': '01',
-        'Region Code': 'REG02',
-        'Item Code': 'ITEM456',
-        'Promo Period': 'P3 2024',
-        'Mechanics': '3+1pcs'
-      }
-    ];
+  const handleDownloadTemplate = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch active regions
+      const { data: regionData } = await supabase
+        .from('promo_region_distributors')
+        .select('dt_code, dt_alias, dt_name')
+        .order('dt_code', { ascending: true });
 
-    import('xlsx').then(XLSX => {
-      const ws = XLSX.utils.json_to_sheet(template);
+      // Fetch active items
+      const { data: itemData } = await supabase
+        .from('promo_items_config')
+        .select('item_code, item_shortform, item_name')
+        .eq('active', true)
+        .order('item_code', { ascending: true });
+
+      // Fetch active periods
+      const { data: periodData } = await supabase
+        .from('promo_periods')
+        .select('promo_period, start_date, end_date')
+        .eq('active', true);
+
+      // Get real sample data from fetched references
+      const sampleRegion = regionData && regionData.length > 0 ? regionData[0].dt_code : 'REG01';
+      const sampleItem1 = itemData && itemData.length > 0 ? itemData[0].item_code : 'ITEM123';
+      const sampleItem2 = itemData && itemData.length > 1 ? itemData[1].item_code : sampleItem1;
+      const samplePeriod = periodData && periodData.length > 0 ? periodData[0].promo_period : 'P3 2024';
+
+      // Main Template Structure
+      const template = [
+        {
+          'Promo Number': '01',
+          'Region Code': sampleRegion,
+          'Item Code': sampleItem1,
+          'Promo Period': samplePeriod,
+          'Mechanics': '100+RM20, 200+RM50'
+        },
+        {
+          'Promo Number': '01',
+          'Region Code': sampleRegion,
+          'Item Code': sampleItem2,
+          'Promo Period': samplePeriod,
+          'Mechanics': '3+1pcs'
+        }
+      ];
+
+      // Format Reference Data
+      const refRegions = (regionData || []).map(r => ({
+        'Region / DT Code': r.dt_code || '',
+        'Alias': r.dt_alias || '',
+        'Name': r.dt_name || ''
+      }));
+
+      const refItems = (itemData || []).map(i => ({
+        'Item Code': i.item_code || '',
+        'Shortform': i.item_shortform || '',
+        'Description': i.item_name || ''
+      }));
+
+      const refPeriods = (periodData || []).map(p => ({
+        'Period': p.promo_period || '',
+        'Start Date': p.start_date ? new Date(p.start_date).toLocaleDateString('en-GB') : '',
+        'End Date': p.end_date ? new Date(p.end_date).toLocaleDateString('en-GB') : ''
+      }));
+
+      const XLSX = await import('xlsx');
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Template");
+
+      // Append Template Sheet
+      const wsTemplate = XLSX.utils.json_to_sheet(template);
+      wsTemplate['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 40 }];
+      XLSX.utils.book_append_sheet(wb, wsTemplate, "Template");
+
+      // Append Reference Regions
+      if (refRegions.length > 0) {
+        const wsRegions = XLSX.utils.json_to_sheet(refRegions);
+        wsRegions['!cols'] = [{ wch: 20 }, { wch: 15 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(wb, wsRegions, "Ref_Regions");
+      }
+
+      // Append Reference Items
+      if (refItems.length > 0) {
+        const wsItems = XLSX.utils.json_to_sheet(refItems);
+        wsItems['!cols'] = [{ wch: 20 }, { wch: 15 }, { wch: 50 }];
+        XLSX.utils.book_append_sheet(wb, wsItems, "Ref_Items");
+      }
+
+      // Append Reference Periods
+      if (refPeriods.length > 0) {
+        const wsPeriods = XLSX.utils.json_to_sheet(refPeriods);
+        wsPeriods['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }];
+        XLSX.utils.book_append_sheet(wb, wsPeriods, "Ref_Periods");
+      }
+
       XLSX.writeFile(wb, "bulk_promo_upload_template.xlsx");
-    });
+      setLoading(false);
+    } catch (err) {
+      console.error("Template generation error:", err);
+      toast.error("Failed to generate complete template.");
+      setLoading(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -447,19 +525,24 @@ export default function UfsBulkUploadModal({ isOpen, onClose, onSuccess }) {
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-8 py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-rose-500/20 active:scale-95 flex items-center gap-2"
+                  disabled={loading}
+                  className="px-8 py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-lg shadow-rose-500/20 active:scale-95 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <Upload size={16} />
                   Choose File
                 </button>
                 <button
                   onClick={handleDownloadTemplate}
-                  className="px-6 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2"
+                  disabled={loading}
+                  className="px-6 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed relative"
                 >
-                  <Download size={16} />
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
                   Template
                 </button>
               </div>
+              <p className="text-[10px] font-bold text-slate-400 max-w-[280px] text-center italic">
+                Template includes active Reference Sheets for Regions, Items, and Periods to make copy-pasting easier.
+              </p>
               <input
                 type="file"
                 ref={fileInputRef}

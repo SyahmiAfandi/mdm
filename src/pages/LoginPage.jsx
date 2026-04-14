@@ -143,7 +143,7 @@ export default function LoginPage() {
   };
 
   const handleLogin = async () => {
-    console.log("DEBUG LOGIN: handleLogin started");
+
     setLoading(true);
     setError("");
     toast.dismiss("login");
@@ -153,11 +153,11 @@ export default function LoginPage() {
       const t0 = performance.now();
 
       const result = await loginWithUsername(username, password);
-      console.log(`[handleLogin] loginWithUsername finished in ${(performance.now() - t0).toFixed(0)}ms`, result);
+
       const { user, role, profile, license, licenseValid, permissions } = result;
 
       const resolvedRole = role || "viewer";
-      console.log("DEBUG RESOLVED ROLE:", resolvedRole);
+
 
       if (!licenseValid) {
         await hardSignOutEverywhere();

@@ -59,8 +59,14 @@ export default function ReconCellsPage() {
   const canManage = !!user;
 
   const actorName =
-    user?.name?.trim() || user?.displayName?.trim() || user?.email || "unknown";
-  const actorUid = user?.uid || "";
+    user?.display_name?.trim() ||
+    user?.displayName?.trim() ||
+    user?.name?.trim() ||
+    localStorage.getItem("display_name")?.trim() ||
+    localStorage.getItem("username")?.trim() ||
+    user?.email ||
+    "unknown";
+  const actorUid = user?.uid || user?.id || "";
   const actorEmail = user?.email || "";
 
   const [periods, setPeriods] = useState([]);
@@ -467,9 +473,6 @@ export default function ReconCellsPage() {
       status,
       remark: remark || "",
 
-      pic: actorName,
-      pic_uid: actorUid,
-      pic_email: actorEmail,
       updated_by: actorName,
     };
 

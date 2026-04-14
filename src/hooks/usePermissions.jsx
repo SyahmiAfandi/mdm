@@ -137,7 +137,7 @@ export function PermissionsProvider({ children, options = {} }) {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[usePermissions] Auth event: ${event}`);
+
       const u = session?.user || null;
       if (!u) {
         setState({ loading: false, user: null, role: null, perms: {} });
@@ -150,7 +150,7 @@ export function PermissionsProvider({ children, options = {} }) {
       
       const refreshStart = Date.now();
       try {
-        console.log(`[usePermissions] Background refresh starting for ${u.email}...`);
+
         const { url, key } = assertSupabaseBrowserConfig();
         const headers = {
           apikey: key,
@@ -174,7 +174,7 @@ export function PermissionsProvider({ children, options = {} }) {
           perms = normalizePermissionRows(permsData);
         }
         
-        console.log(`[usePermissions] Background refresh done in ${Date.now() - refreshStart}ms (role=${role})`);
+
         setState({ loading: false, user: u, role, perms });
         saveCache(opts.cacheKey, { role, perms, expiresAt: now() + opts.cacheTtlMs });
       } catch (e) {
