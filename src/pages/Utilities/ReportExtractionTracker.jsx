@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -10,8 +10,10 @@ import {
   Clock3,
   Eye,
   EyeOff,
+  FileSpreadsheet,
   Info,
   Loader2,
+  Paperclip,
   PauseCircle,
   Pencil,
   RefreshCcw,
@@ -36,7 +38,7 @@ const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
-const TRACKER_STATUS_OPTIONS = ["Pending", "Complete", "Offline", "On Hold"];
+const TRACKER_STATUS_OPTIONS = ["Pending", "Offline", "On Hold"];
 const TRACKER_FILTER_OPTIONS = ["Unassigned", ...TRACKER_STATUS_OPTIONS];
 
 function safeStr(value) {
@@ -110,6 +112,45 @@ function matchesAnyName(value, candidates = []) {
   return candidates.some((candidate) => left === safeStr(candidate).toLowerCase());
 }
 
+function sanitizeFileToken(value, fallback) {
+  const token = safeStr(value)
+    .replace(/&/g, " and ")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+  return token || fallback;
+}
+
+function getExcelExtension(file) {
+  const name = safeStr(file?.name);
+  const lastDotIndex = name.lastIndexOf(".");
+  const rawExtension = lastDotIndex >= 0 ? name.slice(lastDotIndex + 1).toLowerCase() : "";
+  if (rawExtension === "xls" || rawExtension === "xlsx") return `.${rawExtension}`;
+  if (file?.type === "application/vnd.ms-excel") return ".xls";
+  return ".xlsx";
+}
+
+function buildUploadFileName(row, file) {
+  const periodValue = safeStr(row?.periodId) || `${safeStr(row?.periodYear)}_${String(row?.periodMonthNumber || "").padStart(2, "0")}`;
+  const parts = [
+    sanitizeFileToken(row?.businessCode, "Business"),
+    sanitizeFileToken(row?.reportType, "ReportType"),
+    sanitizeFileToken(row?.distributorCode, "DistributorCode"),
+    sanitizeFileToken(periodValue, "Period"),
+  ];
+  return `${parts.join("_")}${getExcelExtension(file)}`;
+}
+
+function isAllowedExcelFile(file) {
+  if (!file) return false;
+  const allowedTypes = [
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ];
+  const ext = safeStr(file.name).split(".").pop().toLowerCase();
+  return allowedTypes.includes(file.type) || ["xls", "xlsx"].includes(ext);
+}
+
 function mapMismatchCell(row) {
   const periodYear = getPeriodYear(row);
   const periodMonthNumber = getPeriodMonthNumber(row);
@@ -153,6 +194,10 @@ function mapTrackerRow(row) {
     assignedByUid: safeStr(row?.assigned_by_uid),
     assignedByName: safeStr(row?.assigned_by_name),
     completedAt: row?.completed_at || null,
+    filePath: safeStr(row?.file_path),
+    fileName: safeStr(row?.file_name),
+    fileUploadedAt: row?.file_uploaded_at || null,
+    fileUploadedBy: safeStr(row?.file_uploaded_by),
   };
 }
 
@@ -183,7 +228,9 @@ function mapAssignableUser(profile, roleById) {
 }
 
 function getEffectiveTrackerStatus(row) {
-  return row.isAssigned ? safeStr(row.trackerStatus) || "Pending" : "Unassigned";
+  if (!row.isAssigned) return "Unassigned";
+  if (row.filePath) return "Complete"; // file upload always means Complete
+  return safeStr(row.trackerStatus) || "Pending";
 }
 
 function getStatusTone(status) {
@@ -253,8 +300,8 @@ export default function ReportExtractionTracker() {
   const [assigneeOptions, setAssigneeOptions] = useState([]);
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState([]);
   const [search, setSearch] = useState("");
-  const [yearFilter, setYearFilter] = useState(String(defaultPeriod.year));
-  const [monthFilter, setMonthFilter] = useState(String(defaultPeriod.monthNum));
+  const [yearFilter, setYearFilter] = useState("All");
+  const [monthFilter, setMonthFilter] = useState("All");
   const [businessFilter, setBusinessFilter] = useState("All");
   const [trackerStatusFilter, setTrackerStatusFilter] = useState("All");
   const [showPasswords, setShowPasswords] = useState(false);
@@ -266,6 +313,14 @@ export default function ReportExtractionTracker() {
   const [activeRemarkRow, setActiveRemarkRow] = useState(null);
   const [draftRemark, setDraftRemark] = useState("");
   const [savingRemark, setSavingRemark] = useState(false);
+  const [uploadingById, setUploadingById] = useState({});
+  const [uploadModalRow, setUploadModalRow] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [stagedFile, setStagedFile] = useState(null);
+  const [dragOverRowId, setDragOverRowId] = useState(null);
+  const fileInputRefs = useRef({});
+  const dropZoneRef = useRef(null);
+  const analyticsPreviousListModeRef = useRef("my");
 
   const trackerById = useMemo(() => {
     const map = new Map();
@@ -326,6 +381,10 @@ export default function ReportExtractionTracker() {
         assignedByName: tracker?.assignedByName || "",
         completedAt: tracker?.completedAt || null,
         isAssigned,
+        filePath: tracker?.filePath || "",
+        fileName: tracker?.fileName || "",
+        fileUploadedAt: tracker?.fileUploadedAt || null,
+        fileUploadedBy: tracker?.fileUploadedBy || "",
       };
     });
   }, [mismatchRows, trackerById, distributorByCode]);
@@ -645,6 +704,89 @@ export default function ReportExtractionTracker() {
     setRemarkModalOpen(true);
   }
 
+  async function uploadFileForRow(row, file) {
+    if (!isAllowedExcelFile(file)) {
+      toast.error("Only .xls and .xlsx files are allowed.");
+      return;
+    }
+
+    const isMineByUid = row.assignedToUid && row.assignedToUid === currentUserId;
+    const isMineByName = !row.assignedToUid && matchesAnyName(row.assignedToName, currentUserAliases);
+    if (!(isAdmin || isMineByUid || isMineByName)) {
+      toast.error("You can only upload files for rows assigned to you.");
+      return;
+    }
+
+    const generatedFileName = buildUploadFileName(row, file);
+    const storagePath = `${taskId}/${row.id}/${generatedFileName}`;
+    const uploadToastId = toast.loading("Uploading file...");
+
+    try {
+      setUploadingById(prev => ({ ...prev, [row.id]: true }));
+
+      // Remove old file if exists
+      if (row.filePath) {
+        await supabase.storage.from("report-extractions").remove([row.filePath]);
+      }
+
+      const { error: uploadError } = await supabase.storage
+        .from("report-extractions")
+        .upload(storagePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const timestamp = new Date().toISOString();
+      const uploader = currentUserName || currentUserEmail || "System";
+
+      const { error: dbError } = await supabase
+        .from(TRACKER_TABLE)
+        .update({
+          file_path: storagePath,
+          file_name: generatedFileName,
+          file_uploaded_at: timestamp,
+          file_uploaded_by: uploader,
+          status: "Complete",
+          completed_at: timestamp,
+          updated_at: timestamp,
+          updated_by: uploader,
+        })
+        .eq("id", row.trackerId);  // Use composite tracker ID, not cell ID
+
+      if (dbError) throw dbError;
+
+      toast.success("File uploaded & marked Complete!", { id: uploadToastId });
+      await fetchData({ background: true });
+    } catch (err) {
+      console.error(err);
+      toast.error("Upload failed: " + (err.message || String(err)), { id: uploadToastId });
+    } finally {
+      setUploadingById(prev => { const n = { ...prev }; delete n[row.id]; return n; });
+    }
+  }
+
+  async function handleInlineFilePick(row, file) {
+    if (!file) return;
+    setDragOverRowId(null);
+    await uploadFileForRow(row, file);
+  }
+
+  async function handleInlineFileDrop(row, event) {
+    event.preventDefault();
+    setDragOverRowId(null);
+    const file = event.dataTransfer?.files?.[0];
+    if (!file) return;
+    await handleInlineFilePick(row, file);
+  }
+
+  async function downloadFileForRow(row) {
+    if (!row.filePath) return;
+    const { data, error } = await supabase.storage
+      .from("report-extractions")
+      .createSignedUrl(row.filePath, 60);
+    if (error) { toast.error("Could not generate download link."); return; }
+    window.open(data.signedUrl, "_blank");
+  }
+
   async function saveRemark() {
     if (!activeRemarkRow) return;
 
@@ -690,6 +832,49 @@ export default function ReportExtractionTracker() {
         ? previous.filter((id) => id !== userId)
         : [...previous, userId]
     ));
+  }
+
+  async function deleteFileForRow(row) {
+    const isMineByUid = row.assignedToUid && row.assignedToUid === currentUserId;
+    const isMineByName = !row.assignedToUid && matchesAnyName(row.assignedToName, currentUserAliases);
+    if (!(isAdmin || isMineByUid || isMineByName)) {
+      toast.error("You can only remove files for rows assigned to you.");
+      return;
+    }
+    if (!window.confirm(`Remove file "${row.fileName}" and reset status to Pending?`)) return;
+
+    const toastId = toast.loading("Removing file...");
+    try {
+      setUploadingById(prev => ({ ...prev, [row.id]: true }));
+
+      if (row.filePath) {
+        await supabase.storage.from("report-extractions").remove([row.filePath]);
+      }
+
+      const timestamp = new Date().toISOString();
+      const { error } = await supabase
+        .from(TRACKER_TABLE)
+        .update({
+          file_path: null,
+          file_name: null,
+          file_uploaded_at: null,
+          file_uploaded_by: null,
+          status: "Pending",
+          completed_at: null,
+          updated_at: timestamp,
+          updated_by: currentUserName || currentUserEmail || "System",
+        })
+        .eq("id", row.trackerId);
+
+      if (error) throw error;
+      toast.success("File removed & status reset to Pending.", { id: toastId });
+      await fetchData({ background: true });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to remove file: " + (err.message || String(err)), { id: toastId });
+    } finally {
+      setUploadingById(prev => { const n = { ...prev }; delete n[row.id]; return n; });
+    }
   }
 
   useEffect(() => {
@@ -776,6 +961,17 @@ export default function ReportExtractionTracker() {
     return { total, complete, pending, unassigned, overallPercent, assigneeStats };
   }, [progressRows, assigneeOptions]);
 
+  function openProgressModal() {
+    analyticsPreviousListModeRef.current = listMode;
+    setListMode("all");
+    setProgressModalOpen(true);
+  }
+
+  function closeProgressModal() {
+    setProgressModalOpen(false);
+    setListMode(analyticsPreviousListModeRef.current || "my");
+  }
+
   return (
     <div className="w-full min-w-0 px-3 sm:px-5 pb-4 flex flex-col gap-4">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 mx-3 sm:mx-5 mt-5 p-4 sm:p-5 rounded-2xl shadow-xl shadow-slate-900/10">
@@ -821,7 +1017,7 @@ export default function ReportExtractionTracker() {
               </button>
             )}
             <button
-              onClick={() => setProgressModalOpen(true)}
+              onClick={openProgressModal}
               className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 sm:px-4 py-2 text-sm font-bold text-white transition-all hover:bg-white/20 whitespace-nowrap"
             >
               <BarChart3 className="h-4 w-4" />
@@ -941,7 +1137,28 @@ export default function ReportExtractionTracker() {
                   const canUpdateRow = row.isAssigned && (isAdmin || canUpdateByUid || canUpdateByName);
 
                   return (
-                    <tr key={row.id} className="align-top hover:bg-slate-50/80">
+                    <tr
+                      key={row.id}
+                      onDragOver={(event) => {
+                        if (!canUpdateRow) return;
+                        event.preventDefault();
+                        setDragOverRowId(row.id);
+                      }}
+                      onDragLeave={(event) => {
+                        if (!canUpdateRow) return;
+                        if (event.currentTarget.contains(event.relatedTarget)) return;
+                        setDragOverRowId((current) => (current === row.id ? null : current));
+                      }}
+                      onDrop={(event) => {
+                        if (!canUpdateRow) return;
+                        void handleInlineFileDrop(row, event);
+                      }}
+                      className={`align-top transition-colors ${
+                        dragOverRowId === row.id
+                          ? "bg-indigo-50/80"
+                          : "hover:bg-slate-50/80"
+                      }`}
+                    >
                       <Td>
                         <div className="font-semibold text-slate-800">{row.periodMonthName} {row.periodYear}</div>
                         <div className="text-[11px] text-slate-500">{row.periodId || "-"}</div>
@@ -957,23 +1174,33 @@ export default function ReportExtractionTracker() {
                       <Td>
                         <div className="flex flex-col gap-1 w-[160px]">
                           <div className="flex items-center gap-2 rounded-md bg-slate-50 ring-1 ring-inset ring-slate-100 px-1 py-0.5">
-                            <div className="flex flex-col flex-1 px-1">
-                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">TVID</span>
-                              <span className="font-mono text-[10px] text-slate-700 truncate">{row.tvid || "-"}</span>
-                            </div>
+                            <button
+                              type="button"
+                              title="Click to copy TVID"
+                              onClick={() => row.tvid && navigator.clipboard.writeText(row.tvid).then(() => toast.success("TVID copied!"))}
+                              className="flex flex-col flex-1 px-1 text-left hover:bg-sky-50 rounded transition-colors cursor-pointer group/tvid"
+                            >
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 group-hover/tvid:text-sky-500">TVID</span>
+                              <span className="font-mono text-[10px] text-slate-700 truncate group-hover/tvid:text-sky-700">{row.tvid || "-"}</span>
+                            </button>
                             <div className="h-5 w-px bg-slate-200" />
-                            <div className="flex flex-col flex-1 px-1">
-                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">PWD</span>
-                              <span className="font-mono text-[10px] text-slate-700 truncate">
+                            <button
+                              type="button"
+                              title="Click to copy Password"
+                              onClick={() => row.password && navigator.clipboard.writeText(row.password).then(() => toast.success("Password copied!"))}
+                              className="flex flex-col flex-1 px-1 text-left hover:bg-sky-50 rounded transition-colors cursor-pointer group/pwd"
+                            >
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 group-hover/pwd:text-sky-500">PWD</span>
+                              <span className="font-mono text-[10px] text-slate-700 truncate group-hover/pwd:text-sky-700">
                                 {showPasswords ? (row.password || "-") : maskSecret(row.password)}
                               </span>
-                            </div>
+                            </button>
                           </div>
                         </div>
                       </Td>
                       <Td>
-                        <div className="max-w-[220px] group flex gap-2">
-                           <div className="whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-600 flex-1">
+                        <div className="w-[180px] max-w-[180px] group flex gap-2 overflow-hidden">
+                           <div className="overflow-hidden text-[11px] leading-5 text-slate-600 flex-1" style={{display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden'}} title={row.reconRemark || ""}>
                              {row.reconRemark || <span className="text-slate-400 italic">No remark</span>}
                            </div>
                            {canUpdateRow && (
@@ -1000,13 +1227,12 @@ export default function ReportExtractionTracker() {
                       </Td>
                       <Td>
                         <div className="flex items-center w-max">
-                          {canUpdateRow ? (
+                          {canUpdateRow && effectiveStatus !== "Complete" ? (
                             <select
                               value={effectiveStatus}
                               onChange={(event) => updateRowStatus(row, event.target.value)}
                               disabled={savingStatus}
                               className={`w-28 rounded-xl border px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wider outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
-                                effectiveStatus === "Complete" ? "bg-emerald-50 text-emerald-700 border-emerald-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" :
                                 effectiveStatus === "Pending" ? "bg-amber-50 text-amber-700 border-amber-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-100" :
                                 "bg-slate-50 text-slate-700 border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
                               }`}
@@ -1027,26 +1253,87 @@ export default function ReportExtractionTracker() {
                             Sav...
                           </div>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (row.trackerUpdatedAt) {
-                                toast(
-                                  <div className="flex flex-col gap-0.5">
-                                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Update Details</div>
-                                    <div className="text-sm font-bold text-slate-800">{row.trackerUpdatedBy || "Unknown User"}</div>
-                                    <div className="text-xs text-sky-600 font-medium">{formatDateTime(row.trackerUpdatedAt)}</div>
-                                  </div>,
-                                  { duration: 4000, position: 'bottom-right' }
-                                );
-                              } else {
-                                toast("No update details available.", { icon: 'ℹ️', position: 'bottom-right' });
-                              }
-                            }}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-600 hover:shadow-sm transition-all"
-                          >
-                            <Info className="h-4 w-4" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            {/* Info button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (row.trackerUpdatedAt) {
+                                  toast(
+                                    <div className="flex flex-col gap-0.5">
+                                      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Update Details</div>
+                                      <div className="text-sm font-bold text-slate-800">{row.trackerUpdatedBy || "Unknown User"}</div>
+                                      <div className="text-xs text-sky-600 font-medium">{formatDateTime(row.trackerUpdatedAt)}</div>
+                                    </div>,
+                                    { duration: 4000, position: 'bottom-right' }
+                                  );
+                                } else {
+                                  toast("No update details available.", { icon: 'ℹ️', position: 'bottom-right' });
+                                }
+                              }}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-600 hover:shadow-sm transition-all"
+                            >
+                              <Info className="h-4 w-4" />
+                            </button>
+
+                            {/* Upload / File button */}
+                            {canUpdateRow && (
+                              <>
+                                {row.filePath ? (
+                                  <div className="inline-flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      title={`Download: ${row.fileName}`}
+                                      onClick={() => downloadFileForRow(row)}
+                                      disabled={uploadingById[row.id]}
+                                      className="inline-flex h-8 items-center gap-1 rounded-l-xl border border-emerald-200 bg-emerald-50 px-2 text-[10px] font-bold text-emerald-700 hover:bg-emerald-100 transition-all disabled:opacity-50"
+                                    >
+                                      <FileSpreadsheet className="h-3.5 w-3.5" />
+                                      <span className="max-w-[60px] truncate">{row.fileName}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title="Remove uploaded file"
+                                      onClick={() => deleteFileForRow(row)}
+                                      disabled={uploadingById[row.id]}
+                                      className="inline-flex h-8 w-6 items-center justify-center rounded-r-xl border border-l-0 border-emerald-200 bg-emerald-50 text-emerald-400 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-500 transition-all disabled:opacity-50"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="inline-flex">
+                                    <input
+                                      ref={(element) => {
+                                        if (element) fileInputRefs.current[row.id] = element;
+                                        else delete fileInputRefs.current[row.id];
+                                      }}
+                                      type="file"
+                                      accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                      className="hidden"
+                                      onChange={(event) => {
+                                        const file = event.target.files?.[0];
+                                        void handleInlineFilePick(row, file);
+                                        event.target.value = "";
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      title="Click to upload .xls / .xlsx file"
+                                      onClick={() => fileInputRefs.current[row.id]?.click()}
+                                      disabled={uploadingById[row.id]}
+                                      className="inline-flex h-8 items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 text-[10px] font-bold text-slate-500 transition-all hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600 hover:shadow-sm disabled:opacity-50"
+                                    >
+                                      {uploadingById[row.id]
+                                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        : <Paperclip className="h-4 w-4" />}
+                                      <span>Attach</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
                         )}
                       </Td>
                   </tr>
@@ -1095,6 +1382,127 @@ export default function ReportExtractionTracker() {
           </div>
         ) : null}
       </div>
+
+      {/* ── Upload Modal ── */}
+      {uploadModalRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-black text-slate-800">Upload Extraction File</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {uploadModalRow.distributorCode} — {uploadModalRow.reportType}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setUploadModalRow(null); setStagedFile(null); setDragOver(false); }}
+                className="rounded-xl border border-slate-200 p-2 text-slate-400 hover:bg-slate-50"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Drop Zone */}
+            <div className="p-6 flex flex-col gap-4">
+              <div
+                ref={dropZoneRef}
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={e => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (!file) return;
+                  const ext = file.name.split(".").pop().toLowerCase();
+                  if (!['xls','xlsx'].includes(ext)) {
+                    toast.error("Only .xls and .xlsx files are allowed.");
+                    return;
+                  }
+                  setStagedFile(file);
+                }}
+                onClick={() => dropZoneRef.current?.querySelector('input')?.click()}
+                className={`relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-10 cursor-pointer transition-all ${
+                  dragOver
+                    ? "border-indigo-400 bg-indigo-50"
+                    : stagedFile
+                    ? "border-emerald-400 bg-emerald-50"
+                    : "border-slate-200 bg-slate-50 hover:border-indigo-300 hover:bg-indigo-50/50"
+                }`}
+              >
+                <input
+                  type="file"
+                  accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) setStagedFile(file);
+                    e.target.value = "";
+                  }}
+                />
+                {stagedFile ? (
+                  <>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100">
+                      <FileSpreadsheet className="h-6 w-6 text-emerald-600" />
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm font-bold text-emerald-800 break-all">{stagedFile.name}</div>
+                      <div className="text-[11px] text-emerald-600 mt-0.5">{(stagedFile.size / 1024).toFixed(1)} KB</div>
+                    </div>
+                    <div className="text-[11px] text-slate-400">Click or drop to replace</div>
+                  </>
+                ) : (
+                  <>
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl transition-colors ${
+                      dragOver ? "bg-indigo-100" : "bg-slate-100"
+                    }`}>
+                      <Paperclip className={`h-6 w-6 transition-colors ${
+                        dragOver ? "text-indigo-500" : "text-slate-400"
+                      }`} />
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm font-semibold text-slate-700">
+                        {dragOver ? "Drop file here" : "Drag & drop or click to browse"}
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-1">.xls and .xlsx files only</div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setUploadModalRow(null); setStagedFile(null); setDragOver(false); }}
+                  className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!stagedFile || uploadingById[uploadModalRow?.id]}
+                  onClick={async () => {
+                    if (!stagedFile || !uploadModalRow) return;
+                    await uploadFileForRow(uploadModalRow, stagedFile);
+                    setUploadModalRow(null);
+                    setStagedFile(null);
+                    setDragOver(false);
+                  }}
+                  className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                >
+                  {uploadingById[uploadModalRow?.id] ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Uploading...</>
+                  ) : (
+                    <><Paperclip className="h-4 w-4" /> Upload & Complete</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isAdmin && assignmentModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -1208,7 +1616,7 @@ export default function ReportExtractionTracker() {
               </div>
               <button
                 type="button"
-                onClick={() => setProgressModalOpen(false)}
+                onClick={closeProgressModal}
                 className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white transition"
               >
                 <X className="h-5 w-5" />

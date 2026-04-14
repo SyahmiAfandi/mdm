@@ -2,12 +2,41 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../supabaseClient";
 import toast from "react-hot-toast";
-import { Plus, Archive, ChevronRight, Loader2, ArrowRightCircle, CalendarDays, User, Clock5, Pencil, ChevronDown, Check, Trash2 } from "lucide-react";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
+import { Plus, Archive, Download, ChevronRight, Loader2, ArrowRightCircle, CalendarDays, User, Clock5, Pencil, ChevronDown, Check, Trash2 } from "lucide-react";
 import { useUser } from "../../context/UserContext";
 import { usePermissions } from "../../hooks/usePermissions";
 
 const TASK_LISTS_TABLE = "report_extraction_task_lists";
+const TRACKER_TABLE = "report_extraction_tracker";
+const STORAGE_BUCKET = "report-extractions";
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function safeText(value) {
+  return String(value ?? "").trim();
+}
+
+function sanitizeZipToken(value, fallback = "file") {
+  const token = safeText(value)
+    .replace(/&/g, " and ")
+    .replace(/[^a-zA-Z0-9._-]+/g, "_")
+    .replace(/^[_\-.]+|[_\-.]+$/g, "")
+    .replace(/_+/g, "_");
+  return token || fallback;
+}
+
+function basenameFromPath(path) {
+  const text = safeText(path);
+  if (!text) return "";
+  const parts = text.split("/");
+  return parts[parts.length - 1] || "";
+}
+
+function buildZipFileName(task) {
+  const title = sanitizeZipToken(task?.title, "report_extraction_task");
+  return `${title}_attachments.zip`;
+}
 
 export default function ReportExtractionTaskLists() {
   const { user } = useUser();
@@ -35,6 +64,7 @@ export default function ReportExtractionTaskLists() {
   const [periodDropdownOpen, setPeriodDropdownOpen] = useState(false);
   const [reportType, setReportType] = useState("All");
   const [creating, setCreating] = useState(false);
+  const [downloadingTaskId, setDownloadingTaskId] = useState(null);
   
   const [reconPeriods, setReconPeriods] = useState([]);
   const [mismatchReportTypes, setMismatchReportTypes] = useState(["All"]);
@@ -334,6 +364,67 @@ export default function ReportExtractionTaskLists() {
     }
   }
 
+  async function handleDownloadAllFiles(task) {
+    const toastId = `download-all-${task.id}`;
+    setDownloadingTaskId(task.id);
+    toast.loading("Preparing ZIP download...", { id: toastId });
+
+    try {
+      const { data: trackerRows, error: trackerError } = await supabase
+        .from(TRACKER_TABLE)
+        .select("id,file_path,file_name")
+        .eq("task_list_id", task.id)
+        .not("file_path", "is", null);
+
+      if (trackerError) throw trackerError;
+
+      const files = (trackerRows || []).filter((row) => safeText(row?.file_path));
+      if (!files.length) {
+        toast.error("No attached files found for this task.", { id: toastId });
+        return;
+      }
+
+      const zip = new JSZip();
+      const usedNames = new Set();
+
+      for (let index = 0; index < files.length; index += 1) {
+        const row = files[index];
+        toast.loading(`Downloading file ${index + 1} of ${files.length}...`, { id: toastId });
+
+        const { data: blob, error: downloadError } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .download(row.file_path);
+
+        if (downloadError) throw new Error(`Failed to download ${row.file_name || row.file_path}: ${downloadError.message || downloadError}`);
+
+        const originalName = sanitizeZipToken(row.file_name || basenameFromPath(row.file_path), `attachment_${index + 1}`);
+        let uniqueName = originalName;
+        let duplicateCounter = 2;
+
+        while (usedNames.has(uniqueName.toLowerCase())) {
+          const extensionIndex = originalName.lastIndexOf(".");
+          const base = extensionIndex > 0 ? originalName.slice(0, extensionIndex) : originalName;
+          const ext = extensionIndex > 0 ? originalName.slice(extensionIndex) : "";
+          uniqueName = `${base}_${duplicateCounter}${ext}`;
+          duplicateCounter += 1;
+        }
+
+        usedNames.add(uniqueName.toLowerCase());
+        zip.file(uniqueName, blob);
+      }
+
+      toast.loading("Creating ZIP archive...", { id: toastId });
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      saveAs(zipBlob, buildZipFileName(task));
+      toast.success(`Downloaded ${files.length} file(s) as ZIP.`, { id: toastId });
+    } catch (err) {
+      console.error("Failed to download task attachments:", err);
+      toast.error(err.message || "Failed to download task attachments.", { id: toastId });
+    } finally {
+      setDownloadingTaskId((current) => (current === task.id ? null : current));
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
@@ -421,13 +512,26 @@ export default function ReportExtractionTaskLists() {
                     </div>
                   </div>
                   
-                  <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                       {(isAdmin || task.created_by === user?.display_name || task.created_by === user?.email) && (
-                         <>
-                           <button 
-                             onClick={() => handleArchive(task)}
-                             title="Archive Task List"
+                      <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                        <button 
+                          type="button"
+                          onClick={() => handleDownloadAllFiles(task)}
+                          disabled={downloadingTaskId === task.id}
+                          title="Download all attached files as ZIP"
+                          className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {downloadingTaskId === task.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
+                        </button>
+                        {(isAdmin || task.created_by === user?.display_name || task.created_by === user?.email) && (
+                          <>
+                            <button 
+                              onClick={() => handleArchive(task)}
+                              title="Archive Task List"
                              className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors"
                            >
                              <Archive className="w-4 h-4" />
@@ -445,10 +549,10 @@ export default function ReportExtractionTaskLists() {
                          onClick={() => openEditModal(task)}
                          title="Edit Task List"
                          className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors"
-                       >
-                         <Pencil className="w-4 h-4" />
-                       </button>
-                    </div>
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                     </div>
                      
                      <Link 
                        to={`/utilities/report-extraction-tracker/${task.id}`}
@@ -456,9 +560,9 @@ export default function ReportExtractionTaskLists() {
                      >
                         Open Tracker <ArrowRightCircle className="w-4 h-4" />
                      </Link>
-                  </div>
-                </div>
-              ))}
+                   </div>
+                 </div>
+               ))}
             </div>
           )}
         </div>
