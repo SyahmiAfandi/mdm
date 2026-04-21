@@ -36,7 +36,7 @@ const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
-const TRACKER_STATUS_OPTIONS = ["Pending", "Offline", "On Hold"];
+const TRACKER_STATUS_OPTIONS = ["Pending", "Offline", "On Hold", "Complete"];
 const TRACKER_FILTER_OPTIONS = ["Unassigned", ...TRACKER_STATUS_OPTIONS];
 
 function safeStr(value) {
@@ -180,6 +180,8 @@ function mapTrackerRow(row) {
     pic: safeStr(row?.pic),
     dueDate: row?.due_date || null,
     remark: safeStr(row?.remark),
+    remarkBy: safeStr(row?.remark_by),
+    remarkAt: row?.remark_at || null,
     requestedBy: safeStr(row?.requested_by),
     requestedAt: row?.requested_at || null,
     createdAt: row?.created_at || null,
@@ -371,6 +373,8 @@ export default function ReportExtractionTracker() {
         pic: assignedToName,
         dueDate: tracker?.dueDate || null,
         trackerRemark: tracker?.remark || "",
+        trackerRemarkBy: tracker?.remarkBy || "",
+        trackerRemarkAt: tracker?.remarkAt || null,
         requestedBy: tracker?.requestedBy || cell.reconUpdatedBy || "System Sync",
         requestedAt: tracker?.requestedAt || cell.reconUpdatedAt || cell.reconCreatedAt || null,
         createdAt: tracker?.createdAt || cell.reconCreatedAt || null,
@@ -442,14 +446,42 @@ export default function ReportExtractionTracker() {
     });
   }, [scopedRows, yearFilter, monthFilter, businessFilter, trackerStatusFilter, search]);
 
+  // statsRows excludes the status card filter so card numbers stay stable when a card is clicked
+  const statsRows = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return scopedRows.filter((row) => {
+      const effectiveStatus = getEffectiveTrackerStatus(row);
+      const searchText = [
+        row.periodYear,
+        row.periodMonthName,
+        row.businessCode,
+        row.distributorCode,
+        row.distributorName,
+        row.reportType,
+        row.tvid,
+        row.password,
+        row.pic,
+        effectiveStatus,
+        row.reconRemark,
+        row.trackerRemark,
+        row.assignedByName,
+      ].join(" ").toLowerCase();
+
+      return (yearFilter === "All" || row.periodYear === yearFilter)
+        && (monthFilter === "All" || String(row.periodMonthNumber) === monthFilter)
+        && (businessFilter === "All" || row.businessCode === businessFilter)
+        && (!q || searchText.includes(q));
+    });
+  }, [scopedRows, yearFilter, monthFilter, businessFilter, search]);
+
   const stats = useMemo(() => ({
-    total: filteredRows.length,
-    unassigned: filteredRows.filter((row) => !row.isAssigned).length,
-    pending: filteredRows.filter((row) => getEffectiveTrackerStatus(row) === "Pending").length,
-    complete: filteredRows.filter((row) => getEffectiveTrackerStatus(row) === "Complete").length,
-    offline: filteredRows.filter((row) => getEffectiveTrackerStatus(row) === "Offline").length,
-    onHold: filteredRows.filter((row) => getEffectiveTrackerStatus(row) === "On Hold").length,
-  }), [filteredRows]);
+    total: statsRows.length,
+    unassigned: statsRows.filter((row) => !row.isAssigned).length,
+    pending: statsRows.filter((row) => getEffectiveTrackerStatus(row) === "Pending").length,
+    complete: statsRows.filter((row) => getEffectiveTrackerStatus(row) === "Complete").length,
+    offline: statsRows.filter((row) => getEffectiveTrackerStatus(row) === "Offline").length,
+    onHold: statsRows.filter((row) => getEffectiveTrackerStatus(row) === "On Hold").length,
+  }), [statsRows]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / ROWS_PER_PAGE));
 
@@ -705,7 +737,7 @@ export default function ReportExtractionTracker() {
     }
 
     setActiveRemarkRow(row);
-    setDraftRemark(row.reconRemark || "");
+    setDraftRemark(row.trackerRemark || ""); // seed from tracker remark, not recon_cells remark
     setRemarkModalOpen(true);
   }
 
@@ -799,18 +831,19 @@ export default function ReportExtractionTracker() {
       setSavingRemark(true);
       setStatusSavingById((previous) => ({ ...previous, [activeRemarkRow.id]: true }));
       const timestamp = new Date().toISOString();
+      const author = currentUserName || currentUserEmail || "System";
 
+      // Save remark to the tracker table (not recon_cells)
       const { error } = await supabase
-        .from(CELLS_TABLE)
+        .from(TRACKER_TABLE)
         .update({
           remark: draftRemark,
+          remark_by: author,
+          remark_at: timestamp,
           updated_at: timestamp,
-          updated_by: currentUserName || currentUserEmail || "System"
+          updated_by: author,
         })
-        .eq("id", activeRemarkRow.id);
-
-      // Also ensure tracker remark is somewhat synced if needed, but the original code just updated CELLS_TABLE
-      if (error) throw error;
+        .eq("id", activeRemarkRow.trackerId);
 
       if (error) throw error;
 
@@ -978,125 +1011,188 @@ export default function ReportExtractionTracker() {
   }
 
   return (
-    <div className="w-full min-w-0 px-3 sm:px-5 pb-4 flex flex-col gap-4">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 mx-3 sm:mx-5 mt-5 p-4 sm:p-5 rounded-2xl shadow-xl shadow-slate-900/10">
+    <div className="w-full min-w-0 px-3 sm:px-5 pb-6 flex flex-col gap-4" style={{background: 'linear-gradient(135deg, #f0f4ff 0%, #f8faff 50%, #eef6ff 100%)', minHeight: '100vh'}}>
+      {/* ── Premium Header ── */}
+      <div className="relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mx-0 mt-4 p-5 sm:p-6 rounded-2xl shadow-2xl" style={{background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #0c4a6e 100%)'}}>
+        {/* Decorative orbs */}
+        <div className="pointer-events-none absolute -top-10 -right-10 h-48 w-48 rounded-full opacity-20" style={{background: 'radial-gradient(circle, #6366f1 0%, transparent 70%)'}} />
+        <div className="pointer-events-none absolute -bottom-8 left-1/3 h-32 w-32 rounded-full opacity-10" style={{background: 'radial-gradient(circle, #06b6d4 0%, transparent 70%)'}} />
         <div>
           <div className="flex items-center gap-3">
-            <Link to="/utilities/report-extraction-tracker" className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
-              <ArrowLeft className="w-5 h-5" />
+            <Link to="/utilities/report-extraction-tracker" className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-all">
+              <ArrowLeft className="w-4 h-4" />
             </Link>
-            <div className="flex items-center gap-2 text-emerald-400">
-              <ClipboardList className="h-6 w-6" />
-              <h1 className="text-xl font-black tracking-tight text-white m-0">Extraction Tracker</h1>
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{background: 'linear-gradient(135deg, #10b981, #059669)'}}>
+                <ClipboardList className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-black tracking-tight text-white m-0 leading-none">Extraction Tracker</h1>
+                <div className="text-[11px] text-slate-400 font-medium mt-0.5">Distributor login &amp; file collection</div>
+              </div>
             </div>
           </div>
-          <div className="text-[13px] text-slate-400 font-medium pl-10 mt-1">Manage distributor logins and file collection status.</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-xl border border-white/25 bg-white/10 p-1">
-              <button
-                className={`px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all ${
-                  listMode === "all" ? "bg-white text-sky-700 shadow" : "text-white hover:bg-white/15"
-                }`}
-                onClick={() => setListMode("all")}
-              >
-                All Tasks
-              </button>
-              <button
-                className={`px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all ${
-                  listMode === "my" ? "bg-white text-sky-700 shadow" : "text-white hover:bg-white/15"
-                }`}
-                onClick={() => setListMode("my")}
-              >
-                My Tasks
-              </button>
-            </div>
-
-            {canManageAssignments && (
-              <button
-                onClick={() => setAssignmentModalOpen(true)}
-                className="flex items-center gap-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 px-3 sm:px-4 py-2 text-sm font-bold text-white shadow-sm transition-all shadow-indigo-900/20 whitespace-nowrap"
-              >
-                <Users className="h-4 w-4" />
-                <span className="hidden sm:inline">Assignments</span>
-              </button>
-            )}
+          {/* My / All toggle */}
+          <div className="inline-flex rounded-xl border border-white/20 bg-white/5 backdrop-blur-sm p-1">
             <button
-              onClick={openProgressModal}
-              className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 sm:px-4 py-2 text-sm font-bold text-white transition-all hover:bg-white/20 whitespace-nowrap"
+              className={`px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all ${
+                listMode === "my"
+                  ? "bg-white/15 text-white shadow-md shadow-black/20 ring-1 ring-white/20"
+                  : "text-slate-400 hover:text-white hover:bg-white/10"
+              }`}
+              onClick={() => setListMode("my")}
             >
-              <BarChart3 className="h-4 w-4" />
-              <span className="hidden sm:inline">Analytics</span>
+              My Tasks
             </button>
             <button
-              type="button"
-              onClick={() => fetchData({ background: true })}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2 text-xs font-bold text-white hover:bg-white/15"
+              className={`px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg transition-all ${
+                listMode === "all"
+                  ? "bg-white/15 text-white shadow-md shadow-black/20 ring-1 ring-white/20"
+                  : "text-slate-400 hover:text-white hover:bg-white/10"
+              }`}
+              onClick={() => setListMode("all")}
             >
-              <RefreshCcw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              Refresh
+              All Tasks
             </button>
           </div>
+
+          {canManageAssignments && (
+            <button
+              onClick={() => setAssignmentModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl px-3 sm:px-4 py-2 text-sm font-bold text-white transition-all whitespace-nowrap hover:scale-105 active:scale-95"
+              style={{background: 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 4px 15px rgba(99,102,241,0.4)'}}
+            >
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Assignments</span>
+            </button>
+          )}
+          <button
+            onClick={openProgressModal}
+            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/8 backdrop-blur-sm px-3 sm:px-4 py-2 text-sm font-bold text-white transition-all hover:bg-white/15 hover:scale-105 active:scale-95 whitespace-nowrap"
+          >
+            <BarChart3 className="h-4 w-4" />
+            <span className="hidden sm:inline">Analytics</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => fetchData({ background: true })}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/8 backdrop-blur-sm px-4 py-2 text-xs font-bold text-white hover:bg-white/15 transition-all hover:scale-105 active:scale-95"
+          >
+            <RefreshCcw className={`h-4 w-4 transition-transform ${refreshing ? "animate-spin" : "hover:rotate-180"}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <StatCard label="Visible Rows" value={stats.total} icon={<ClipboardList className="h-4 w-4 text-sky-600" />} tone="sky" />
-        <StatCard label="Unassigned" value={stats.unassigned} icon={<Users className="h-4 w-4 text-slate-700" />} tone="slate" />
-        <StatCard label="Pending" value={stats.pending} icon={<Clock3 className="h-4 w-4 text-amber-600" />} tone="amber" />
-        <StatCard label="Complete" value={stats.complete} icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} tone="emerald" />
-        <StatCard label="On Hold" value={stats.onHold} icon={<AlertTriangle className="h-4 w-4 text-rose-600" />} tone="rose" />
-        <StatCard label="Offline" value={stats.offline} icon={<PauseCircle className="h-4 w-4 text-slate-700" />} tone="slate" />
+      {/* ── Stats Row ── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <StatCard 
+          label="Visible" 
+          value={stats.total} 
+          icon={<ClipboardList className="h-4 w-4" />} 
+          tone="sky" 
+          isActive={trackerStatusFilter === "All"}
+          onClick={() => setTrackerStatusFilter("All")}
+        />
+        <StatCard 
+          label="Unassigned" 
+          value={stats.unassigned} 
+          icon={<Users className="h-4 w-4" />} 
+          tone="slate" 
+          isActive={trackerStatusFilter === "Unassigned"}
+          onClick={() => setTrackerStatusFilter("Unassigned")}
+        />
+        <StatCard 
+          label="Pending" 
+          value={stats.pending} 
+          icon={<Clock3 className="h-4 w-4" />} 
+          tone="amber" 
+          isActive={trackerStatusFilter === "Pending"}
+          onClick={() => setTrackerStatusFilter("Pending")}
+        />
+        <StatCard 
+          label="Complete" 
+          value={stats.complete} 
+          icon={<CheckCircle2 className="h-4 w-4" />} 
+          tone="emerald" 
+          isActive={trackerStatusFilter === "Complete"}
+          onClick={() => setTrackerStatusFilter("Complete")}
+        />
+        <StatCard 
+          label="On Hold" 
+          value={stats.onHold} 
+          icon={<AlertTriangle className="h-4 w-4" />} 
+          tone="rose" 
+          isActive={trackerStatusFilter === "On Hold"}
+          onClick={() => setTrackerStatusFilter("On Hold")}
+        />
+        <StatCard 
+          label="Offline" 
+          value={stats.offline} 
+          icon={<PauseCircle className="h-4 w-4" />} 
+          tone="violet" 
+          isActive={trackerStatusFilter === "Offline"}
+          onClick={() => setTrackerStatusFilter("Offline")}
+        />
       </div>
 
-      <div className="rounded-xl border border-gray-100 bg-white p-2 sm:p-3 shadow-sm">
-        <div className="grid grid-cols-2 gap-2 lg:flex lg:items-center lg:gap-3">
-          <div className="relative col-span-2 lg:col-span-1 lg:max-w-[240px] lg:flex-1">
-            <Search className="absolute left-2.5 top-[9px] h-3.5 w-3.5 text-gray-400" />
+      {/* ── Filter Bar ── */}
+      <div className="rounded-2xl border border-white/60 bg-white/80 backdrop-blur-md p-3 shadow-lg shadow-slate-200/60">
+        <div className="grid grid-cols-2 gap-2 lg:flex lg:items-center lg:gap-2.5">
+          <div className="relative col-span-2 lg:col-span-1 lg:max-w-[260px] lg:flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={listMode === "all" ? "Search all records..." : "Search assigned tasks..."}
-              className="w-full rounded-lg border border-gray-200 py-1.5 pl-8 pr-3 text-[11px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+              placeholder={listMode === "all" ? "Search all records..." : "Search my tasks..."}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-[11px] font-medium outline-none focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100 transition-all"
             />
           </div>
-          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} className="w-full lg:w-auto rounded-lg border border-gray-200 px-2 py-1.5 text-[11px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100">
+          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} className="w-full lg:w-auto rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] font-medium outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all">
             <option value="All">All Years</option>
             {yearOptions.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
-          <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="w-full lg:w-auto rounded-lg border border-gray-200 px-2 py-1.5 text-[11px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100">
+          <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="w-full lg:w-auto rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] font-medium outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all">
             <option value="All">All Months</option>
             {MONTHS.map((label, index) => <option key={label} value={String(index + 1)}>{label}</option>)}
           </select>
-          <select value={businessFilter} onChange={(e) => setBusinessFilter(e.target.value)} className="w-full lg:w-auto rounded-lg border border-gray-200 px-2 py-1.5 text-[11px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100">
+          <select value={businessFilter} onChange={(e) => setBusinessFilter(e.target.value)} className="w-full lg:w-auto rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] font-medium outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all">
             <option value="All">All Businesses</option>
             {businessOptions.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
-          <select value={trackerStatusFilter} onChange={(e) => setTrackerStatusFilter(e.target.value)} className="col-span-2 lg:col-span-1 w-full lg:w-auto rounded-lg border border-gray-200 px-2 py-1.5 text-[11px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100">
+          <select value={trackerStatusFilter} onChange={(e) => setTrackerStatusFilter(e.target.value)} className="col-span-2 lg:col-span-1 w-full lg:w-auto rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] font-medium outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all">
             <option value="All">All Statuses</option>
             {TRACKER_FILTER_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
-          <div className="col-span-2 hidden text-right text-[11px] font-semibold text-slate-500 lg:block lg:flex-1">
-            {filteredRows.length} result(s)
+          <div className="col-span-2 hidden text-right lg:block lg:flex-1">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-100 px-3 py-1">
+              <span className="text-[10px] font-black text-indigo-600">{filteredRows.length}</span>
+              <span className="text-[10px] font-semibold text-indigo-400">results</span>
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-        <div className="border-b border-gray-100 px-3 py-2.5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm font-semibold text-slate-800">
+      {/* ── Main Table ── */}
+      <div className="rounded-2xl border border-white/60 bg-white/90 backdrop-blur-md shadow-xl shadow-slate-200/50 overflow-hidden">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-3" style={{background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'}}>
+          <div className="flex items-center gap-2.5">
+            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="text-sm font-bold text-white">
               {canManageAssignments
-                ? (listMode === "all" ? "Mismatch List with Assignment Control" : "My Assigned Extraction List")
-                : "Your Assigned Extraction List"}
+                ? (listMode === "all" ? "Full Mismatch List" : "My Assigned Extraction Tasks")
+                : "Your Assigned Extraction Tasks"}
             </div>
-            <div className="text-xs text-slate-500">
-              {filteredRows.length ? `${(currentPage - 1) * ROWS_PER_PAGE + 1}-${Math.min(currentPage * ROWS_PER_PAGE, filteredRows.length)} of ${filteredRows.length}` : "0 results"}
-            </div>
+          </div>
+          <div className="text-[11px] font-semibold text-slate-400">
+            {filteredRows.length ? `${(currentPage - 1) * ROWS_PER_PAGE + 1}–${Math.min(currentPage * ROWS_PER_PAGE, filteredRows.length)} of ${filteredRows.length}` : "0 results"}
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-[1120px] w-full">
-            <thead className="bg-slate-50">
+            <thead style={{background: 'linear-gradient(135deg, #1e293b, #0f172a)'}}>
               <tr>
                 <Th>Period</Th>
                 <Th>Business / Report</Th>
@@ -1108,118 +1204,139 @@ export default function ReportExtractionTracker() {
                 <Th></Th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-100/80">
               {(loading || userLoading || permissionsLoading) ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-500">
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading report extraction list...
+                  <td colSpan={8} className="px-4 py-16 text-center">
+                    <span className="inline-flex flex-col items-center gap-3">
+                      <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+                      <span className="text-sm font-medium text-slate-500">Loading extraction tasks...</span>
                     </span>
                   </td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-500">
-                    {canManageAssignments
-                      ? "No mismatches found for the selected filters."
-                      : "No assigned report extraction rows found for the selected filters."}
+                  <td colSpan={8} className="px-4 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
+                        <ClipboardList className="h-8 w-8 text-slate-400" />
+                      </div>
+                      <div className="text-sm font-semibold text-slate-500">
+                        {canManageAssignments ? "No mismatches match the active filters." : "No assigned extraction tasks found."}
+                      </div>
+                    </div>
                   </td>
                 </tr>
-              ) : paginatedRows.map((row) => {
+              ) : paginatedRows.map((row, rowIdx) => {
                 const effectiveStatus = getEffectiveTrackerStatus(row);
                 const savingStatus = !!statusSavingById[row.id];
                 const canUpdateByUid = row.assignedToUid && row.assignedToUid === currentUserId;
                 const canUpdateByName = !row.assignedToUid && matchesAnyName(row.assignedToName, currentUserAliases);
-                  const canUpdateRow = row.isAssigned && (isAdmin || canUpdateByUid || canUpdateByName);
+                const canUpdateRow = row.isAssigned && (isAdmin || canUpdateByUid || canUpdateByName);
 
-                  return (
-                    <tr
-                      key={row.id}
-                      onDragOver={(event) => {
-                        if (!canUpdateRow) return;
-                        event.preventDefault();
-                        setDragOverRowId(row.id);
-                      }}
-                      onDragLeave={(event) => {
-                        if (!canUpdateRow) return;
-                        if (event.currentTarget.contains(event.relatedTarget)) return;
-                        setDragOverRowId((current) => (current === row.id ? null : current));
-                      }}
-                      onDrop={(event) => {
-                        if (!canUpdateRow) return;
-                        void handleInlineFileDrop(row, event);
-                      }}
-                      className={`align-top transition-colors ${
-                        dragOverRowId === row.id
-                          ? "bg-indigo-50/80"
-                          : "hover:bg-slate-50/80"
-                      }`}
-                    >
+                return (
+                  <tr
+                    key={row.id}
+                    onDragOver={(event) => {
+                      if (!canUpdateRow) return;
+                      event.preventDefault();
+                      setDragOverRowId(row.id);
+                    }}
+                    onDragLeave={(event) => {
+                      if (!canUpdateRow) return;
+                      if (event.currentTarget.contains(event.relatedTarget)) return;
+                      setDragOverRowId((current) => (current === row.id ? null : current));
+                    }}
+                    onDrop={(event) => {
+                      if (!canUpdateRow) return;
+                      void handleInlineFileDrop(row, event);
+                    }}
+                    className={`align-top transition-all duration-150 ${
+                      dragOverRowId === row.id
+                        ? "bg-indigo-50 ring-1 ring-inset ring-indigo-200"
+                        : rowIdx % 2 === 0 ? "bg-white hover:bg-slate-50/80" : "bg-slate-50/40 hover:bg-slate-50"
+                    }`}
+                  >
                       <Td>
-                        <div className="font-semibold text-slate-800">{row.periodMonthName} {row.periodYear}</div>
-                        <div className="text-[11px] text-slate-500">{row.periodId || "-"}</div>
+                        <div className="font-bold text-slate-800 text-[12px]">{row.periodMonthName} {row.periodYear}</div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">{row.periodId || "–"}</div>
                       </Td>
                       <Td>
-                        <div className="font-semibold text-slate-800">{row.reportType}</div>
-                        <div className="text-[11px] text-slate-500">{row.businessCode}</div>
+                        <div className="font-bold text-slate-800 text-[12px]">{row.reportType}</div>
+                        <div className="inline-flex items-center mt-0.5">
+                          <span className="text-[10px] font-bold tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-px">{row.businessCode}</span>
+                        </div>
                       </Td>
                       <Td>
-                        <div className="font-semibold text-slate-800">{row.distributorCode}</div>
-                        <div className="max-w-[180px] truncate text-[11px] text-slate-500">{row.distributorName}</div>
+                        <div className="font-bold text-slate-800 text-[12px]">{row.distributorCode}</div>
+                        <div className="max-w-[180px] truncate text-[10px] text-slate-400 mt-0.5">{row.distributorName}</div>
                       </Td>
                       <Td>
-                        <div className="flex flex-col gap-1 w-[160px]">
-                          <div className="flex items-center gap-2 rounded-md bg-slate-50 ring-1 ring-inset ring-slate-100 px-1 py-0.5">
+                        <div className="flex flex-col gap-1.5 w-[165px]">
+                          <div className="flex items-stretch gap-0 rounded-lg overflow-hidden border border-slate-200 shadow-sm">
                             <button
                               type="button"
                               title="Click to copy TVID"
                               onClick={() => row.tvid && navigator.clipboard.writeText(row.tvid).then(() => toast.success("TVID copied!"))}
-                              className="flex flex-col flex-1 px-1 text-left hover:bg-sky-50 rounded transition-colors cursor-pointer group/tvid"
+                              className="flex flex-col flex-1 px-2 py-1 text-left bg-white hover:bg-cyan-50 transition-colors cursor-pointer group/tvid border-r border-slate-200"
                             >
-                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 group-hover/tvid:text-sky-500">TVID</span>
-                              <span className="font-mono text-[10px] text-slate-700 truncate group-hover/tvid:text-sky-700">{row.tvid || "-"}</span>
+                              <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 group-hover/tvid:text-cyan-500">TVID</span>
+                              <span className="font-mono text-[10px] font-semibold text-slate-700 truncate group-hover/tvid:text-cyan-700">{row.tvid || "–"}</span>
                             </button>
-                            <div className="h-5 w-px bg-slate-200" />
                             <button
                               type="button"
                               title="Click to copy Password"
                               onClick={() => row.password && navigator.clipboard.writeText(row.password).then(() => toast.success("Password copied!"))}
-                              className="flex flex-col flex-1 px-1 text-left hover:bg-sky-50 rounded transition-colors cursor-pointer group/pwd"
+                              className="flex flex-col flex-1 px-2 py-1 text-left bg-white hover:bg-violet-50 transition-colors cursor-pointer group/pwd"
                             >
-                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 group-hover/pwd:text-sky-500">PWD</span>
-                              <span className="font-mono text-[10px] text-slate-700 truncate group-hover/pwd:text-sky-700">
-                                {maskSecret(row.password)}
-                              </span>
+                              <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 group-hover/pwd:text-violet-500">PWD</span>
+                              <span className="font-mono text-[10px] font-semibold text-slate-700 truncate group-hover/pwd:text-violet-700">{maskSecret(row.password)}</span>
                             </button>
                           </div>
                         </div>
                       </Td>
                       <Td>
-                        <div className="w-[180px] max-w-[180px] group flex gap-2 overflow-hidden">
-                           <div className="overflow-hidden text-[11px] leading-5 text-slate-600 flex-1" style={{display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden'}} title={row.reconRemark || ""}>
-                             {row.reconRemark || <span className="text-slate-400 italic">No remark</span>}
-                           </div>
-                           {canUpdateRow && (
-                              <button 
-                                type="button" 
-                                onClick={() => openRemarkModal(row)} 
-                                disabled={savingStatus}
-                                className="shrink-0 text-slate-400 opacity-0 group-hover:opacity-100 hover:text-sky-600 transition-all self-start pt-0.5 disabled:opacity-0"
-                                title="Edit Remark"
-                              >
-                                 <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                           )}
+                        <div className="w-[185px] max-w-[185px] group flex gap-2 overflow-hidden">
+                          <div className="overflow-hidden text-[11px] leading-relaxed text-slate-600 flex-1" style={{display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden'}} title={row.trackerRemark || row.reconRemark || ""}>
+                            {row.trackerRemark ? (
+                              <span className="text-slate-800 font-medium">{row.trackerRemark}</span>
+                            ) : row.reconRemark ? (
+                              <span className="text-slate-500 italic">{row.reconRemark}</span>
+                            ) : (
+                              <span className="text-slate-300 italic text-[10px]">No remark</span>
+                            )}
+                          </div>
+                          {canUpdateRow && (
+                            <button
+                              type="button"
+                              onClick={() => openRemarkModal(row)}
+                              disabled={savingStatus}
+                              className="shrink-0 text-slate-300 opacity-0 group-hover:opacity-100 hover:text-indigo-500 transition-all self-start pt-0.5 disabled:opacity-0"
+                              title="Edit Remark"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
+                        {row.trackerRemark && (
+                          <div className="flex items-center gap-1 mt-1 text-[9px] font-bold text-slate-400">
+                             <div className="h-1 w-1 rounded-full bg-slate-300" />
+                             <span className="truncate">{row.trackerRemarkBy || "Unknown"}</span>
+                             <span>•</span>
+                             <span>{row.trackerRemarkAt ? formatDateTime(row.trackerRemarkAt) : "Recently"}</span>
+                          </div>
+                        )}
                       </Td>
                       <Td>
                         {row.isAssigned ? (
-                          <div className="text-[11px] font-bold text-slate-800">{row.assignedToName || row.pic || "-"}</div>
-                        ) : (
-                          <div>
-                            <Badge tone="slate">Unassigned</Badge>
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-black text-white uppercase shadow-sm" style={{background: 'linear-gradient(135deg, #6366f1, #8b5cf6)'}}>
+                              {(row.assignedToName || row.pic || "?").charAt(0)}
+                            </div>
+                            <div className="text-[11px] font-bold text-slate-700 truncate max-w-[110px]">{row.assignedToName || row.pic || "–"}</div>
                           </div>
+                        ) : (
+                          <Badge tone="slate">Unassigned</Badge>
                         )}
                       </Td>
                       <Td>
@@ -1340,29 +1457,30 @@ export default function ReportExtractionTracker() {
           </table>
         </div>
         {filteredRows.length > ROWS_PER_PAGE ? (
-          <div className="flex flex-col gap-3 border-t border-gray-100 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs text-slate-500">
+          <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-[11px] font-semibold text-slate-400">
               Page {currentPage} of {totalPages}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                 disabled={currentPage === 1}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-40 transition-all"
               >
-                Previous
+                ← Prev
               </button>
               {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
                 <button
                   key={page}
                   type="button"
                   onClick={() => setCurrentPage(page)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+                  className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
                     currentPage === page
-                      ? "bg-sky-600 text-white shadow-sm shadow-sky-200"
-                      : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                      ? "text-white shadow-md"
+                      : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
                   }`}
+                  style={currentPage === page ? {background: 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 2px 8px rgba(99,102,241,0.35)'} : {}}
                 >
                   {page}
                 </button>
@@ -1371,9 +1489,9 @@ export default function ReportExtractionTracker() {
                 type="button"
                 onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                 disabled={currentPage === totalPages}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-40 transition-all"
               >
-                Next
+                Next →
               </button>
             </div>
           </div>
@@ -1802,15 +1920,27 @@ export default function ReportExtractionTracker() {
             </div>
             
             <div className="p-6">
-              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
-                Remark Text
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Remark Text
+                </label>
+                {activeRemarkRow.trackerRemarkBy && (
+                   <span className="text-[10px] font-medium text-slate-400">
+                     Last edited by <span className="text-slate-600 font-bold">{activeRemarkRow.trackerRemarkBy}</span>
+                   </span>
+                )}
+              </div>
               <textarea
                 value={draftRemark}
                 onChange={(e) => setDraftRemark(e.target.value)}
                 placeholder="Enter your observation, recon details or any status notes here..."
                 className="h-32 w-full resize-none rounded-xl border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-700 outline-none focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100 transition-all"
               />
+              {activeRemarkRow.trackerRemarkAt && (
+                <div className="mt-2 text-[10px] text-right text-slate-400">
+                   Modified {formatDateTime(activeRemarkRow.trackerRemarkAt)}
+                </div>
+              )}
             </div>
             
             <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-4">
@@ -1844,48 +1974,77 @@ export default function ReportExtractionTracker() {
   );
 }
 
-function StatCard({ label, value, icon, tone }) {
-  const tones = {
-    amber: "border-amber-100 bg-amber-50",
-    sky: "border-sky-100 bg-sky-50",
-    emerald: "border-emerald-100 bg-emerald-50",
-    rose: "border-rose-100 bg-rose-50",
-    slate: "border-slate-100 bg-slate-50",
+function StatCard({ label, value, icon, tone, isActive, onClick }) {
+  const configs = {
+    sky:     { grad: 'linear-gradient(135deg,#0ea5e9,#0284c7)', shadow: 'rgba(14,165,233,0.3)', bg: '#f0f9ff', border: '#bae6fd', text: '#0369a1', ring: 'ring-sky-400' },
+    amber:   { grad: 'linear-gradient(135deg,#f59e0b,#d97706)', shadow: 'rgba(245,158,11,0.3)',  bg: '#fffbeb', border: '#fde68a', text: '#92400e', ring: 'ring-amber-400' },
+    emerald: { grad: 'linear-gradient(135deg,#10b981,#059669)', shadow: 'rgba(16,185,129,0.3)', bg: '#ecfdf5', border: '#a7f3d0', text: '#065f46', ring: 'ring-emerald-400' },
+    rose:    { grad: 'linear-gradient(135deg,#f43f5e,#e11d48)', shadow: 'rgba(244,63,94,0.3)',  bg: '#fff1f2', border: '#fecdd3', text: '#9f1239', ring: 'ring-rose-400' },
+    violet:  { grad: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', shadow: 'rgba(139,92,246,0.3)', bg: '#f5f3ff', border: '#ddd6fe', text: '#5b21b6', ring: 'ring-violet-400' },
+    slate:   { grad: 'linear-gradient(135deg,#64748b,#475569)', shadow: 'rgba(100,116,139,0.2)', bg: '#f8fafc', border: '#e2e8f0', text: '#334155', ring: 'ring-slate-400' },
   };
+  const cfg = configs[tone] || configs.slate;
 
   return (
-    <div className={`rounded-2xl border px-3.5 py-3 shadow-sm ${tones[tone] || "border-slate-100 bg-white"}`}>
-      <div className="flex items-center justify-between gap-3">
+    <div
+      onClick={onClick}
+      className={`relative overflow-hidden rounded-2xl p-4 shadow-md transition-all cursor-pointer select-none ${
+        isActive 
+          ? `ring-2 ${cfg.ring} ring-offset-2 scale-[1.02] shadow-lg` 
+          : "hover:scale-[1.02] hover:shadow-lg opacity-80 hover:opacity-100"
+      }`}
+      style={{ 
+        background: cfg.bg, 
+        border: `1px solid ${isActive ? 'transparent' : cfg.border}`, 
+        boxShadow: isActive ? `0 8px 24px ${cfg.shadow}` : `0 4px 16px ${cfg.shadow}` 
+      }}
+    >
+      <div className="pointer-events-none absolute -right-3 -top-3 h-20 w-20 rounded-full opacity-10" style={{ background: cfg.grad }} />
+      <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">{label}</div>
-          <div className="mt-1 text-xl font-black tracking-tight text-slate-900">{value}</div>
+          <div className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: cfg.text, opacity: 0.7 }}>{label}</div>
+          <div className="mt-1.5 text-2xl font-black tracking-tight" style={{ color: cfg.text }}>{value}</div>
         </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/80 shadow-sm">{icon}</div>
+        <div
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-md"
+          style={{ background: cfg.grad, boxShadow: `0 4px 12px ${cfg.shadow}`, color: 'white' }}
+        >
+          {icon}
+        </div>
       </div>
     </div>
   );
 }
 
 function Badge({ children, tone = "slate" }) {
-  const tones = {
-    amber: "border-amber-200 bg-amber-50 text-amber-700",
-    sky: "border-sky-200 bg-sky-50 text-sky-700",
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    rose: "border-rose-200 bg-rose-50 text-rose-700",
-    slate: "border-slate-200 bg-slate-100 text-slate-600",
+  const configs = {
+    amber:   { bg: 'linear-gradient(135deg,#fef3c7,#fde68a)', border: '#f59e0b', text: '#92400e', shadow: 'rgba(245,158,11,0.2)' },
+    sky:     { bg: 'linear-gradient(135deg,#e0f2fe,#bae6fd)', border: '#0ea5e9', text: '#0369a1', shadow: 'rgba(14,165,233,0.2)' },
+    emerald: { bg: 'linear-gradient(135deg,#d1fae5,#a7f3d0)', border: '#10b981', text: '#065f46', shadow: 'rgba(16,185,129,0.2)' },
+    rose:    { bg: 'linear-gradient(135deg,#ffe4e6,#fecdd3)', border: '#f43f5e', text: '#9f1239', shadow: 'rgba(244,63,94,0.2)' },
+    slate:   { bg: 'linear-gradient(135deg,#f1f5f9,#e2e8f0)', border: '#94a3b8', text: '#475569', shadow: 'rgba(100,116,139,0.1)' },
+    violet:  { bg: 'linear-gradient(135deg,#ede9fe,#ddd6fe)', border: '#8b5cf6', text: '#5b21b6', shadow: 'rgba(139,92,246,0.2)' },
   };
+  const cfg = configs[tone] || configs.slate;
 
   return (
-    <span className={`inline-flex w-fit rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${tones[tone]}`}>
+    <span
+      className="inline-flex w-fit rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-widest"
+      style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.text, boxShadow: `0 2px 6px ${cfg.shadow}` }}
+    >
       {children}
     </span>
   );
 }
 
 function Th({ children }) {
-  return <th className="px-2.5 py-2 text-left text-[9px] font-extrabold uppercase tracking-[0.16em] text-slate-500">{children}</th>;
+  return (
+    <th className="px-3 py-3 text-left text-[9px] font-extrabold uppercase tracking-[0.18em]" style={{ color: '#94a3b8' }}>
+      {children}
+    </th>
+  );
 }
 
 function Td({ children }) {
-  return <td className="px-2.5 py-2 text-[11px] text-slate-700">{children}</td>;
+  return <td className="px-3 py-2.5 text-[11px] text-slate-700">{children}</td>;
 }

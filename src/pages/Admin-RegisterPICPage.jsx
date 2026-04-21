@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
+import { getBackendUrl } from "../config/backend";
 import { 
   UserPlus2, 
   ArrowLeft, 
@@ -16,23 +17,38 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-async function restoreSession(session) {
-  if (!session?.access_token || !session?.refresh_token) return;
+const TEMP_PASSWORD = "Password!123";
+const MotionDiv = motion.div;
 
-  const { error } = await supabase.auth.setSession({
-    access_token: session.access_token,
-    refresh_token: session.refresh_token,
-  });
-
-  if (error) throw error;
+async function readJsonSafely(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
-function licenseDateToValidUntil(ymd) {
-  if (!ymd) return null;
+function mapRegisterError(err) {
+  const message = String(err?.message || "").trim();
+  const lowerMessage = message.toLowerCase();
 
-  const base = new Date(`${ymd}T00:00:00`);
-  const next = new Date(base.getTime() + 24 * 60 * 60 * 1000);
-  return next.toISOString();
+  if (lowerMessage.includes("failed to fetch")) {
+    return "Could not reach the backend. Make sure the Flask backend is running and the header backend URL points to it.";
+  }
+
+  if (lowerMessage.includes("invalid or expired session")) {
+    return "Your admin session expired. Please sign in again and retry.";
+  }
+
+  if (lowerMessage.includes("admin access required")) {
+    return "This action requires an admin account.";
+  }
+
+  if (lowerMessage.includes("email signups are disabled")) {
+    return "Supabase Email signups are disabled. Open Authentication > Providers > Email, enable Email signups, and keep Confirm email off if you do not want verification emails.";
+  }
+
+  return message || "An error occurred during registration.";
 }
 
 function RegisterPICPage() {
@@ -42,7 +58,7 @@ function RegisterPICPage() {
     name: "",
     username: "",
     email: "",
-    password: "",
+    password: TEMP_PASSWORD,
     role: "user",
     validUntil: "",
   });
@@ -61,56 +77,44 @@ function RegisterPICPage() {
       return;
     }
 
-    let previousSession = null;
-
     try {
       setLoading(true);
 
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      previousSession = session;
 
-      if (!previousSession?.user?.id) {
+      if (!session?.user?.id || !session?.access_token) {
         throw new Error("Your current admin session expired. Please sign in again and retry.");
       }
 
-      const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-      });
-
-      if (authErr) throw authErr;
-
-      const uid = authData.user?.id;
-      if (!uid) throw new Error("Failed to get user ID after auth registration.");
-
-      await restoreSession(previousSession);
-
-      const { error: profErr } = await supabase.from("profiles").upsert({
-        id: uid,
-        display_name: form.name,
-        name: form.name,
-        email: form.email,
-        username: form.username,
-      }, { onConflict: "id" });
-      if (profErr) throw profErr;
-
-      const { error: roleErr } = await supabase.from("user_roles").upsert({
-        id: uid,
-        role: form.role,
-      }, { onConflict: "id" });
-      if (roleErr) throw roleErr;
-
-      if (form.validUntil) {
-        const { error: licErr } = await supabase.from("licenses").upsert({
-          id: uid,
-          valid_until: licenseDateToValidUntil(form.validUntil),
-        }, { onConflict: "id" });
-        if (licErr) throw licErr;
+      const backendUrl = getBackendUrl();
+      if (!backendUrl) {
+        throw new Error("Backend URL is not configured. Set it from the header backend control and try again.");
       }
 
-      toast.success("User successfully registered!");
+      const response = await fetch(`${backendUrl}/admin/register-pic`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          name: form.name,
+          username: form.username,
+          email: form.email,
+          password: form.password,
+          role: form.role,
+          validUntil: form.validUntil,
+        }),
+      });
+
+      const payload = await readJsonSafely(response);
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to register the user.");
+      }
+
+      toast.success(payload?.message || "User successfully registered with a temporary password.");
 
       setTimeout(() => {
         navigate("/settings/admin/users");
@@ -118,20 +122,8 @@ function RegisterPICPage() {
 
     } catch (err) {
       console.error(err);
-      toast.error(err.message || "An error occurred during registration.");
+      toast.error(mapRegisterError(err));
     } finally {
-      try {
-        const {
-          data: { session: currentSession },
-        } = await supabase.auth.getSession();
-
-        if (previousSession?.user?.id && currentSession?.user?.id !== previousSession.user.id) {
-          await restoreSession(previousSession);
-        }
-      } catch (restoreErr) {
-        console.error("Failed to restore the admin session after registration.", restoreErr);
-      }
-
       setLoading(false);
     }
   }
@@ -175,7 +167,7 @@ function RegisterPICPage() {
       <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Form Section */}
         <div className="lg:col-span-2 space-y-4">
-          <motion.div 
+          <MotionDiv 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/50 backdrop-blur-sm"
@@ -235,11 +227,24 @@ function RegisterPICPage() {
                     type="password"
                     name="password"
                     required
-                    placeholder="Minimum 6 characters"
+                    placeholder={TEMP_PASSWORD}
                     value={form.password}
                     onChange={handleChange}
+                    autoComplete="new-password"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm font-bold transition-all focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-950/50 dark:focus:border-indigo-500"
                   />
+                  <div className="flex flex-col gap-2 px-1 pt-1 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                      Default temporary password: <span className="font-black text-slate-700 dark:text-slate-200">{TEMP_PASSWORD}</span>. Ask the user to change it after first sign-in.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setForm((current) => ({ ...current, password: TEMP_PASSWORD }))}
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 transition hover:border-indigo-300 hover:text-indigo-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-indigo-500 dark:hover:text-indigo-300"
+                    >
+                      Reset Temp Password
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -289,7 +294,7 @@ function RegisterPICPage() {
                 </button>
               </div>
             </form>
-          </motion.div>
+          </MotionDiv>
         </div>
 
         {/* Side Section aligned with Admin density */}
@@ -300,7 +305,9 @@ function RegisterPICPage() {
             </h3>
             <div className="space-y-3">
               {[
-                "Credentials active immediately upon registration.",
+                "Credentials are created through the backend admin flow without signup emails.",
+                `Default temporary password can be ${TEMP_PASSWORD}.`,
+                "New PIC users must change that password after first sign-in.",
                 "Username must be unique for identification.",
                 "License Date controls automated expiry."
               ].map((text, i) => (

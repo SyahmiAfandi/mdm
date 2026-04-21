@@ -19,12 +19,14 @@ import {
   ArrowLeft,
   Check,
   Settings,
+  ClipboardList,
 } from "lucide-react";
 
 import { supabase } from "../supabaseClient";
 
 import useReconsProgress from "../hooks/useReconsProgress";
 import useEmailTrackerSummaryCounts from "../hooks/useEmailTrackerSummaryCounts";
+import useReportExtractionSummaryCounts from "../hooks/useReportExtractionSummaryCounts";
 import { usePermissions } from "../hooks/usePermissions";
 import { useUser } from "../context/UserContext";
 
@@ -378,6 +380,8 @@ function HomePage() {
   const [dbHint, setDbHint] = useState("");
   const [apiLatency, setApiLatency] = useState(null);
   const [dbLatency, setDbLatency] = useState(null);
+  const [storageStatus, setStorageStatus] = useState("Loading...");
+  const [storageHint, setStorageHint] = useState("");
   const [healthCheckedAt, setHealthCheckedAt] = useState(null);
   const [healthRefreshing, setHealthRefreshing] = useState(false);
 
@@ -736,14 +740,17 @@ function HomePage() {
           setDbStatus("OFFLINE");
           setApiHint("No internet connection");
           setDbHint("No internet connection");
+          setStorageHint("No internet connection");
           setApiLatency(null);
           setDbLatency(null);
+          setStorageStatus("OFFLINE");
           return;
         }
 
-        const [api, db] = await Promise.allSettled([
+        const [api, db, storageRes] = await Promise.allSettled([
           fetchApiHealth(controller.signal),
           fetchSupabaseHealth(),
+          supabase.rpc('get_db_size')
         ]);
 
         const apply = async (key, result, setStatus, setHint, setLatency, docId, fallbackUrl, source) => {
@@ -775,11 +782,32 @@ function HomePage() {
 
         await apply("api", api, setApiStatus, setApiHint, setApiLatency, "apiService", FLASK_HEALTH_URL, "Flask");
         await apply("db", db, setDbStatus, setDbHint, setDbLatency, "supabaseDb", "supabase", "Supabase");
+
+        if (storageRes.status === "fulfilled") {
+          const { data, error } = storageRes.value;
+          if (error) {
+             setStorageStatus("SETUP NEEDED");
+             setStorageHint(error.code === 'PGRST202' ? "Run get_db_size SQL setup" : error.message);
+          } else if (data) {
+             const left = data.left_mb;
+             const percent = data.percent_used;
+             setStorageStatus(percent >= 90 ? "WARNING" : "UP");
+             setStorageHint(`${left} MB left (${(100 - percent).toFixed(1)}% free)`);
+          } else {
+             setStorageStatus("N/A");
+             setStorageHint("No data");
+          }
+        } else {
+          setStorageStatus("DOWN");
+          setStorageHint(String(storageRes.reason || "Check failed"));
+        }
       } catch (err) {
         setApiStatus("DOWN");
         setDbStatus("DOWN");
+        setStorageStatus("DOWN");
         setApiHint(String(err));
         setDbHint(String(err));
+        setStorageHint(String(err));
         setApiLatency(null);
         setDbLatency(null);
       } finally {
@@ -799,14 +827,18 @@ function HomePage() {
     };
   }, []); // keep []
 
-  // ✅ Email Tracker Summary
+  // ✅ Summaries
   const emailSummary = useEmailTrackerSummaryCounts();
+  const extractionSummary = useReportExtractionSummaryCounts();
 
   // ✅ Fix: subscribe once, avoid infinite resubscribe loop
   const refreshRef = useRef(() => { });
   useEffect(() => {
-    refreshRef.current = emailSummary.refresh;
-  }, [emailSummary]);
+    refreshRef.current = () => {
+      emailSummary.refresh();
+      extractionSummary.refresh();
+    };
+  }, [emailSummary, extractionSummary]);
 
   useEffect(() => {
     let channel;
@@ -843,7 +875,7 @@ function HomePage() {
     return String(emailSummary.error).slice(0, 160);
   }, [emailSummary.error]);
 
-  const pendingEmailCount = (emailSummary.counts?.new || 0) + (emailSummary.counts?.inProgress || 0);
+
 
   const displayName = useMemo(() => {
     const name = user?.name?.trim();
@@ -950,139 +982,6 @@ function HomePage() {
     return items.filter((item) => !item.perm || can(item.perm)).slice(0, 6);
   }, [can]);
 
-  const focusItems = useMemo(() => {
-    const items = [];
-
-    if (!apiHealthy || !dbHealthy) {
-      const affectedSystems = [
-        !apiHealthy ? "Python API" : null,
-        !dbHealthy ? "Supabase DB" : null,
-      ]
-        .filter(Boolean)
-        .join(" and ");
-
-      items.push({
-        title: apiHealthy || dbHealthy ? "Investigate platform warning" : "Platform health needs attention",
-        desc: `${affectedSystems || "One or more services"} need monitoring from the health panel above.`,
-        icon: AlertTriangle,
-        tone: apiHealthy || dbHealthy ? "amber" : "rose",
-        badge: platformHealthSummary.label,
-      });
-    }
-
-    if (emailSummary.counts?.new > 0 && can("mdmEmailTracker.view")) {
-      items.push({
-        href: "/utilities/emailtracker",
-        title: "Triage new email tasks",
-        desc: `${emailSummary.counts.new} new item${emailSummary.counts.new === 1 ? "" : "s"} waiting for action.`,
-        icon: Mail,
-        tone: "rose",
-        perm: "mdmEmailTracker.view",
-        section: "Email Tracker",
-      });
-    }
-
-    if (emailSummary.counts?.inProgress > 0 && can("mdmEmailTracker.view")) {
-      items.push({
-        href: "/utilities/emailtracker",
-        title: "Close active requests",
-        desc: `${emailSummary.counts.inProgress} item${emailSummary.counts.inProgress === 1 ? "" : "s"} still in progress.`,
-        icon: Clock3,
-        tone: "blue",
-        perm: "mdmEmailTracker.view",
-        section: "Email Tracker",
-      });
-    }
-
-    if (can("tools.reconciliation.view")) {
-      items.push({
-        href: "/recons/upload",
-        title: "Upload this cycle's recon files",
-        desc: "Open the intake workspace for OSDP and PBI submissions.",
-        icon: UploadCloud,
-        tone: "blue",
-        perm: "tools.reconciliation.view",
-        section: "Reconciliation",
-      });
-    }
-
-    if (can("tools.promotions.view")) {
-      items.push({
-        href: "/promotions",
-        title: "Continue promotion setup",
-        desc: "Access manual entry, Auto IC generation and promo controls.",
-        icon: FileText,
-        tone: "emerald",
-        perm: "tools.promotions.view",
-        section: "Promotions",
-      });
-    }
-
-    if (!items.length) {
-      items.push({
-        href: can("tools.view") ? "/tools" : undefined,
-        title: "Everything looks steady",
-        desc: can("tools.view")
-          ? "Open the tools hub and pick the next module to work on."
-          : "Your live workspace is stable right now.",
-        icon: CheckCircle2,
-        tone: "emerald",
-        perm: can("tools.view") ? "tools.view" : undefined,
-        section: "Workspace",
-      });
-    }
-
-    return items.slice(0, 4);
-  }, [
-    apiHealthy,
-    dbHealthy,
-    emailSummary.counts,
-    can,
-    platformHealthSummary.label,
-  ]);
-
-  const recentFallbackAction = useMemo(() => {
-    if (quickActions[0]) return quickActions[0];
-    if (can("tools.view")) {
-      return {
-        href: "/tools",
-        title: "Browse Tools Hub",
-        desc: "Explore the modules available for your role.",
-        perm: "tools.view",
-        section: "Navigation",
-      };
-    }
-    return null;
-  }, [quickActions, can]);
-
-  const visibleRecentLaunches = useMemo(
-    () =>
-      recentLaunches
-        .filter((item) => !item?.perm || can(item.perm))
-        .slice(0, 4),
-    [recentLaunches, can]
-  );
-
-  function rememberLaunch(item) {
-    if (!item?.href) return;
-
-    setRecentLaunches((prev) => {
-      const next = [
-        {
-          href: item.href,
-          title: item.title,
-          desc: item.desc,
-          perm: item.perm,
-          section: item.section,
-          visitedAt: new Date().toISOString(),
-        },
-        ...prev.filter((entry) => entry.href !== item.href),
-      ].slice(0, 5);
-
-      saveRecentLaunches(next);
-      return next;
-    });
-  }
 
   useEffect(() => {
     const timerId = window.setInterval(() => {
@@ -1093,58 +992,42 @@ function HomePage() {
   }, []);
 
   return (
-    <div className="w-full min-w-0 px-3 sm:px-5 pb-3">
+    <div className="w-full h-full flex flex-col min-w-0 pb-1 overflow-hidden">
 
       {/* ── Header Banner ── */}
-      <div className="relative overflow-hidden rounded-xl mb-3 bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-200 dark:shadow-blue-950/40 px-4 py-3 sm:py-4">
+      <div className="shrink-0 relative overflow-hidden rounded-xl mb-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 shadow-md px-4 py-2.5 sm:py-3">
         {/* decorative circles */}
-        <div className="pointer-events-none absolute -top-8 -right-8 w-36 h-36 rounded-full bg-white/10" />
-        <div className="pointer-events-none absolute -bottom-10 right-20 w-24 h-24 rounded-full bg-white/10" />
+        <div className="pointer-events-none absolute -top-8 -right-8 w-24 h-24 rounded-full bg-white/10" />
+        <div className="pointer-events-none absolute -bottom-8 right-20 w-16 h-16 rounded-full bg-white/10" />
 
-        <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-lg sm:text-xl font-extrabold text-white tracking-tight">
+            <div className="flex items-center gap-2 mb-0.5">
+              <h1 className="text-base sm:text-lg font-extrabold text-white tracking-tight">
                 MDM Operations Dashboard
               </h1>
-              <span className="inline-flex items-center rounded-full bg-white/20 text-white px-2 py-0.5 text-[10px] font-bold tracking-wide border border-white/30">
+              <span className="inline-flex items-center rounded-full bg-white/20 text-white px-1.5 py-0.5 text-[9px] font-bold tracking-wide border border-white/30">
                 v3.0
               </span>
             </div>
-            <p className="text-blue-100 text-xs sm:text-sm">
+            <p className="text-blue-100 text-[11px] sm:text-xs">
               Real-time visibility into email, reconciliation &amp; system health.
             </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[10px] font-semibold text-white/90">
-                <Info size={10} />
-                {displayName}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[10px] font-semibold text-white/90">
-                <ShieldCheck size={10} />
-                {roleLabel}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[10px] font-semibold text-white/90">
-                <ExternalLink size={10} />
-                {permissionsLoading ? "Loading shortcuts..." : `${quickActions.length} shortcuts ready`}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[10px] font-semibold text-white/90">
-                <Mail size={10} />
-                {pendingEmailCount > 0 ? `${pendingEmailCount} email tasks active` : "Inbox workflow clear"}
-              </span>
-            </div>
           </div>
-          <div className="flex items-center gap-1.5 self-start sm:self-center bg-white/15 rounded-full px-3 py-1.5 border border-white/20 shrink-0">
-            <span className="relative flex h-2 w-2">
+          <div className="flex items-center gap-1.5 self-start sm:self-center bg-white/15 rounded-full px-2.5 py-1 border border-white/20 shrink-0">
+            <span className="relative flex h-1.5 w-1.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
             </span>
-            <span className="text-[11px] font-semibold text-white/90">Live · {lastSync}</span>
+            <span className="text-[10px] font-semibold text-white/90">Live · {lastSync}</span>
           </div>
         </div>
       </div>
 
-      {/* ── Row 1: 3 summary cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 mb-2.5">
+      <div className="flex-1 flex flex-col min-h-0 gap-2.5">
+
+        {/* ── Row 1: 3 summary cards ── */}
+        <div className="shrink-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
 
         {/* Email Tracker */}
         <SummaryCardCompact
@@ -1168,9 +1051,9 @@ function HomePage() {
         {/* Recons Progress (flip card) */}
         <FlipReconsCard />
 
-        {/* Platform Health */}
+        {/* Service Health */}
         <DashCard
-          title="Platform Health"
+          title="Service Health"
           icon={<ShieldCheck size={15} />}
           iconColor="text-emerald-600 dark:text-emerald-400"
           iconBg="bg-emerald-50 dark:bg-emerald-900/30"
@@ -1185,7 +1068,7 @@ function HomePage() {
             </div>
           }
         >
-          <div className="space-y-2.5 mt-3">
+          <div className="space-y-1.5 mt-2">
             <div className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50/80 px-3 py-2 dark:border-gray-700 dark:bg-gray-900/40">
               <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${platformHealthSummary.className}`}>
                 {platformHealthSummary.label}
@@ -1200,18 +1083,27 @@ function HomePage() {
                 Refresh
               </button>
             </div>
-            <HealthRowCompact label="Python API" status={apiStatus} hint={apiHint} latency={apiLatency} />
-            <HealthRowCompact label="Supabase DB" status={dbStatus} hint={dbHint} latency={dbLatency} />
+            <HealthRowCompact label="Backend API" status={apiStatus} hint={apiHint} latency={apiLatency} />
+            <HealthRowCompact label="Database" status={dbStatus} hint={dbHint} latency={dbLatency} />
+            <HealthRowCompact label="DB Storage" status={storageStatus} hint={storageHint} />
           </div>
         </DashCard>
       </div>
 
-      {/* ── Row 2: Quick Actions + Helpful Links ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+        {/* ── Row 2: Report Extraction + Quick Actions ── */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-2.5">
 
-        {/* Quick Actions – spans 2/3 width */}
+        {/* Report Extraction */}
+        <div className="lg:col-span-1 h-full border border-gray-100 dark:border-gray-800 rounded-[20px] bg-white dark:bg-gray-800 shadow-sm">
+          <ReportExtractionSummaryCard 
+            summary={extractionSummary} 
+            cta={{ href: "/utilities/report-extraction-tracker", label: "Open Tracking Board" }} 
+          />
+        </div>
+
+        {/* Quick Actions – spans 2 widths */}
         <DashCard
-          className="md:col-span-2"
+          className="lg:col-span-2"
           title="Quick Actions"
           icon={<ExternalLink size={15} />}
           iconColor="text-indigo-600 dark:text-indigo-400"
@@ -1251,7 +1143,7 @@ function HomePage() {
                 Loading the best shortcuts for your role...
               </div>
             ) : quickActions.length ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                 {quickActions.map((item) => (
                   <ShortcutTile
                     key={item.href}
@@ -1272,67 +1164,7 @@ function HomePage() {
           </div>
         </DashCard>
 
-        <div className="space-y-2.5">
-          <DashCard
-            title="Focus Today"
-            icon={<AlertTriangle size={15} />}
-            iconColor="text-amber-600 dark:text-amber-400"
-            iconBg="bg-amber-50 dark:bg-amber-900/30"
-          >
-            <div className="space-y-2.5 mt-3">
-              {focusItems.map((item) => (
-                <FocusActionRow
-                  key={`${item.title}-${item.href || "static"}`}
-                  href={item.href}
-                  title={item.title}
-                  desc={item.desc}
-                  icon={item.icon}
-                  tone={item.tone}
-                  badge={item.badge}
-                  onClick={item.href ? () => rememberLaunch(item) : undefined}
-                />
-              ))}
-            </div>
-          </DashCard>
-
-          <DashCard
-            title="Recent Launches"
-            icon={<LinkIcon size={15} />}
-            iconColor="text-sky-600 dark:text-sky-400"
-            iconBg="bg-sky-50 dark:bg-sky-900/30"
-          >
-            <div className="space-y-2 mt-3">
-              {visibleRecentLaunches.length ? (
-                visibleRecentLaunches.map((item) => (
-                  <RecentLaunchRow
-                    key={`${item.href}-${item.visitedAt || "recent"}`}
-                    item={item}
-                    onClick={() => rememberLaunch(item)}
-                  />
-                ))
-              ) : (
-                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 px-3.5 py-4 dark:border-gray-700 dark:bg-gray-900/20">
-                  <div className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                    No recent launches yet
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    The tools you open from this homepage will appear here for faster access.
-                  </p>
-                  {recentFallbackAction?.href && (
-                    <Link
-                      to={recentFallbackAction.href}
-                      onClick={() => rememberLaunch(recentFallbackAction)}
-                      className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-sky-600 transition-colors hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
-                    >
-                      Start with {recentFallbackAction.title} <ArrowRight size={12} />
-                    </Link>
-                  )}
-                </div>
-              )}
-            </div>
-          </DashCard>
         </div>
-
       </div>
     </div>
   );
@@ -1486,13 +1318,13 @@ function TinyPill({ icon: Icon, label, value, sub, tone = "gray" }) {
 /* ─── DashCard ─── */
 function DashCard({ title, icon, iconColor = "text-gray-500 dark:text-gray-400", iconBg = "bg-gray-100 dark:bg-gray-700", children, footer, className = "" }) {
   return (
-    <div className={["bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 shadow-sm hover:shadow-md transition-shadow duration-200 p-3.5 sm:p-4 flex flex-col", className].join(" ")}>
-      <div className="flex items-center gap-2.5">
+    <div className={["bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700/60 shadow-sm p-3.5 sm:p-4 flex flex-col h-full", className].join(" ")}>
+      <div className="flex items-center gap-2.5 mb-2.5 shrink-0">
         <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${iconBg} ${iconColor}`}>{icon}</div>
         <h2 className="text-sm font-bold text-gray-800 dark:text-gray-100">{title}</h2>
       </div>
-      <div className="flex-1">{children}</div>
-      {footer && <div className="mt-auto">{footer}</div>}
+      <div className="flex-1 min-h-0 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>{children}</div>
+      {footer && <div className="mt-auto shrink-0 pt-2">{footer}</div>}
     </div>
   );
 }
@@ -1546,102 +1378,208 @@ function ShortcutTile({ href, title, desc, icon, color = "blue", onClick }) {
   );
 }
 
-/* ─── HelpLinkCompact ─── */
-function FocusActionRow({ href, title, desc, icon: Icon, tone = "blue", badge, onClick }) {
-  const toneMap = {
-    blue: "bg-blue-50 border-blue-100 text-blue-700 dark:bg-blue-950/30 dark:border-blue-900/50 dark:text-blue-300",
-    emerald: "bg-emerald-50 border-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:border-emerald-900/50 dark:text-emerald-300",
-    amber: "bg-amber-50 border-amber-100 text-amber-700 dark:bg-amber-950/30 dark:border-amber-900/50 dark:text-amber-300",
-    rose: "bg-rose-50 border-rose-100 text-rose-700 dark:bg-rose-950/30 dark:border-rose-900/50 dark:text-rose-300",
-  };
-  const accent = toneMap[tone] || toneMap.blue;
-  const body = (
-    <>
-      <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${accent}`}>
-        <Icon size={16} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">{title}</div>
-          {badge && (
-            <span className="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-gray-500 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700">
-              {badge}
-            </span>
-          )}
-        </div>
-        <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{desc}</div>
-      </div>
-      {href && (
-        <ArrowRight
-          size={13}
-          className="mt-1 shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-blue-400 dark:text-gray-600"
-        />
-      )}
-    </>
-  );
 
-  if (!href) {
-    return (
-      <div className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50/70 p-3 dark:border-gray-700 dark:bg-gray-900/30">
-        {body}
-      </div>
-    );
-  }
-
-  return (
-    <Link
-      to={href}
-      onClick={onClick}
-      className="group flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50/70 p-3 transition-colors hover:border-blue-200 hover:bg-white dark:border-gray-700 dark:bg-gray-900/30 dark:hover:border-blue-700/60 dark:hover:bg-gray-800/70"
-    >
-      {body}
-    </Link>
-  );
-}
-
-function RecentLaunchRow({ item, onClick }) {
-  return (
-    <Link
-      to={item.href}
-      onClick={onClick}
-      className="group flex items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2.5 transition-colors hover:border-sky-200 hover:bg-white dark:border-gray-700 dark:bg-gray-900/30 dark:hover:border-sky-700/60 dark:hover:bg-gray-800/70"
-    >
-      <div className="min-w-0">
-        <div className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-          {item.title}
-        </div>
-        <div className="truncate text-xs text-gray-500 dark:text-gray-400">{item.desc}</div>
-        <div className="mt-1 text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
-          {item.section || "Workspace"} • {formatRelativeTime(item.visitedAt)}
-        </div>
-      </div>
-      <ArrowRight
-        size={13}
-        className="shrink-0 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-sky-400 dark:text-gray-600"
-      />
-    </Link>
-  );
-}
 
 /* ─── HealthRowCompact ─── */
 function HealthRowCompact({ label, status, hint, latency }) {
-  const s = String(status || "");
-  const ok = s.toLowerCase() === "up" || s.toLowerCase().includes("operational");
+  const s = String(status || "Unknown");
+  const sLower = s.toLowerCase();
+  
+  const ok = sLower === "up" || sLower.includes("operational") || sLower === "ok";
+  const warn = sLower.includes("warning") || sLower.includes("setup");
+  const offline = sLower === "down" || sLower.includes("offline") || sLower === "unknown";
+
+  // Dynamic Theme Generation
+  let dotColor = "bg-gray-400";
+  let textColor = "text-gray-600 dark:text-gray-400";
+  let bgGradient = "from-gray-50 to-white dark:from-gray-800/10 dark:to-transparent border-gray-200 dark:border-gray-700/50";
+  let Icon = Info;
+  let pulse = false;
+
+  if (ok) {
+    dotColor = "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]";
+    textColor = "text-emerald-700 dark:text-emerald-400";
+    bgGradient = "from-emerald-50/80 to-white border-emerald-100 dark:from-emerald-950/20 dark:to-transparent dark:border-emerald-900/30";
+    Icon = CheckCircle2;
+    pulse = true;
+  } else if (warn) {
+    dotColor = "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]";
+    textColor = "text-amber-700 dark:text-amber-400";
+    bgGradient = "from-amber-50/80 to-white border-amber-100 dark:from-amber-950/20 dark:to-transparent dark:border-amber-900/30";
+    Icon = AlertTriangle;
+    pulse = true;
+  } else if (offline) {
+    dotColor = "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]";
+    textColor = "text-rose-700 dark:text-rose-400";
+    bgGradient = "from-rose-50/80 to-white border-rose-100 dark:from-rose-950/20 dark:to-transparent dark:border-rose-900/30";
+    Icon = AlertTriangle;
+  }
+
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-14 shrink-0">{label}</span>
-      <div className="flex items-center gap-2 flex-1 flex-wrap">
-        <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${ok
-          ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/50"
-          : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900/50"
-          }`}>
-          {ok ? <CheckCircle2 size={10} strokeWidth={3} /> : <AlertTriangle size={10} strokeWidth={2.5} />}
-          {s}
-        </span>
-        {latency != null && <span className="text-[11px] text-gray-400 dark:text-gray-500 font-mono">{latency}ms</span>}
-        {hint && <span className="text-[11px] text-gray-400 dark:text-gray-500 truncate max-w-[20ch]">{hint}</span>}
+    <div className={`relative overflow-hidden flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border bg-gradient-to-r ${bgGradient} transition-all duration-300 hover:shadow-sm group`}>
+      <div className="flex items-center gap-2.5 min-w-0 z-10">
+        <div className="relative flex items-center justify-center w-6 h-6 rounded-md bg-white dark:bg-gray-800 shadow-sm shrink-0 border border-gray-100 dark:border-gray-700">
+           {pulse && <span className="absolute inline-flex h-full w-full rounded-md bg-current opacity-20 animate-ping" style={{ color: 'inherit' }}></span>}
+           <Icon size={12} className={textColor} />
+        </div>
+        <div className="min-w-0 flex flex-col leading-tight">
+          <span className="text-xs font-bold text-gray-800 dark:text-gray-100 truncate">{label}</span>
+          {hint && <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate mt-0.5">{hint}</span>}
+        </div>
       </div>
+      
+      <div className="flex items-center gap-2 shrink-0 z-10">
+        {latency != null && (
+          <span className="text-[10px] sm:text-[11px] font-medium font-mono text-gray-400 dark:text-gray-500 transition-colors group-hover:text-gray-600 dark:group-hover:text-gray-300">
+            {latency}ms
+          </span>
+        )}
+        <div className="flex items-center gap-1.5 bg-white/60 dark:bg-gray-900/40 px-1.5 py-0.5 rounded-md border border-gray-200/50 dark:border-gray-700/50 backdrop-blur-sm shadow-sm min-w-[4rem] justify-center">
+          <span className={`w-1.5 h-1.5 rounded-full ${dotColor} ${offline ? 'animate-pulse' : ''}`}></span>
+          <span className={`text-[9px] font-black uppercase tracking-wider ${textColor}`}>{s}</span>
+        </div>
+      </div>
+
+      {/* Decorative background accent line */}
+      <div className={`absolute top-0 bottom-0 left-0 w-[3px] ${textColor.split(' ')[0].replace('text-', 'bg-')} opacity-30 dark:opacity-20`}></div>
     </div>
   );
 }
+/* ─── ReportExtractionSummaryCard (Graphical Visual Style) ─── */
+function ReportExtractionSummaryCard({ summary, cta }) {
+  const { counts, loading, error } = summary || {};
+  const global = counts?.global || { pending: 0, onHold: 0, complete: 0, total: 0 };
+  const mine = counts?.mine || { pending: 0, onHold: 0, complete: 0, total: 0 };
+
+  const [view, setView] = useState("mine");
+  const activeStats = view === "mine" ? mine : global;
+  const { pending, onHold, complete, total } = activeStats;
+  const incomplete = pending + onHold;
+  const pctComplete = total > 0 ? Math.round((complete / total) * 100) : 0;
+  const isClear = incomplete === 0;
+
+  // SVG donut arc
+  const R = 30;
+  const C = 2 * Math.PI * R;
+  const offset = C - (pctComplete / 100) * C;
+
+  const statRows = [
+    { label: "Pending", value: pending, color: "bg-rose-500", glow: "#f43f5e", pct: total > 0 ? (pending / total) * 100 : 0 },
+    { label: "On Hold", value: onHold, color: "bg-amber-400", glow: "#fbbf24", pct: total > 0 ? (onHold / total) * 100 : 0 },
+    { label: "Completed", value: complete, color: "bg-emerald-500", glow: "#10b981", pct: total > 0 ? (complete / total) * 100 : 0 },
+  ];
+
+  return (
+    <div className="flex flex-col h-full p-3.5 relative overflow-hidden">
+
+      {/* Subtle background glow */}
+      <div className="pointer-events-none absolute -right-8 -top-8 w-28 h-28 rounded-full bg-violet-400/10 dark:bg-violet-500/5 blur-2xl" />
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300">
+            <ClipboardList size={14} />
+          </div>
+          <div>
+            <div className="text-xs font-bold text-gray-800 dark:text-gray-100 leading-tight">Report Extraction</div>
+            <div className="text-[10px] text-gray-400 dark:text-gray-500">
+              {loading ? "Loading..." : error ? "Failed" : "Live pipeline"}
+            </div>
+          </div>
+        </div>
+        {/* Tab Toggle */}
+        <div className="flex p-0.5 bg-gray-100 dark:bg-gray-900/60 rounded-md">
+          {["mine", "global"].map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded transition-all ${
+                view === v
+                  ? "bg-white text-violet-700 shadow-sm dark:bg-gray-700 dark:text-violet-300"
+                  : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              }`}
+            >
+              {v === "mine" ? "Mine" : "All"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Body: SVG Donut + Big Number */}
+      <div className="flex items-center gap-4 mb-3 shrink-0">
+        {/* SVG Arc Donut */}
+        <div className="relative shrink-0 w-[72px] h-[72px]">
+          <svg viewBox="0 0 72 72" className="w-full h-full -rotate-90">
+            {/* track */}
+            <circle cx="36" cy="36" r={R} fill="none" stroke="currentColor" strokeWidth="7" className="text-gray-100 dark:text-gray-700" />
+            {/* progress */}
+            <circle
+              cx="36" cy="36" r={R}
+              fill="none"
+              stroke={isClear ? "#10b981" : "#8b5cf6"}
+              strokeWidth="7"
+              strokeLinecap="round"
+              strokeDasharray={C}
+              strokeDashoffset={offset}
+              style={{ transition: "stroke-dashoffset 1s ease, stroke 0.5s ease" }}
+            />
+          </svg>
+          {/* Center text */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className={`text-base font-black leading-none tabular-nums ${isClear ? "text-emerald-500" : "text-violet-600 dark:text-violet-400"}`}>
+              {pctComplete}%
+            </span>
+            <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wide">done</span>
+          </div>
+        </div>
+
+        {/* Right: Incomplete Hero + total */}
+        <div className="flex flex-col justify-center flex-1 min-w-0">
+          <div className={`text-3xl font-black tabular-nums tracking-tighter leading-none ${isClear ? "text-emerald-500" : "text-rose-500"}`}>
+            {incomplete}
+          </div>
+          <div className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-0.5">
+            Incomplete
+          </div>
+          <div className="mt-1.5 flex items-center gap-1">
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">{complete}/{total} completed</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Animated Status Bar Rows */}
+      <div className="flex flex-col gap-1.5 flex-1 justify-end">
+        {statRows.map((s) => (
+          <div key={s.label} className="flex items-center gap-2 group/row">
+            <div className="w-14 shrink-0">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{s.label}</span>
+            </div>
+            <div className="flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-700/60 overflow-hidden">
+              <div
+                className={`h-full rounded-full ${s.color} transition-all duration-1000 ease-out`}
+                style={{ width: `${Math.max(0, Math.min(100, s.pct))}%` }}
+              />
+            </div>
+            <span className="text-[10px] font-black text-gray-700 dark:text-gray-300 w-4 text-right shrink-0">{s.value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* CTA */}
+      {cta?.href && (
+        <div className="mt-3 pt-2.5 border-t border-gray-100 dark:border-gray-700/60 shrink-0">
+          <Link
+            to={cta.href}
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 transition-colors group"
+          >
+            {cta.label} <ArrowRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export default HomePage;

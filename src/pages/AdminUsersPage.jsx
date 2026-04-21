@@ -231,7 +231,6 @@ export default function AdminUsersPage() {
           .update({
             username: d.username,
             display_name: d.name,
-            name: d.name,
             email: d.email || "",
           })
           .eq("id", editingUid),

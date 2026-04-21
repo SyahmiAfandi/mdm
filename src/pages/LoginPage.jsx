@@ -34,12 +34,25 @@ function getLicenseValidUntil(license) {
   return license?.valid_until ?? license?.validUntil ?? null;
 }
 
+function hasTemporaryPasswordFlag(authUser) {
+  const rawFlag =
+    authUser?.user_metadata?.must_change_password
+    ?? authUser?.must_change_password;
+
+  if (typeof rawFlag === "string") {
+    return rawFlag.trim().toLowerCase() === "true";
+  }
+
+  return rawFlag === true;
+}
+
 export default function LoginPage() {
   const [username, setUserName] = useState("");
   const [password, setPassword] = useState("");
   const [recoveryPassword, setRecoveryPassword] = useState("");
   const [recoveryConfirm, setRecoveryConfirm] = useState("");
   const [recoveryMode, setRecoveryMode] = useState(false);
+  const [temporaryPasswordMode, setTemporaryPasswordMode] = useState(false);
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,6 +66,7 @@ export default function LoginPage() {
 
   const navigate = useNavigate();
   const { setRole, setUser } = useUser();
+  const passwordChangeMode = recoveryMode || temporaryPasswordMode;
 
   const canSubmit = useMemo(() => {
     return !!username.trim() && !!password && !loading && !success;
@@ -68,13 +82,17 @@ export default function LoginPage() {
       localStorage.removeItem(ROLE_STORAGE_KEY);
       localStorage.removeItem("username");
       localStorage.removeItem("display_name");
-    } catch {}
+    } catch {
+      // Ignore local storage cleanup failures in restricted browser contexts.
+    }
   };
 
   const hardSignOutEverywhere = async () => {
     try {
-      await logout();
-    } catch {}
+      await hardSignOutEverywhere();
+    } catch {
+      // Ignore sign-out cleanup failures; local state is still cleared below.
+    }
     clearLocalPerms();
   };
 
@@ -84,24 +102,54 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
+    let mounted = true;
     const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     if (hashParams.get("type") === "recovery") {
       setRecoveryMode(true);
+      setTemporaryPasswordMode(false);
     }
 
+    async function syncTemporaryPasswordMode() {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!mounted) return;
+
+        if (hasTemporaryPasswordFlag(session?.user)) {
+          clearLocalPerms();
+          setUser(null);
+          setRole(null);
+          setRecoveryMode(false);
+          setTemporaryPasswordMode(true);
+        }
+      } catch (sessionErr) {
+        console.warn("Failed to inspect the current auth session.", sessionErr);
+      }
+    }
+
+    syncTemporaryPasswordMode();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (!mounted) return;
+
       if (event === "PASSWORD_RECOVERY") {
         setRecoveryMode(true);
+        setTemporaryPasswordMode(false);
         setError("");
         setSuccess(false);
         toast("Set a new password to finish recovery.", { id: "login" });
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [setRole, setUser]);
 
-  const handleRecoverySubmit = async () => {
+  const handlePasswordUpdateSubmit = async () => {
     if (!recoveryPassword) {
       toast.error("New password is required", { id: "login" });
       return;
@@ -120,18 +168,36 @@ export default function LoginPage() {
     toast.dismiss("login");
 
     try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: recoveryPassword,
-      });
+      const updatePayload = temporaryPasswordMode
+        ? {
+            password: recoveryPassword,
+            data: {
+              must_change_password: false,
+              temporary_password: false,
+              temporary_password_set_at: null,
+            },
+          }
+        : {
+            password: recoveryPassword,
+          };
+
+      const { error: updateError } = await supabase.auth.updateUser(updatePayload);
       if (updateError) throw updateError;
 
       await logout();
       setRecoveryMode(false);
+      setTemporaryPasswordMode(false);
       setRecoveryPassword("");
       setRecoveryConfirm("");
+      setPassword("");
       setLoading(false);
       setSuccess(false);
-      toast.success("Password updated. Please sign in with your new password.", { id: "login" });
+      toast.success(
+        temporaryPasswordMode
+          ? "Temporary password replaced. Please sign in with your new password."
+          : "Password updated. Please sign in with your new password.",
+        { id: "login" }
+      );
       window.history.replaceState({}, document.title, "/login");
     } catch (e) {
       console.error(e);
@@ -150,11 +216,19 @@ export default function LoginPage() {
 
     try {
       console.time("handleLogin:total");
-      const t0 = performance.now();
 
       const result = await loginWithUsername(username, password);
 
-      const { user, role, profile, license, licenseValid, permissions } = result;
+      const {
+        user,
+        role,
+        profile,
+        license,
+        licenseValid,
+        permissions,
+        accessToken,
+        refreshToken,
+      } = result;
 
       const resolvedRole = role || "viewer";
 
@@ -169,10 +243,34 @@ export default function LoginPage() {
           if (validUntil) {
             expText = new Date(validUntil).toISOString().slice(0, 10);
           }
-        } catch {}
+        } catch {
+          // Fallback to N/A when expiry formatting fails.
+        }
 
         toast.error(`Account expired on ${expText}`, { id: "login" });
         triggerShake();
+        return;
+      }
+
+      if (hasTemporaryPasswordFlag(user)) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionError) throw sessionError;
+
+        clearLocalPerms();
+        setUser(null);
+        setRole(null);
+        setLoading(false);
+        setSuccess(false);
+        setError("");
+        setRecoveryMode(false);
+        setTemporaryPasswordMode(true);
+        setRecoveryPassword("");
+        setRecoveryConfirm("");
+        setShowPassword(false);
+        toast("Temporary password detected. Create a new password to continue.", { id: "login" });
         return;
       }
 
@@ -201,7 +299,9 @@ export default function LoginPage() {
           perms: permSnapshot,
           expiresAt: Date.now() + 24 * 60 * 60 * 1000,
         }));
-      } catch {}
+      } catch {
+        // Ignore permission cache write failures and continue with the session.
+      }
 
       setLoading(false);
       setSuccess(true);
@@ -316,17 +416,26 @@ export default function LoginPage() {
         <div className={["glass-card rounded-3xl p-8 sm:p-10", shake ? "anim-shake" : ""].join(" ")}>
           <div className="text-center mb-8">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-2">
-              {recoveryMode ? "Reset password" : "Welcome back"}
+              {passwordChangeMode ? (temporaryPasswordMode ? "Create a new password" : "Reset password") : "Welcome back"}
             </h2>
             <p className="text-sm text-slate-400">
-              {recoveryMode
-                ? "Enter a new password to complete your recovery link."
+              {passwordChangeMode
+                ? (temporaryPasswordMode
+                    ? "This account is using an administrator-issued temporary password. Replace it before continuing."
+                    : "Enter a new password to complete your recovery link.")
                 : "Enter your credentials to access your dashboard"}
             </p>
           </div>
 
-          {recoveryMode ? (
+          {passwordChangeMode ? (
             <>
+              {temporaryPasswordMode && (
+                <div className="mb-5 flex items-start gap-2 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 anim-pop">
+                  <AlertCircle size={14} className="mt-0.5 text-amber-400 shrink-0" />
+                  Your temporary password works only for this first sign-in. Set a new password now to finish activation.
+                </div>
+              )}
+
               <div className="mb-5">
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 ml-1">
                   New Password
@@ -345,7 +454,7 @@ export default function LoginPage() {
                     autoComplete="new-password"
                     onKeyDown={(e) => {
                       setCapsOn(!!e.getModifierState?.("CapsLock"));
-                      if (e.key === "Enter" && canSubmitRecovery) handleRecoverySubmit();
+                      if (e.key === "Enter" && canSubmitRecovery) handlePasswordUpdateSubmit();
                     }}
                     onBlur={() => setCapsOn(false)}
                     aria-label="New Password"
@@ -381,7 +490,7 @@ export default function LoginPage() {
                     autoComplete="new-password"
                     onKeyDown={(e) => {
                       setCapsOn(!!e.getModifierState?.("CapsLock"));
-                      if (e.key === "Enter" && canSubmitRecovery) handleRecoverySubmit();
+                      if (e.key === "Enter" && canSubmitRecovery) handlePasswordUpdateSubmit();
                     }}
                     onBlur={() => setCapsOn(false)}
                     aria-label="Confirm Password"
@@ -463,24 +572,24 @@ export default function LoginPage() {
           )}
 
           <button
-            onClick={recoveryMode ? handleRecoverySubmit : handleLogin}
-            disabled={recoveryMode ? !canSubmitRecovery : !canSubmit}
+            onClick={passwordChangeMode ? handlePasswordUpdateSubmit : handleLogin}
+            disabled={passwordChangeMode ? !canSubmitRecovery : !canSubmit}
             className="shimmer-btn w-full relative overflow-hidden rounded-xl py-3.5 font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none"
-            title={recoveryMode ? "" : !username.trim() || !password ? "Enter username and password" : ""}
+            title={passwordChangeMode ? "" : !username.trim() || !password ? "Enter username and password" : ""}
           >
             <span className="relative flex items-center justify-center gap-2">
               {loading ? (
                 <>
                   <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  {recoveryMode ? "Updating password..." : "Authenticating..."}
+                  {passwordChangeMode ? "Updating password..." : "Authenticating..."}
                 </>
               ) : success ? (
                 <>
                   <CheckCircle className="text-white anim-pop" size={20} />
                   Success!
                 </>
-              ) : recoveryMode ? (
-                "Update Password"
+              ) : passwordChangeMode ? (
+                temporaryPasswordMode ? "Save New Password" : "Update Password"
               ) : (
                 "Sign In"
               )}

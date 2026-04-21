@@ -108,7 +108,6 @@ async function clearStaleSession() {
 
 export async function loginWithUsername(username, password) {
   try {
-    const t0 = performance.now();
     await clearStaleSession();
     const { url, key } = assertSupabaseBrowserConfig();
 
@@ -141,7 +140,6 @@ export async function loginWithUsername(username, password) {
     const authUrl = `${url}/auth/v1/token?grant_type=password`;
     
     // Explicit timeout helper to ensure B2 ALWAYS prints
-    const authStart = Date.now();
     const authController = new AbortController();
     const authTimeout = setTimeout(() => authController.abort(), 12000); // 12s hard limit for the main auth
     
@@ -176,14 +174,12 @@ export async function loginWithUsername(username, password) {
     // We fire and forget this so the "stupid" SDK can take its time to sync locally
     // while we already proceed with the login.
 
-    const syncStart = Date.now();
     supabase.auth.setSession({
       access_token: authData.access_token,
       refresh_token: authData.refresh_token
     }).catch(err => console.warn("[Login] setSession background error:", err));
     
     const uid = user.id;
-    const syncElapsed = Date.now() - syncStart;
 
 
     // Step 4: Fetch profiles, user_roles, and licenses in PARALLEL via RAW FETCH.
@@ -224,7 +220,16 @@ export async function loginWithUsername(username, password) {
     }
 
 
-    return { user, role, profile, license, licenseValid, permissions };
+    return {
+      user,
+      role,
+      profile,
+      license,
+      licenseValid,
+      permissions,
+      accessToken: authData.access_token,
+      refreshToken: authData.refresh_token,
+    };
   } catch (err) {
     console.error(`[Login] CRITICAL FAILURE:`, err.message);
     throw new Error(mapAuthError(err));

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -12,7 +12,7 @@ import {
 import { BarChart2, Table, Search, Eye, EyeOff } from 'lucide-react';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { APP_FULL_NAME } from '../config';
+import { supabase } from '../supabaseClient';
 
 ChartJS.register(
   CategoryScale,
@@ -23,6 +23,121 @@ ChartJS.register(
   Legend,
   annotationPlugin
 );
+
+const RECON_CELLS_TABLE = 'recon_cells';
+const SUPABASE_PAGE_SIZE = 1000;
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June', 'July',
+  'August', 'September', 'October', 'November', 'December',
+];
+const BASE_VISIBLE_COLS = {
+  Year: true,
+  Month: true,
+  BusinessType: true,
+  Distributor: true,
+  DistributorName: true,
+};
+
+function normalizeText(value = '') {
+  return String(value ?? '').trim();
+}
+
+function titleCaseWords(value = '') {
+  const clean = normalizeText(value);
+  if (!clean) return '';
+  return clean
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function monthNumberToName(monthValue) {
+  const monthNum = Number(monthValue);
+  if (!Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12) return '';
+  return MONTH_NAMES[monthNum - 1];
+}
+
+function monthNameToNumber(monthName) {
+  if (!monthName) return undefined;
+  const normalized = normalizeText(monthName).toLowerCase();
+  const idx = MONTH_NAMES.findIndex((month) => month.toLowerCase() === normalized);
+  return idx >= 0 ? idx + 1 : undefined;
+}
+
+function normalizeReconStatus(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === 'match') return 'Match';
+  if (normalized === 'mismatch') return 'Mismatch';
+  if (['no_data', 'no data', 'nodata'].includes(normalized)) return 'No Data';
+  return titleCaseWords(value);
+}
+
+function formatTimestamp(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+}
+
+function inferPeriodParts(row = {}) {
+  const year = Number(row?.year);
+  const month = Number(row?.month);
+  if (Number.isFinite(year) && Number.isFinite(month) && month >= 1 && month <= 12) {
+    return { year: String(year), month };
+  }
+
+  const periodId = normalizeText(row?.period_id ?? row?.periodId ?? '');
+  const match = periodId.match(/^(\d{4})-(\d{1,2})$/);
+  if (!match) return { year: '', month: undefined };
+
+  return {
+    year: match[1],
+    month: Number(match[2]),
+  };
+}
+
+async function fetchAllSupabaseRows(buildQuery) {
+  const rows = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + SUPABASE_PAGE_SIZE - 1;
+    const { data, error } = await buildQuery().range(from, to);
+    if (error) throw error;
+
+    const chunk = data || [];
+    rows.push(...chunk);
+
+    if (chunk.length < SUPABASE_PAGE_SIZE) break;
+    from += SUPABASE_PAGE_SIZE;
+  }
+
+  return rows;
+}
+
+function mapReconCellToSummaryRow(row = {}) {
+  const { year, month } = inferPeriodParts(row);
+  return {
+    id: row.id ?? '',
+    Year: year,
+    Month: monthNumberToName(month),
+    'Business Type': normalizeText(row.business_type ?? row.businessType ?? ''),
+    'Distributor Code': normalizeText(row.distributor_code ?? row.distributorCode ?? ''),
+    'Distributor Name': normalizeText(row.distributor_name ?? row.distributorName ?? ''),
+    'Report Type': normalizeText(row.report_type_name ?? row.reportTypeName ?? row.report_type_id ?? row.reportTypeId ?? ''),
+    'Report Status': normalizeReconStatus(row.status ?? row.Status ?? ''),
+    PIC: normalizeText(row.updated_by ?? row.updatedBy ?? ''),
+    Timestamp: formatTimestamp(row.updated_at ?? row.updatedAt ?? ''),
+    Remark: normalizeText(row.remark ?? ''),
+  };
+}
 
 // Helper: prettify “hpc-retail” → “Hpc Retail”
 function prettifyBusinessType(b) {
@@ -142,6 +257,8 @@ ChartJS.register(barStackValueLabelPlugin);
 
 
 export default function ReportSummaryPage() {
+  const MotionDiv = motion.div;
+
   // ---- Default filters to “previous month” of current year ----
   const currentDate = new Date();
   let defaultMonthIdx = currentDate.getMonth() - 1;
@@ -150,15 +267,13 @@ export default function ReportSummaryPage() {
     defaultMonthIdx = 11;
     defaultYear = defaultYear - 1;
   }
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June', 'July',
-    'August', 'September', 'October', 'November', 'December',
-  ];
-
   // ---- Main state hooks ----
   const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [yearOptions, setYearOptions] = useState([]);
   const [filters, setFilters] = useState({
-    month: monthNames[defaultMonthIdx],
+    month: MONTH_NAMES[defaultMonthIdx],
     year: defaultYear.toString(),
     status: '',
     type: '',
@@ -167,14 +282,7 @@ export default function ReportSummaryPage() {
   const [viewMode, setViewMode] = useState(true); // true = Chart, false = Table
 
   // ---- Column visibility state ----
-  const [visibleCols, setVisibleCols] = useState({
-    Year: true,
-    Month: true,
-    BusinessType: true,
-    Distributor: true,
-    DistributorName: true,
-    // Report types will be added dynamically after data loads
-  });
+  const [visibleCols, setVisibleCols] = useState(BASE_VISIBLE_COLS);
 
   // ---- Show/Hide the “Show Columns” dropdown ----
   const [showDropdown, setShowDropdown] = useState(false);
@@ -191,23 +299,107 @@ export default function ReportSummaryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  // ---------------- Fetch data ----------------
+  // ---------------- Fetch available years from recon_cells ----------------
   useEffect(() => {
-    fetch(import.meta.env.VITE_GAS_REPORT_SUMMARY_URL)
-      .then((res) => res.json())
-      .then((rows) => {
-        setData(rows);
-        // Dynamically add each Report Type to visibleCols
-        const allReportTypes = Array.from(new Set(rows.map((row) => row['Report Type'] || ''))).sort();
-        setVisibleCols((prev) => {
-          const updated = { ...prev };
-          allReportTypes.forEach((r) => {
-            if (!(r in updated)) updated[r] = true;
-          });
-          return updated;
+    let alive = true;
+
+    async function loadYearOptions() {
+      try {
+        const rows = await fetchAllSupabaseRows(() =>
+          supabase
+            .from(RECON_CELLS_TABLE)
+            .select('year')
+            .order('year', { ascending: false })
+        );
+
+        if (!alive) return;
+
+        const options = Array.from(
+          new Set(
+            rows
+              .map((row) => normalizeText(row?.year))
+              .filter(Boolean)
+          )
+        ).sort((a, b) => Number(b) - Number(a));
+
+        setYearOptions(options.length ? options : [String(defaultYear)]);
+      } catch (error) {
+        console.error('Failed to load recon summary year options:', error);
+        if (alive) setYearOptions([String(defaultYear)]);
+      }
+    }
+
+    loadYearOptions();
+    return () => {
+      alive = false;
+    };
+  }, [defaultYear]);
+
+  // ---------------- Fetch summary data from Supabase recon_cells ----------------
+  useEffect(() => {
+    let alive = true;
+
+    async function loadSummaryRows() {
+      setLoading(true);
+      setLoadError('');
+      setData([]);
+
+      try {
+        const selectedYear = filters.year ? Number(filters.year) : undefined;
+        const selectedMonth = monthNameToNumber(filters.month);
+
+        const rows = await fetchAllSupabaseRows(() => {
+          let query = supabase
+            .from(RECON_CELLS_TABLE)
+            .select('id,period_id,year,month,business_type,distributor_code,distributor_name,report_type_id,report_type_name,status,remark,updated_by,updated_at')
+            .order('id', { ascending: true });
+
+          if (Number.isFinite(selectedYear)) query = query.eq('year', selectedYear);
+          if (selectedMonth) query = query.eq('month', selectedMonth);
+
+          return query;
         });
-      });
-  }, []);
+
+        const mappedRows = rows
+          .map(mapReconCellToSummaryRow)
+          .filter((row) => row['Distributor Code'] && row['Report Type']);
+
+        if (!alive) return;
+
+        const allReportTypes = Array.from(
+          new Set(mappedRows.map((row) => row['Report Type']).filter(Boolean))
+        ).sort();
+
+        setData(mappedRows);
+        setVisibleCols((prev) => {
+          const next = {
+            Year: prev.Year ?? true,
+            Month: prev.Month ?? true,
+            BusinessType: prev.BusinessType ?? true,
+            Distributor: prev.Distributor ?? true,
+            DistributorName: prev.DistributorName ?? true,
+          };
+          allReportTypes.forEach((reportType) => {
+            next[reportType] = prev[reportType] ?? true;
+          });
+          return next;
+        });
+      } catch (error) {
+        console.error('Failed to load recon summary rows from Supabase:', error);
+        if (!alive) return;
+        setData([]);
+        setVisibleCols(BASE_VISIBLE_COLS);
+        setLoadError(error?.message || 'Failed to load reconciliation summary from Supabase.');
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+
+    loadSummaryRows();
+    return () => {
+      alive = false;
+    };
+  }, [filters.year, filters.month]);
 
   // ---------------- Close “Show Columns” dropdown on outside click ----------------
   useEffect(() => {
@@ -231,6 +423,27 @@ export default function ReportSummaryPage() {
       (!filters.business || row['Business Type'] === filters.business)
     );
   });
+  const reportTypeOptions = useMemo(
+    () => Array.from(new Set(data.map((row) => row['Report Type']).filter(Boolean))).sort(),
+    [data]
+  );
+  const businessOptions = useMemo(
+    () =>
+      Array.from(new Set(data.map((row) => row['Business Type']).filter(Boolean))).sort((a, b) =>
+        prettifyBusinessType(a).localeCompare(prettifyBusinessType(b))
+      ),
+    [data]
+  );
+  const resolvedYearOptions = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...yearOptions,
+          normalizeText(filters.year) || String(defaultYear),
+        ].filter(Boolean))
+      ).sort((a, b) => Number(b) - Number(a)),
+    [yearOptions, filters.year, defaultYear]
+  );
 
   // ---------------- Build counts for chart ----------------
   const counts = {};
@@ -240,9 +453,9 @@ export default function ReportSummaryPage() {
     const status = d['Report Status'];
     if (!counts[business]) counts[business] = {};
     if (!counts[business][report]) {
-      counts[business][report] = { Match: 0, Mismatch: 0 };
+      counts[business][report] = { Match: 0, Mismatch: 0, 'No Data': 0 };
     }
-    if (status === 'Match' || status === 'Mismatch') {
+    if (status === 'Match' || status === 'Mismatch' || status === 'No Data') {
       counts[business][report][status]++;
     }
   });
@@ -270,6 +483,7 @@ export default function ReportSummaryPage() {
 
   const matchData = actualPairs.map(([b, r]) => counts[b][r]?.Match || 0);
   const mismatchData = actualPairs.map(([b, r]) => counts[b][r]?.Mismatch || 0);
+  const noDataSeries = actualPairs.map(([b, r]) => counts[b][r]?.['No Data'] || 0);
 
   const chartData = {
     labels: onlyReportTypeLabels,
@@ -284,6 +498,12 @@ export default function ReportSummaryPage() {
         label: 'Mismatch',
         data: mismatchData,
         backgroundColor: '#f87171',
+        stack: 'stack1',
+      },
+      {
+        label: 'No Data',
+        data: noDataSeries,
+        backgroundColor: '#fbbf24',
         stack: 'stack1',
       },
     ],
@@ -326,6 +546,7 @@ export default function ReportSummaryPage() {
       grouped[key] = {
         Year: row.Year,
         Month: row.Month,
+        BusinessTypeRaw: row['Business Type'],
         BusinessType: prettifyBusinessType(row['Business Type']),
         Distributor: row['Distributor Code'],
         DistributorName: '',
@@ -336,8 +557,12 @@ export default function ReportSummaryPage() {
     if (nameFromRow && nameFromRow.trim() !== '' && grouped[key].DistributorName.trim() === '') {
       grouped[key].DistributorName = nameFromRow.trim();
     }
-    // Store all report statuses as raw value (could be "", null, etc.)
-    grouped[key].reports[row['Report Type']] = row['Report Status'];
+    grouped[key].reports[row['Report Type']] = {
+      status: row['Report Status'],
+      pic: row.PIC,
+      timestamp: row.Timestamp,
+      remark: row.Remark,
+    };
   });
   let tableRows = Object.values(grouped);
 
@@ -375,15 +600,6 @@ export default function ReportSummaryPage() {
   function handleToggleCol(col) {
     setVisibleCols((prev) => ({ ...prev, [col]: !prev[col] }));
   }
-  // Helper for rendering status cell
-  function getStatusCell(status, hasType) {
-    if (!hasType) return <span className="text-gray-400 italic">Not Applicable</span>;
-    if (status === undefined || status === null || /^\s*$/.test(status)) {
-      // If the report type exists for this distributor but status is blank/null/empty
-      return <span className="text-yellow-500 italic">No Data</span>;
-    }
-    return status;
-  }
 
   const totalRows = tableRows.length;
   const totalPages = Math.ceil(totalRows / rowsPerPage);
@@ -393,33 +609,9 @@ export default function ReportSummaryPage() {
     currentPage * rowsPerPage
   );
   useEffect(() => { setCurrentPage(1); }, [searchTerm, filters, sortConfig]);
-
-  // Add this just above your component (or in your CSS)
-  const tooltipStyle = `
-  .custom-tooltip {
-    position: absolute;
-    z-index: 40;
-    background: #1e293b;
-    color: white;
-    font-size: 0.75rem;
-    border-radius: 0.5rem;
-    padding: 0.5rem 0.75rem;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.16);
-    min-width: 180px;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.1s;
-    left: 50%; top: 100%; transform: translateX(-50%) translateY(10px);
-    white-space: pre-line;
-  }
-  .hover-tooltip:hover .custom-tooltip { opacity: 1; pointer-events: auto; }
-`;
-
-
-  <style>{tooltipStyle}</style>
   return (
     <>
-      <motion.div
+      <MotionDiv
         className="p-6 space-y-6"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -442,7 +634,7 @@ export default function ReportSummaryPage() {
               onChange={(e) => setFilters({ ...filters, month: e.target.value })}
             >
               <option value="">All Months</option>
-              {monthNames.map((m) => (
+              {MONTH_NAMES.map((m) => (
                 <option key={m} value={m}>
                   {m}
                 </option>
@@ -459,7 +651,7 @@ export default function ReportSummaryPage() {
               onChange={(e) => setFilters({ ...filters, year: e.target.value })}
             >
               <option value="">All Years</option>
-              {[2023, 2024, 2025, 2026].map((y) => (
+              {resolvedYearOptions.map((y) => (
                 <option key={y} value={y}>
                   {y}
                 </option>
@@ -478,6 +670,7 @@ export default function ReportSummaryPage() {
               <option value="">All Status</option>
               <option value="Match">Match</option>
               <option value="Mismatch">Mismatch</option>
+              <option value="No Data">No Data</option>
             </select>
           </div>
 
@@ -492,7 +685,7 @@ export default function ReportSummaryPage() {
               onChange={(e) => setFilters({ ...filters, type: e.target.value })}
             >
               <option value="">All Types</option>
-              {[...new Set(data.map((d) => d['Report Type']))].map((type) => (
+              {reportTypeOptions.map((type) => (
                 <option key={type} value={type}>
                   {type}
                 </option>
@@ -511,7 +704,7 @@ export default function ReportSummaryPage() {
               onChange={(e) => setFilters({ ...filters, business: e.target.value })}
             >
               <option value="">All Business Types</option>
-              {[...new Set(data.map((d) => d['Business Type']))].map((b) => (
+              {businessOptions.map((b) => (
                 <option key={b} value={b}>
                   {prettifyBusinessType(b)}
                 </option>
@@ -519,6 +712,20 @@ export default function ReportSummaryPage() {
             </select>
           </div>
         </div>
+
+        {(loading || loadError || (!loading && !loadError && data.length === 0)) && (
+          <div
+            className={`rounded-lg border px-4 py-3 text-sm ${
+              loadError
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : 'border-slate-200 bg-white text-slate-500'
+            }`}
+          >
+            {loading
+              ? 'Loading reconciliation summary from Supabase...'
+              : loadError || 'No reconciliation cells found for the selected period.'}
+          </div>
+        )}
 
         {/* =============================================================== */}
         {/* 2) Combined: Hide/Show Search, Search Input, + Chart/Table Toggle */}
@@ -538,7 +745,7 @@ export default function ReportSummaryPage() {
                 </button>
                 <AnimatePresence initial={false}>
                   {showSearchBar && (
-                    <motion.div
+                    <MotionDiv
                       key="search"
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
@@ -557,7 +764,7 @@ export default function ReportSummaryPage() {
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
-                    </motion.div>
+                    </MotionDiv>
                   )}
                 </AnimatePresence>
               </>
@@ -627,7 +834,7 @@ export default function ReportSummaryPage() {
         {/* ================================================= */}
         <AnimatePresence mode="wait">
           {viewMode ? (
-            <motion.div
+            <MotionDiv
               key="chart"
               initial={{ opacity: 0, x: 50 }}
               animate={{ opacity: 1, x: 0 }}
@@ -721,9 +928,9 @@ export default function ReportSummaryPage() {
                 }}
                 plugins={[barStackValueLabelPlugin, businessGroupLabelPlugin]}
               />
-            </motion.div>
+            </MotionDiv>
           ) : (
-            <motion.div
+            <MotionDiv
               key="table"
               initial={{ opacity: 0, x: -50 }}
               animate={{ opacity: 1, x: 0 }}
@@ -799,28 +1006,20 @@ export default function ReportSummaryPage() {
                       )}
                       {allReportTypes.map((report, colIdx) => {
                         if (!visibleCols[report]) return null;
-                        const status = row.reports[report];
-                        const hasType = report in row.reports;
+                        const reportEntry = row.reports[report];
+                        const status = reportEntry?.status;
+                        const hasType = Boolean(reportEntry);
 
                         let cellClass = "w-24 px-2 py-1 text-center font-medium relative"; // note: relative for tooltip positioning
                         let display = "";
 
                         // Tooltip content preparation
                         let tooltip = null;
-                        if (hasType && (status === "Match" || status === "Mismatch")) {
-                          // Find the original row for more info
-                          const detailRow = filtered.find(
-                            d =>
-                              d.Year === row.Year &&
-                              d.Month === row.Month &&
-                              d['Business Type'] === row.BusinessType && // might need .toLowerCase() fix
-                              d['Distributor Code'] === row.Distributor &&
-                              d['Report Type'] === report
-                          );
+                        if (hasType && (status === "Match" || status === "Mismatch" || status === "No Data")) {
                           tooltip = (
                             <div
                               className={
-                                "custom-tooltip absolute top-full mt-2 bg-slate-800 text-white text-xs rounded-lg shadow-lg p-3 z-50 whitespace-pre-line pointer-events-none opacity-0 group-hover:opacity-100 transition text-left " +
+                                "absolute top-full mt-2 bg-slate-800 text-white text-xs rounded-lg shadow-lg p-3 z-50 whitespace-pre-line pointer-events-none opacity-0 group-hover:opacity-100 transition text-left " +
                                 (colIdx >= allReportTypes.length - 2
                                   ? "right-0 left-auto translate-x-0"
                                   : "left-1/2 -translate-x-1/2")
@@ -830,12 +1029,12 @@ export default function ReportSummaryPage() {
                               <div><b>Report Type:</b> {report}</div>
                               <div>
                                 <b>Status:</b>{' '}
-                                <span className={status === "Match" ? "text-green-400 font-semibold" : status === "Mismatch" ? "text-red-400 font-semibold" : ""}>
+                                <span className={status === "Match" ? "text-green-400 font-semibold" : status === "Mismatch" ? "text-red-400 font-semibold" : status === "No Data" ? "text-amber-300 font-semibold" : ""}>
                                   {status}
                                 </span>
                               </div>
-                              <div><b>User:</b> {detailRow?.PIC || '-'}</div>
-                              <div><b>Last Update:</b> {detailRow?.Timestamp || '-'}</div>
+                              <div><b>User:</b> {reportEntry?.pic || '-'}</div>
+                              <div><b>Last Update:</b> {reportEntry?.timestamp || '-'}</div>
                             </div>
                           );
                         }
@@ -843,9 +1042,14 @@ export default function ReportSummaryPage() {
                         if (!hasType) {
                           cellClass += " bg-gray-200 text-gray-400 italic";
                           display = "Not Applicable";
-                        } else if (status === undefined || status === null || /^\s*$/.test(status)) {
-                          cellClass += " bg-yellow-100 text-yellow-700 italic";
-                          display = "No Data";
+                        } else if (status === undefined || status === null || /^\s*$/.test(status) || status === "No Data") {
+                          cellClass += " bg-yellow-100 text-yellow-700 italic group";
+                          display = tooltip ? (
+                            <div className="hover-tooltip relative group cursor-pointer">
+                              No Data
+                              {tooltip}
+                            </div>
+                          ) : "No Data";
                         } else if (status === "Match") {
                           cellClass += " bg-green-100 text-green-700 group";
                           display = (
@@ -938,10 +1142,10 @@ export default function ReportSummaryPage() {
                 </div>
               </div>
 
-            </motion.div>
+            </MotionDiv>
           )}
         </AnimatePresence>
-      </motion.div>
+      </MotionDiv>
     </>
   );
 }

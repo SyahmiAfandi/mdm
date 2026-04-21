@@ -3,13 +3,18 @@ import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import {
+  ArrowRight,
   CalendarDays,
   Bell,
+  CircleCheck,
+  Clock3,
   HelpCircle,
+  Info,
   UserCircle,
   Moon,
   Sun,
   LogOut,
+  TriangleAlert,
   User,
   Server,
   X,
@@ -18,6 +23,7 @@ import {
 import { useUser } from "../context/UserContext";
 import { useTooltip } from "../context/TooltipContext";
 import { normalizePermissionRows } from "../hooks/usePermissions";
+import useHeaderNotifications from "../hooks/useHeaderNotifications";
 import { APP_FULL_NAME, ORG_COMP } from "../config";
 
 import {
@@ -30,7 +36,6 @@ import {
   clearBackendUrlTunnel,
   getBackendUrlLocal,
   saveBackendUrlLocal,
-  clearBackendUrlLocal,
   isLocalhostUrl,
   isVercelProdDomain,
 } from "../config/backend";
@@ -38,6 +43,42 @@ import {
 /** storage keys */
 const ROLE_STORAGE_KEY = "ff.role";
 const PERM_STORAGE_KEY = "ff.perms";
+const NOTIFICATION_READ_STORAGE_KEY = "mdm.headerNotifications.read";
+
+const NOTIFICATION_SECTION_ORDER = ["Urgent", "Today", "Earlier"];
+
+const NOTIFICATION_TONES = {
+  critical: {
+    Icon: TriangleAlert,
+    iconClass: "text-rose-600 dark:text-rose-300",
+    surfaceClass: "bg-rose-50 border-rose-100 dark:bg-rose-500/10 dark:border-rose-400/20",
+    dotClass: "bg-rose-500",
+  },
+  warning: {
+    Icon: TriangleAlert,
+    iconClass: "text-amber-600 dark:text-amber-300",
+    surfaceClass: "bg-amber-50 border-amber-100 dark:bg-amber-500/10 dark:border-amber-400/20",
+    dotClass: "bg-amber-500",
+  },
+  success: {
+    Icon: CircleCheck,
+    iconClass: "text-emerald-600 dark:text-emerald-300",
+    surfaceClass: "bg-emerald-50 border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-400/20",
+    dotClass: "bg-emerald-500",
+  },
+  reminder: {
+    Icon: Clock3,
+    iconClass: "text-blue-600 dark:text-blue-300",
+    surfaceClass: "bg-blue-50 border-blue-100 dark:bg-blue-500/10 dark:border-blue-400/20",
+    dotClass: "bg-blue-500",
+  },
+  info: {
+    Icon: Info,
+    iconClass: "text-slate-600 dark:text-slate-300",
+    surfaceClass: "bg-slate-100 border-slate-200 dark:bg-slate-700/60 dark:border-slate-600",
+    dotClass: "bg-slate-400",
+  },
+};
 
 /** Theme toggle logic */
 function useTheme() {
@@ -66,8 +107,22 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
 
   const canViewBackend = can("settings.backend.view");
   const canEditBackend = can("settings.backend.edit");
+  const canViewUtilities = can("utilities.view");
+  const canViewEmailTracker = can("mdmEmailTracker.view");
+  const canViewPromoPeriods = can("promotions.promoPeriod.view");
 
   // --- UI menus ---
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationReadMap, setNotificationReadMap] = useState(() => {
+    try {
+      const saved = localStorage.getItem(NOTIFICATION_READ_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const notificationsRef = useRef(null);
+
   const [showUserMenu, setShowUserMenu] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -92,7 +147,66 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
   const [backendStatus, setBackendStatus] = useState(backendUrl ? "checking" : "missing");
   const [backendMsg, setBackendMsg] = useState(backendUrl ? "Checking..." : "No URL set");
 
+  const {
+    notifications: liveNotifications,
+    loading: notificationsLoading,
+    error: notificationsError,
+  } = useHeaderNotifications({
+    user,
+    enableUtilities: canViewUtilities,
+    enableEmailTracker: canViewEmailTracker,
+    enablePromotions: canViewPromoPeriods,
+  });
+
   const isAbsoluteHttpUrl = (url) => /^https?:\/\/.+/i.test(url);
+
+  const notifications = liveNotifications.map((item) => ({
+    ...item,
+    read: !!notificationReadMap?.[item.id],
+  }));
+
+  const unreadCount = notifications.reduce((count, item) => count + (item.read ? 0 : 1), 0);
+
+  const notificationSections = NOTIFICATION_SECTION_ORDER
+    .map((section) => ({
+      label: section,
+      items: notifications.filter((item) => item.section === section),
+    }))
+    .filter((section) => section.items.length > 0);
+
+  const markNotificationRead = (id) => {
+    setNotificationReadMap((current) => ({
+      ...current,
+      [id]: true,
+    }));
+  };
+
+  const markAllNotificationsRead = () => {
+    setNotificationReadMap((current) => {
+      const next = { ...current };
+      notifications.forEach((item) => {
+        next[item.id] = true;
+      });
+      return next;
+    });
+  };
+
+  const openNotification = (item) => {
+    markNotificationRead(item.id);
+    setShowNotifications(false);
+    if (item.route) navigate(item.route);
+  };
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        NOTIFICATION_READ_STORAGE_KEY,
+        JSON.stringify(notificationReadMap)
+      );
+    } catch {
+      // Ignore storage write failures for notification read state.
+    }
+  }, [notificationReadMap]);
 
   const testBackend = async (url) => {
     const base = normalizeUrl(url);
@@ -163,7 +277,6 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
 
     const t = getBackendUrlTunnel();
     setBackendUrl(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMyProdDomain]);
 
   // Recompute canonical backendUrl when mode/url changes, then test
@@ -219,6 +332,9 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
   // Close menus on outside click
   useEffect(() => {
     function handleClickOutside(event) {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowUserMenu(false);
       }
@@ -227,11 +343,11 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
       }
     }
 
-    if (showUserMenu || showBackendPopover) {
+    if (showNotifications || showUserMenu || showBackendPopover) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showUserMenu, showBackendPopover]);
+  }, [showNotifications, showUserMenu, showBackendPopover]);
 
   const iconBtn =
     "h-8 w-8 inline-flex items-center justify-center rounded-xl text-slate-500 dark:text-slate-400 " +
@@ -273,9 +389,160 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
           {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
         </div>
 
-        <button title="Notifications" className={iconBtn} type="button">
-          <Bell size={16} />
-        </button>
+        <div className="relative" ref={notificationsRef}>
+          <button
+            title="Notifications"
+            className={`${iconBtn} relative`}
+            type="button"
+            aria-label="Notifications"
+            aria-expanded={showNotifications}
+            onClick={() => {
+              setShowBackendPopover(false);
+              setShowUserMenu(false);
+              setShowNotifications((prev) => !prev);
+            }}
+          >
+            <Bell
+              size={16}
+              className={unreadCount ? "text-slate-700 dark:text-slate-100" : undefined}
+            />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-[18px] text-center shadow-sm shadow-rose-500/30">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {showNotifications && (
+            <div className="absolute right-0 mt-2 w-[22rem] rounded-3xl border border-slate-200/70 bg-white/95 p-4 shadow-2xl backdrop-blur-xl dark:border-slate-700/60 dark:bg-slate-800/95 z-50">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                      Alerts
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                      Supabase
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                    {notificationsLoading && notifications.length === 0
+                      ? "Loading activity..."
+                      : unreadCount > 0
+                      ? `${unreadCount} unread item${unreadCount > 1 ? "s" : ""}`
+                      : "You are all caught up"}
+                  </div>
+                </div>
+
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={markAllNotificationsRead}
+                    className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-4 max-h-[24rem] space-y-4 overflow-y-auto pr-1">
+                {notificationSections.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                    {notificationsLoading ? "Fetching live alerts from Supabase..." : "No active alerts right now."}
+                  </div>
+                ) : (
+                  notificationSections.map((section) => (
+                    <div key={section.label}>
+                      <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                        {section.label}
+                      </div>
+
+                      <div className="space-y-2">
+                        {section.items.map((item) => {
+                          const tone = NOTIFICATION_TONES[item.tone] || NOTIFICATION_TONES.info;
+                          const ToneIcon = tone.Icon;
+
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => openNotification(item)}
+                              className={[
+                                "group flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition",
+                                item.read
+                                  ? "border-slate-200/70 bg-slate-50/80 hover:bg-slate-100/80 dark:border-slate-700/60 dark:bg-slate-900/40 dark:hover:bg-slate-900/70"
+                                  : "border-blue-100 bg-blue-50/70 shadow-sm shadow-blue-100/50 hover:bg-blue-100/70 dark:border-blue-400/20 dark:bg-blue-500/10 dark:hover:bg-blue-500/15",
+                              ].join(" ")}
+                            >
+                              <div
+                                className={[
+                                  "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border",
+                                  tone.surfaceClass,
+                                ].join(" ")}
+                              >
+                                <ToneIcon size={16} className={tone.iconClass} />
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                                        {item.tag}
+                                      </span>
+                                      {!item.read && (
+                                        <span
+                                          className={[
+                                            "h-2 w-2 shrink-0 rounded-full",
+                                            tone.dotClass,
+                                          ].join(" ")}
+                                        />
+                                      )}
+                                    </div>
+
+                                    <div className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                      {item.title}
+                                    </div>
+                                  </div>
+
+                                  <ArrowRight className="mt-0.5 shrink-0 text-slate-300 transition group-hover:text-slate-500 dark:text-slate-600 dark:group-hover:text-slate-300" size={14} />
+                                </div>
+
+                                <div className="mt-1 text-[12px] leading-5 text-slate-500 dark:text-slate-300">
+                                  {item.detail}
+                                </div>
+
+                                <div className="mt-2 text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                                  {item.time}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="mt-4 flex items-center justify-between border-t border-slate-200/80 pt-3 dark:border-slate-700/60">
+                <div className="text-[11px] text-slate-400 dark:text-slate-500">
+                  {notificationsError || "Live activity from Supabase"}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNotifications(false);
+                    navigate("/");
+                  }}
+                  className="text-[11px] font-semibold text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white"
+                >
+                  Open dashboard
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         <button title="Help" className={iconBtn} type="button">
           <HelpCircle size={16} />
@@ -289,6 +556,8 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
             onClick={() => {
               if (permLoading) return;
               if (!canViewBackend) return;
+              setShowNotifications(false);
+              setShowUserMenu(false);
               setShowBackendPopover((v) => !v);
             }}
             className={`${iconBtn} relative`}
@@ -546,7 +815,11 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
           <button
             title="Account"
             className={`${iconBtn} ml-1`}
-            onClick={() => setShowUserMenu((prev) => !prev)}
+            onClick={() => {
+              setShowNotifications(false);
+              setShowBackendPopover(false);
+              setShowUserMenu((prev) => !prev);
+            }}
             type="button"
           >
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[11px] font-extrabold shadow-sm">
@@ -633,7 +906,9 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
                     try {
                       localStorage.removeItem(PERM_STORAGE_KEY);
                       localStorage.removeItem(ROLE_STORAGE_KEY);
-                    } catch { }
+                    } catch {
+                      // Ignore storage cleanup failures during logout.
+                    }
                     navigate("/login");
                   }}
                   className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-semibold transition"
