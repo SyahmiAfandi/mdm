@@ -315,6 +315,14 @@ const PERMISSION_TREE = [
           { key: "settings.configureRoles", label: "Configure Roles & Perms" },
         ],
       },
+      {
+        id: "settings-backend",
+        label: "Backend Indicator",
+        permissions: [
+          { key: "settings.backend.view", label: "Show Backend Icon" },
+          { key: "settings.backend.edit", label: "Edit Backend URL" },
+        ],
+      },
     ],
   },
 ];

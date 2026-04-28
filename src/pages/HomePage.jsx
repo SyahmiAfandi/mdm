@@ -29,6 +29,7 @@ import useEmailTrackerSummaryCounts from "../hooks/useEmailTrackerSummaryCounts"
 import useReportExtractionSummaryCounts from "../hooks/useReportExtractionSummaryCounts";
 import { usePermissions } from "../hooks/usePermissions";
 import { useUser } from "../context/UserContext";
+import { getBackendUrl } from "../config/backend";
 
 /**
  * HomePage — Responsive Dashboard (desktop + mobile)
@@ -38,7 +39,7 @@ import { useUser } from "../context/UserContext";
  */
 
 const GAS_HEALTH_URL = import.meta.env.VITE_GAS_HEALTH_URL;
-const FLASK_HEALTH_URL = import.meta.env.VITE_FLASK_HEALTH_URL;
+const FLASK_HEALTH_URL = import.meta.env.VITE_FLASK_HEALTH_URL || `${getBackendUrl()}/test`;
 const HEALTH_POLL_MS = 60000;
 const HOME_RECENT_KEY = "home_recent_links_v1";
 const RECONS_MONTH_OPTIONS = [

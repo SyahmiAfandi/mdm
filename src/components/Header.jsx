@@ -550,7 +550,8 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
         </button>
 
         {/* Backend icon + popover */}
-        <div className="relative">
+        {canViewBackend && (
+          <div className="relative">
           <button
             type="button"
             title={backendIconTitle}
@@ -809,7 +810,8 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
               )}
             </div>
           )}
-        </div>
+          </div>
+        )}
 
         {/* Account icon + dropdown */}
         <div className="relative">
