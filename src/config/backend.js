@@ -2,6 +2,12 @@
 const KEY_MODE = "backend_mode"; // "local" | "tunnel"
 const KEY_TUNNEL = "backend_url_tunnel";
 const KEY_LOCAL = "backend_url_local";
+const DEFAULT_LOCAL_BACKEND_URL = "http://127.0.0.1:5000";
+const DEFAULT_PROD_BACKEND_URL = "https://api.qordia.xyz";
+
+export function getConfiguredBackendUrl() {
+  return normalizeUrl(import.meta.env.VITE_BACKEND_URL || DEFAULT_PROD_BACKEND_URL);
+}
 
 export function normalizeUrl(url) {
   if (!url) return "";
@@ -43,7 +49,7 @@ export function saveBackendMode(mode) {
 
 // Tunnel
 export function getBackendUrlTunnel() {
-  return localStorage.getItem(KEY_TUNNEL) || "";
+  return localStorage.getItem(KEY_TUNNEL) || getConfiguredBackendUrl();
 }
 export function saveBackendUrlTunnel(url) {
   localStorage.setItem(KEY_TUNNEL, normalizeUrl(url));
@@ -54,7 +60,7 @@ export function clearBackendUrlTunnel() {
 
 // Local
 export function getBackendUrlLocal() {
-  return localStorage.getItem(KEY_LOCAL) || "http://127.0.0.1:5000";
+  return localStorage.getItem(KEY_LOCAL) || DEFAULT_LOCAL_BACKEND_URL;
 }
 export function saveBackendUrlLocal(url) {
   localStorage.setItem(KEY_LOCAL, normalizeUrl(url));
@@ -70,5 +76,5 @@ export function getBackendUrl() {
   const tunnelUrl = getBackendUrlTunnel();
   if (tunnelUrl) return tunnelUrl;
 
-  return getBackendUrlLocal();
+  return getConfiguredBackendUrl();
 }

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, FileSpreadsheet, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
+import { getBackendUrl } from '../config/backend';
 
 
 function ReconciliationPage() {
@@ -117,7 +118,7 @@ function ReconciliationPage() {
     const toastId = toast.loading('Exporting Excel...');
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL || "http://localhost:5000"}/export_result_excel`, {
+      const response = await fetch(`${getBackendUrl()}/export_result_excel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

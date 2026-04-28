@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { getBackendUrl } from '../config/backend';
 
 export default function ChatPage() {
   const [messages, setMessages] = useState([]);
@@ -12,7 +13,7 @@ export default function ChatPage() {
     setInput('');
 
     try {
-      const response = await axios.post('http://localhost:5000/chat', { message: input });
+      const response = await axios.post(`${getBackendUrl()}/chat`, { message: input });
       const botMsg = { sender: 'bot', text: response.data.reply };
       setMessages(prev => [...prev, botMsg]);
     } catch (err) {

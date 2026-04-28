@@ -5,6 +5,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { BriefcaseIcon, DocumentTextIcon } from '@heroicons/react/24/solid';
+import { getBackendUrl } from '../config/backend';
 
 function ReconciliationUploadPage() {
   const [files, setFiles] = useState([]);
@@ -111,7 +112,7 @@ function ReconciliationUploadPage() {
 
   const handleClear = async (isPBI = false) => {
     const url = isPBI ? '/clear_pbi' : '/clear';
-    await axios.post(`http://localhost:5000${url}`);
+    await axios.post(`${getBackendUrl()}${url}`);
     isPBI ? setFilesPBI([]) : setFiles([]);
     isPBI ? setSummaryDataPBI([]) : setSummaryData([]);
     if ((isPBI ? pbiInputRef : osdpInputRef).current) (isPBI ? pbiInputRef : osdpInputRef).current.value = '';
@@ -128,7 +129,7 @@ function ReconciliationUploadPage() {
     const formData = new FormData();
     filesToUpload.forEach(file => formData.append(isPBI ? 'files1' : 'files', file));
     try {
-      const res = await axios.post(`http://localhost:5000${url}`, formData);
+      const res = await axios.post(`${getBackendUrl()}${url}`, formData);
       const sortedKey = isPBI ? 'sorted_data_PBI' : 'sorted_data';
       const summaryKey = isPBI ? 'summary_data_PBI' : 'summary_data';
       const sorted = res.data?.[sortedKey] || [];

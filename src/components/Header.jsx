@@ -38,6 +38,7 @@ import {
   saveBackendUrlLocal,
   isLocalhostUrl,
   isVercelProdDomain,
+  getConfiguredBackendUrl,
 } from "../config/backend";
 
 /** storage keys */
@@ -139,7 +140,7 @@ const Header = ({ title = "", breadcrumbs = [] }) => {
   const [tunnelUrl, setTunnelUrl] = useState(() => getBackendUrlTunnel());
   const [localUrl, setLocalUrl] = useState(() => getBackendUrlLocal());
 
-  const [tunnelUrlInput, setTunnelUrlInput] = useState(() => getBackendUrlTunnel() || "");
+  const [tunnelUrlInput, setTunnelUrlInput] = useState(() => getBackendUrlTunnel() || getConfiguredBackendUrl());
   const [localUrlInput, setLocalUrlInput] = useState(() => getBackendUrlLocal() || "http://127.0.0.1:5000");
 
   const [backendUrl, setBackendUrl] = useState(() => getBackendUrl());

@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react'; // spinner icon
 import { ChevronDownIcon } from 'lucide-react';
 import { useUser } from "../context/UserContext";
+import { getBackendUrl } from '../config/backend';
 
 function ReconciliationSummary() {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ function ReconciliationSummary() {
   const location = useLocation();
   const fromButton = location.state?.fromButton || sessionStorage.getItem('fromButton') || 'N/A';
   const businessType = location.state?.businessType || sessionStorage.getItem('businessType') || 'N/A';
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+  const BACKEND_URL = getBackendUrl();
   const [exporting, setExporting] = useState(false);
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import toast, { Toaster } from 'react-hot-toast';
+import { getBackendUrl } from '../config/backend';
 
 const DateConverterPage = () => {
   const [file, setFile] = useState(null);
@@ -42,7 +43,7 @@ const DateConverterPage = () => {
     formData.append('file', f);
 
     try {
-      const response = await axios.post('http://localhost:5000/get_columns', formData);
+      const response = await axios.post(`${getBackendUrl()}/get_columns`, formData);
       setColumns(response.data.columns);
       toast.success('File uploaded and columns detected!');
     } catch (err) {
@@ -85,7 +86,7 @@ const DateConverterPage = () => {
     formData.append('format', dateFormat);
 
     try {
-      const response = await axios.post('http://localhost:5000/convert_date', formData, {
+      const response = await axios.post(`${getBackendUrl()}/convert_date`, formData, {
         responseType: 'blob',
       });
 
